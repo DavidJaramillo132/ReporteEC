@@ -19,26 +19,15 @@ verificación mediante [[Niveles de Confianza]]. La trazabilidad no es un adorno
 de la interfaz: es el producto, y además es lo que protege legalmente al
 proyecto frente a la publicación de información no confirmada.
 
-## Alcance propuesto para la v1
+## Versiones
 
-Recorte deliberado para llegar a algo publicable y defendible:
+El contenido de cada versión está en [[Hoja de Ruta]]:
 
-- Mapa con datos oficiales históricos ([[Fuentes]])
-- Filtros por año, provincia, cantón, tipo y mes
-- Sección de estadísticas dividida por categoría
-- Etiquetas de confianza y fuente visibles en cada incidente
-
-Esto ya constituye un producto útil y concentra el diferenciador completo con
-una fracción del riesgo.
-
-## Postergado a versiones posteriores
-
-| Funcionalidad | Motivo |
-|---|---|
-| Reportes ciudadanos | Exige moderación resuelta antes de abrir ([[Riesgos Abiertos]]) |
-| Tiempo casi real | Depende de scraping frágil, no de las fuentes oficiales |
-| Notificación por cercanía | Técnicamente imposible en PWA ([[Riesgos Abiertos]]) |
-| App móvil nativa | Solo si el producto valida tracción |
+- **v1 — Mapa histórico:** todos los datos oficiales desde 2019, preparado
+  para la v2.
+- **v2 — Tiempo real:** noticias de la Policía, reportes ciudadanos y
+  notificaciones.
+- **Futuro:** app nativa, coordenadas de choques, fuente de robos.
 
 ## Funcionalidades descritas en la idea original
 

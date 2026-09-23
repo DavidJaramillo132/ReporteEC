@@ -18,13 +18,33 @@ afirmación y quién la sostiene.
 | 🔵 Verificado | Confirmado mediante múltiples fuentes |
 | 🟡 Reportado | Existe una fuente periodística |
 | 🟠 En revisión | Información pendiente de verificar |
-| ⚪ Histórico | Dato estadístico/histórico |
 
-> [!warning] Sobre ⚪ Histórico — incoherencia detectada
-> Tal como está definido («se aplica cuando el usuario consulta un año anterior
-> al actual»), el mismo dato cambiaría de etiqueta según el filtro activo.
-> ⚪ Histórico mide **tiempo**, no verificación: es un eje distinto al del
-> resto de la escala. Ver [[Decisiones de Negocio Pendientes]].
+## Colores en el mapa
+
+> [!success] Decidido el 2026-09-23
+> **El color del marcador indica el nivel de confianza** (🟢🔵🟡🟠). El
+> **tipo de incidente** (robo, homicidio, siniestro…) se muestra con un
+> **ícono**. Así no hay dos sistemas de colores que se confundan en el mapa.
+
+## Vigencia (eje independiente)
+
+La escala anterior solo indica **cómo se confirmó** un dato. **De cuándo es**
+se expresa en un atributo aparte:
+
+| Vigencia | Significado |
+|---|---|
+| Reciente | Pertenece al periodo actual |
+| Histórico | Pertenece a un año anterior al actual |
+
+El color de confianza **nunca cambia** según el año que consulte el usuario.
+Un homicidio de 2015 registrado por el Ministerio del Interior se muestra como
+«🟢 Oficial · 2015».
+
+> [!note] Cambio respecto a la idea original
+> En [[Ideas Sueltas]] existía un quinto nivel, ⚪ Histórico, aplicado cuando el
+> usuario consultaba un año anterior. Se retiró de la escala porque mide
+> tiempo, no verificación, y hacía que un mismo dato cambiara de color según
+> el filtro. Decisión del 2026-09-22; ver [[Decisiones de Negocio Pendientes]].
 
 ## Reglas de asignación
 

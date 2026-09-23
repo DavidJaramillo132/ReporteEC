@@ -13,6 +13,8 @@ Ordenados por capacidad de matar el proyecto, no por dificultad técnica.
 
 ## 1. Reportes ciudadanos sin moderación
 
+> [!info] Mitigado parcialmente el 2026-09-22 — reportar exige cuenta registrada y verificada. La cola de moderación sigue siendo necesaria.
+
 **El riesgo más grave, y el único que la idea original no menciona.**
 
 Anónimo + sin cuenta + geolocalizado + categorías como «robos» o «disparos» es
@@ -32,6 +34,8 @@ reales sobre estigmatización de barrios y valor inmobiliario.
 
 ## 2. El «tiempo casi real» no procede de las fuentes oficiales
 
+> [!check] Decidido el 2026-09-22 — se mantiene el tiempo real, asumiendo que su confianza máxima es 🟡 / 🟠. Ver [[Decisiones de Negocio Pendientes]].
+
 Verificado: los datasets del Ministerio del Interior se actualizan
 **mensualmente** y con rezago aproximado de un mes ([[Fuentes]]). La única vía
 hacia el tiempo casi real es scrapear `noticias.policia.gob.ec`, lo cual es:
@@ -43,6 +47,8 @@ hacia el tiempo casi real es scrapear `noticias.policia.gob.ec`, lo cual es:
 comunica con honestidad, o se retira la promesa del producto.
 
 ## 3. La notificación por cercanía no es viable en PWA
+
+> [!check] Decidido el 2026-09-22 — se posterga a la app nativa; la PWA usa suscripción por zona. Ver [[Decisiones de Negocio Pendientes]], punto 12.
 
 Restricción técnica, no opinión:
 
@@ -65,6 +71,8 @@ a no terminar ninguno. Ver el recorte propuesto en [[Visión y Alcance]].
 
 ## 5. Ambigüedad en el stack de base de datos
 
+> [!check] Resuelto el 2026-09-22 — PostgreSQL + FastAPI, no PostgREST. Stack aprobado. Ver [[Stack e Infraestructura]].
+
 La nota original menciona «Posgrest». Son dos cosas distintas:
 
 - **PostgreSQL** — el motor de base de datos
@@ -74,6 +82,8 @@ La elección cambia si hay backend propio o no. Ver [[Stack e Infraestructura]].
 
 ## 6. Estructura de carpetas del repositorio
 
-`ReporteEC/` (documentación) y `codigo/` (implementación) conviven como
+> [!check] Resuelto el 2026-09-22 — carpetas separadas para ingesta, backend, frontend y despliegue. Ver [[Módulos del Sistema]].
+
+`Documentacion - ReporteEC/` (documentación) y `codigo/` (implementación) conviven como
 carpetas hermanas. Falta definir la estructura interna de `codigo/` antes de
 escribir la primera línea.
