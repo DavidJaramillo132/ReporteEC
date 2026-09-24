@@ -45,6 +45,14 @@ origen: propuesta elaborada con ChatGPT
 
 # Propuesta original
 
+> [!warning] Texto histórico
+> Lo que sigue es la propuesta tal como llegó, sin editar. **No está vigente
+> donde contradiga la tabla de diferencias de arriba**: en particular, el
+> capítulo 29 incluye en la primera versión Telegram, IA, Redis y Redshift,
+> pero se decidió mantener la V1 como mapa histórico
+> ([[V1 - Mapa Histórico]]) y dejar Redshift como experimento
+> ([[Almacén Analítico]]).
+
 # Arquitectura de la Plataforma de Monitoreo de Incidentes en Ecuador
 
 ## 1. Descripción general
@@ -1203,6 +1211,10 @@ Infrastructure
 ---
 
 # 29. Decisión arquitectónica
+
+> [!warning] No vigente
+> Reemplazado por la tabla de diferencias al inicio de este documento y por
+> [[Hoja de Ruta]].
 
 La decisión para la primera versión será:
 

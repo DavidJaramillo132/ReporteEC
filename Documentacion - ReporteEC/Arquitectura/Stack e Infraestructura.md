@@ -33,7 +33,7 @@ actualizado: 2026-09-22
 |---|---|
 | Tiempo real en el mapa | **Server-Sent Events** desde FastAPI + `LISTEN/NOTIFY` de PostgreSQL |
 | Notificaciones | **Web Push** con claves VAPID (`pywebpush` en el servidor) |
-| Imágenes de reportes | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia en `backend/almacenamiento/` |
+| Imágenes de reportes | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia en `backend/app/modules/storage/` |
 
 ### Experimento paralelo
 

@@ -43,6 +43,8 @@ next-env.d.ts
 
 #codex
 .codex/
+.atl/
+.codegraph/
 
 # obsidian (docs vault lives in "Documentacion - ReporteEC/") — keep shared config, ignore per-machine UI state
 Documentacion - ReporteEC/.obsidian/workspace.json

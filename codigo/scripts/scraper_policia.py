@@ -32,7 +32,8 @@ REQUEST_PAUSE_SECONDS = 1.0
 
 # Site category id -> ReporteEC incident type. Ids verified 2026-09-22.
 # Unmapped categories (community events, institutional news) yield type None
-# and are discarded as non-incidents.
+# and are discarded as non-incidents. Category 95 (sexual violence) is
+# deliberately unmapped: that type is only loaded from official sources.
 CATEGORY_TO_TYPE = {
     74: "asesinato",
     77: "tentativa_asesinato",
@@ -41,7 +42,6 @@ CATEGORY_TO_TYPE = {
     257: "robo",
     7: "secuestro_extorsion",
     280: "extorsion",
-    95: "violacion",
     59: "trafico_armas",
     2: "drogas",
     268: "drogas",

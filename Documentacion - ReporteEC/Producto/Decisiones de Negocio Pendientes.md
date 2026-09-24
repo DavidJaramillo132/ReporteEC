@@ -171,15 +171,11 @@ Nueva decisión derivada del alcance. Tres opciones con compromisos reales:
 | **Hexágonos H3** | Celdas hexagonales con conteo | Comparable, cacheable, agregable en PostGIS | Requiere elegir resolución |
 | **Getis-Ord Gi\*** | Zonas estadísticamente significativas | Distingue foco real de azar | Complejo; difícil de explicar al usuario |
 
-**Propuesta:** hexágonos H3 para la v1. Se precalculan por tipo, año y
-resolución, se sirven rápido y son honestos sobre el área. El mapa de calor
-puede añadirse como vista estética sobre los mismos datos.
-
-> [!warning] Conecta con el punto 5
-> Un conteo por hexágono sin normalizar marcará siempre como «zona caliente»
-> el lugar donde más gente vive o transita. Con choques el efecto es aún
-> mayor: las zonas calientes coincidirán con las vías de más tráfico. Hay que
-> decidir si la zona caliente se mide en **conteo absoluto** o en **tasa**.
+> [!note] Historia de esta decisión
+> Se propuso primero usar **hexágonos H3**. Se descartó el 2026-09-22 al
+> elegir **mapa de calor**, que MapLibre dibuja de forma nativa. La pregunta
+> de si medir en conteo o en tasa también se resolvió: **el mapa usa conteo
+> absoluto** y las estadísticas usan tasa (punto 5).
 
 Para los choques, que solo existen por cantón, la «zona caliente» será
 necesariamente el cantón completo.
@@ -323,10 +319,9 @@ fuente. Ver [[Fuentes]].
 
 > [!check] Resuelto el 2026-09-23 — lista adoptada en [[Tipos de Incidente]].
 
-> [!question] Abierto — propuesta de lista de tipos
-> Basada en los datos oficiales, las categorías del sitio de la Policía y los
-> ejemplos dados (robo, muerte, tiroteo, siniestro). **Pendiente de
-> confirmar.**
+> [!note] Propuesta original — adoptada el 2026-09-23
+> La versión vigente y explicada está en [[Tipos de Incidente]]. Basada en los datos oficiales, las categorías del sitio de la Policía y los
+> ejemplos dados (robo, muerte, tiroteo, siniestro).
 >
 > | Tipo | Viene de |
 > |---|---|
@@ -337,7 +332,7 @@ fuente. Ver [[Fuentes]].
 > | Robo / asalto | Policía, reportes (sin dato oficial) |
 > | Secuestro | Policía, reportes |
 > | Extorsión | Policía, reportes |
-> | Violencia sexual | Policía |
+> | Violencia sexual | Solo fuentes oficiales (decidido el 2026-09-24) |
 > | Siniestro de tránsito | INEC (por cantón), reportes |
 > | Persona desaparecida | Min. Interior, reportes |
 > | Pelea / riña | Reportes ciudadanos |

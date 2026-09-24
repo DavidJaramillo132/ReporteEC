@@ -38,7 +38,7 @@ El sitio ya clasifica sus noticias. Ids verificados el 2026-09-22:
 | 257 | Asalto y Robo | 45 | robo |
 | 7 | Secuestro y Extorsión | 1.061 | secuestro_extorsion |
 | 280 | Extorsión | 88 | extorsion |
-| 95 | Delito de violación | 63 | violacion |
+| 95 | Delito de violación | 63 | **se descarta** — violencia sexual solo entra desde fuentes oficiales ([[Tipos de Incidente]]) |
 | 59 | Tráfico de armas de fuego | 412 | trafico_armas |
 | 2, 268 | Drogas | 1.290 / 102 | drogas |
 | 86, 71 | Delincuencia organizada | 1.317 / 605 | delincuencia_organizada |

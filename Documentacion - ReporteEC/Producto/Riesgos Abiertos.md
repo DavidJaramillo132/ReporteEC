@@ -43,7 +43,7 @@ hacia el tiempo casi real es scrapear `noticias.policia.gob.ec`, lo cual es:
 - Frágil — un cambio de maquetación deja la ingesta ciega
 - De legalidad ambigua respecto a los términos del sitio
 
-**Decisión pendiente:** o se asume que el realtime depende de un scraper y se
+**Opciones que se evaluaron:** o se asume que el realtime depende de un scraper y se
 comunica con honestidad, o se retira la promesa del producto.
 
 ## 3. La notificación por cercanía no es viable en PWA
@@ -60,7 +60,7 @@ Restricción técnica, no opinión:
 «Si hubo un incidente cerca de tu ubicación, se te notificará» es precisamente
 la funcionalidad que obliga a app nativa.
 
-**Decisión pendiente:** degradarla a «notificación al abrir la app», o asumir
+**Opciones que se evaluaron:** degradarla a «notificación al abrir la app», o asumir
 desarrollo nativo desde el inicio.
 
 ## 4. El alcance equivale a tres proyectos

@@ -115,6 +115,26 @@ cantón**.
   víctimas cuyos beneficiarios cobraron el seguro. Sesgo de selección.
 - **INEC anuario 2019** en el portal CKAN: obsoleto.
 
+## Violencia sexual — sin fuente utilizable para el mapa
+
+Búsqueda en `datosabiertos.gob.ec` el 2026-09-24 («violencia sexual»,
+«violación», «delitos sexuales», «abuso sexual»: 0 resultados). Solo
+aparecen dos datasets relacionados:
+
+| Dataset | Qué es | Por qué no sirve para el mapa |
+|---|---|---|
+| **Matriz Integral de Registros de Atención** (Secretaría de Derechos Humanos) | Atenciones a víctimas en los Servicios de Protección Integral. Enero–junio 2021: 34.711 atenciones, de ellas **3.661 por violencia sexual** | Son **atenciones, no denuncias ni hechos**. La ubicación es la **provincia y cantón donde vive la víctima**, no donde ocurrió, y sin coordenadas. Solo cubre **junio 2020 – 2021** y no se actualiza desde 2022 |
+| **Encuesta de relaciones familiares y violencia de género contra las mujeres 2019** (INEC) | Encuesta: mide qué porcentaje de mujeres sufrió violencia a lo largo de su vida | Es una **encuesta**, no un registro de casos. Sirve para contexto, no para ubicar hechos |
+
+**Conclusión:** violencia sexual sigue **sin fuente oficial para el mapa**
+([[Tipos de Incidente]]). El 89 % de las atenciones de la Secretaría son en el
+ámbito intrafamiliar, así que incluso agregadas por cantón de residencia
+señalarían dónde viven las víctimas; no se recomienda publicarlas.
+
+> [!info] Decidido el 2026-09-24
+> **No se buscan más fuentes para este tipo.** El proyecto sigue solo con las
+> fuentes ya incorporadas (Ministerio del Interior e INEC).
+
 ## Robos — sin fuente abierta
 
 > [!danger] Por definir

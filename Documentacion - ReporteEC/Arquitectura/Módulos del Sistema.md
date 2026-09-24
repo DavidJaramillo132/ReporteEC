@@ -104,7 +104,7 @@ Sirve el mapa en **teselas vectoriales** generadas en PostGIS. Es necesario
 porque son cientos de miles de puntos: mandarlos todos al navegador de una vez
 sería lentísimo.
 
-### backend — almacenamiento (`almacenamiento/`, v2)
+### backend — almacenamiento (`app/modules/storage/`, V2)
 
 Las imágenes de los reportes ciudadanos se guardan en un bucket. El código usa
 una **interfaz propia** (subir, obtener URL, borrar) con una implementación

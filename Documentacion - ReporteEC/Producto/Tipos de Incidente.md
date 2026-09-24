@@ -30,7 +30,7 @@ fuente se **traduce** a esta lista al entrar al sistema.
 | **Robo / asalto** | Robo a personas, domicilios, locales o vehículos | Policía, reportes | v2 |
 | **Secuestro** | Privación de libertad, incluido el secuestro extorsivo | Policía, reportes | v2 |
 | **Extorsión** | Cobro de «vacunas» y amenazas para obtener dinero | Policía, reportes | v2 |
-| **Violencia sexual** | Violación y otros delitos sexuales | Policía | v2 |
+| **Violencia sexual** | Violación y otros delitos sexuales | **Solo fuentes oficiales** | Cuando exista una fuente oficial |
 | **Pelea / riña** | Peleas en la vía pública | Reportes | v2 |
 | **Otro** | Lo que no encaja en ninguno de los anteriores | Reportes | v2 |
 
@@ -42,11 +42,23 @@ fuente se **traduce** a esta lista al entrar al sistema.
 
 - **Homicidio y asesinato se agrupan** en un solo tipo para el público. La
   diferencia es jurídica y el dato original se conserva.
-- *(Propuesta, pendiente de confirmar)* **Violencia sexual no se ofrece en el
-  formulario de reporte ciudadano.** Es
-  un delito donde un reporte público puede exponer a la víctima; solo entra
-  desde fuentes oficiales o policiales, y nunca con ubicación exacta.
 - **Robo no tiene fuente oficial** con coordenadas: en la v1 no aparece (ver
   [[Fuentes]]).
 - Cada tipo tiene un **ícono** propio; el color del marcador es el nivel de
   confianza ([[Niveles de Confianza]]).
+
+## Violencia sexual: solo fuentes oficiales
+
+> [!success] Decidido el 2026-09-24
+> - **No aparece en el formulario** de reporte ciudadano.
+> - **Solo entra desde fuentes oficiales.** Las noticias de la Policía
+>   (🟡 Reportado), los reportes ciudadanos y las fuentes de Telegram no la
+>   cargan: esas noticias se descartan al ingresar.
+> - Nunca se muestra con ubicación exacta.
+>
+> Motivo: un reporte público con ubicación puede exponer a la víctima.
+>
+> Hoy **ninguna fuente oficial cargada** trae este tipo, así que no aparecerá
+> en el mapa. Se buscó en el portal de datos abiertos sin resultado útil
+> ([[Fuentes]]) y **se decidió no seguir buscando**: el proyecto continúa con
+> las fuentes que ya tiene.
