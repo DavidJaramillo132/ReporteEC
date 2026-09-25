@@ -1,6 +1,6 @@
 ---
 tags: [datos, fuentes]
-actualizado: 2026-09-22
+actualizado: 2026-09-24
 ---
 
 # Fuentes
@@ -46,12 +46,19 @@ El Ministerio publica exactamente seis datasets en el portal (verificado
 
 No evaluados todavía.
 
-## Límites de provincias, cantones y parroquias — sin fuente
+## Oficiales — Fiscalía General del Estado (FGE) y OECO
 
-> [!question] Abierto
-> Hacen falta para los filtros, para dibujar los siniestros por cantón y para
-> ubicar las noticias de la Policía. **Todavía no se identificó una fuente**
-> con los límites oficiales descargables.
+Fuente primordial para **Extorsión («Vacunas»)** y delitos a la propiedad.
+
+- **FGE:** Publica estadísticas del sistema de justicia penal sobre noticias del delito (denuncias) tipificadas según el Art. 185 del COIP. Frecuencia mensual y anual por provincia y cantón.
+- **OECO (Observatorio Ecuatoriano de Crimen Organizado / PADF):** Sistematiza y normaliza las cifras de FGE y Policía Nacional, ofreciendo indicadores sobre extorsión, usura y mercados ilícitos.
+- Detalle y metodología en [[Extorsión y Vacunas a Negocios]].
+
+## Límites territoriales (DPA) — CONALI / INEC
+
+Identificada la fuente oficial para las geometrías de provincias, cantones y parroquias:
+- **CONALI** (Comité Nacional de Límites Internos) e **INEC** mediante el *Marco Geoestadístico y Cartografía Censal 2022*.
+- Proveen las geometrías oficiales en Shapefile / GeoJSON (WGS84) para dibujar polígonos cantonales, calcular coropletos de siniestros, estimar el riesgo comercial y cruzar buffers viales.
 
 ## Población por cantón — INEC (pendiente)
 

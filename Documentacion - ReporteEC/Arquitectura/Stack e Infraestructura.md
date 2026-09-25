@@ -17,6 +17,8 @@ actualizado: 2026-09-22
 |---|---|---|
 | Base de datos | **PostgreSQL 17 + PostGIS 3** | Estándar para datos geográficos. Los datos ya vienen en WGS84 |
 | Ingesta (ETL y scraper) | **Python 3.12** | Lo mejor para leer XLSX/CSV, limpiar datos y consumir APIs. Los scripts actuales ya son Python |
+| Gestor del backend | **uv** | Crea el entorno, fija Python 3.12, instala dependencias y las congela en `uv.lock` |
+| Gestor del frontend | **Bun** | Instala dependencias y ejecuta Vite. Solo se usa para desarrollar y construir |
 | API | **FastAPI** (Python) | Mismo lenguaje que la ingesta: un solo lenguaje en todo el servidor |
 | Teselas del mapa | **Martin** | Servidor de teselas del propio proyecto MapLibre; genera el mapa directo desde PostGIS |
 | Frontend | **React + TypeScript + Vite + Tailwind CSS** | Aplicación centrada en el mapa; Vite es simple y rápido |
@@ -35,11 +37,8 @@ actualizado: 2026-09-22
 | Notificaciones | **Web Push** con claves VAPID (`pywebpush` en el servidor) |
 | Imágenes de reportes | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia en `backend/app/modules/storage/` |
 
-### Experimento paralelo
-
-| Necesidad | Tecnología |
-|---|---|
-| Almacén analítico | **Amazon Redshift Serverless** y **Microsoft Fabric Warehouse**, con una copia de los datos. Ver [[Almacén Analítico]] |
+### Almacenamiento analítico unificado
+PostgreSQL 17 con PostGIS 3 asume tanto el rol operacional (OLTP) como el analítico (OLAP). Con menos de 1 millón de registros esperados en la fase actual, la combinación de particionamiento anual, índices GiST espaciales y vistas materializadas resuelve las consultas estadísticas y de agregación en milisegundos, eliminando la necesidad de almacenes de datos externos (Data Warehouses).
 
 ## Decisiones cerradas por esta recomendación
 
@@ -58,6 +57,74 @@ optimizadas para buscadores. Si se aprueba Vite, conviene limpiar el
 
 **Mapa de calor y puntos sin hexágonos.** Al elegir mapa de calor (punto 11),
 MapLibre lo resuelve de forma nativa. No hace falta H3.
+
+## Entorno de desarrollo
+
+> [!success] Decidido el 2026-09-24
+> **Bun** para el frontend y **uv** para el backend.
+
+### Frontend con Bun
+
+```bash
+cd codigo/frontend
+
+bun create vite . --template react-ts        # Vite + React + TypeScript
+bun install
+bun add maplibre-gl tailwindcss @tailwindcss/vite
+bun add -d vite-plugin-pwa
+```
+
+Por defecto Vite corre con Node aunque se lance con Bun, porque su ejecutable
+declara Node en la primera línea. Para que corra con Bun, el script `dev` de
+`package.json` debe ser:
+
+```json
+"dev": "bunx --bun vite"
+```
+
+| Comando | Para qué |
+|---|---|
+| `bun run dev` | Servidor de desarrollo |
+| `bun run build` | Genera los archivos finales en `dist/` |
+
+**Bun no corre en el servidor.** En producción Caddy sirve los archivos
+estáticos de `dist/`.
+
+### Backend con uv
+
+```bash
+cd codigo/backend
+
+uv init --app --name reporteec-backend --python 3.12
+rm main.py        # uv crea uno de ejemplo; el nuestro va en app/main.py
+
+uv add "fastapi[standard]" sqlalchemy geoalchemy2 "psycopg[binary]" alembic httpx
+uv add --dev pytest ruff
+```
+
+| Comando | Para qué |
+|---|---|
+| `uv run fastapi dev app/main.py` | La API en desarrollo |
+| `uv run python -m app.workers.historical_worker` | Un worker |
+| `uv run pytest` | Tests |
+| `uv run ruff check` | Revisión de estilo y errores |
+
+El sistema tiene Python 3.14, pero con `--python 3.12` uv descarga y usa esa
+versión solo para el proyecto, sin tocar la del sistema.
+
+En Docker se copia uv a la imagen y se instala con `uv sync --frozen`, que
+respeta exactamente `uv.lock`:
+
+```dockerfile
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN uv sync --frozen --no-cache
+```
+
+### Archivos de bloqueo
+
+**`uv.lock` y `bun.lock` se suben a git.** Guardan las versiones exactas de
+cada dependencia, para que la computadora de desarrollo, el VPS y cualquier
+colaborador instalen exactamente lo mismo.
 
 ## Infraestructura
 

@@ -9,8 +9,8 @@ estado: por empezar
 > [!abstract] Objetivo
 > Un mapa público, rápido y confiable con **todos los datos oficiales desde
 > 2019**, que explique con claridad de dónde sale cada dato. Funciona solo,
-> sin cuentas ni tiempo real, pero construido para que la [[V2 - Tiempo Real]]
-> se sume sin rehacer nada.
+> sin cuentas ni tiempo real, pero construido para que la [[V2 - Rutas e Inteligencia Horaria]]
+> y las siguientes versiones se sumen sin rehacer nada.
 
 Visión general de las versiones en [[Hoja de Ruta]].
 
@@ -22,10 +22,12 @@ Antes de construir funciones, probar que el stack funciona de punta a punta.
 
 1. Crear la estructura de `codigo/`: `backend/`, `frontend/`, `despliegue/`
    ([[Módulos del Sistema]])
-2. Levantar Docker Compose con PostgreSQL + PostGIS
-3. **Esqueleto:** homicidios de 2026 → PostGIS → Martin → puntos en el mapa del
+2. Crear los proyectos: frontend con **Bun** y backend con **uv**
+   ([[Stack e Infraestructura]], «Entorno de desarrollo»)
+3. Levantar Docker Compose con PostgreSQL + PostGIS
+4. **Esqueleto:** homicidios de 2026 → PostGIS → Martin → puntos en el mapa del
    navegador
-4. Verificar fuentes pendientes: población por cantón del INEC y año de inicio
+5. Verificar fuentes pendientes: población por cantón del INEC y año de inicio
    de los siniestros del INEC
 
 **Se termina cuando** aparecen puntos reales en un mapa en el navegador. Si
@@ -42,6 +44,7 @@ ese camino funciona, el [[Stack e Infraestructura]] queda probado.
 | Homicidios intencionales | Puntos + mapa de calor |
 | Personas desaparecidas | Puntos + mapa de calor; las **localizadas se quitan del mapa** |
 | Detenidos y aprehendidos | **Capa aparte**, solo mapa de calor, rotulada como actividad policial |
+| Extorsión y vacunas a negocios (FGE / OECO) | **Por cantón**, semáforo de riesgo comercial ([[Extorsión y Vacunas a Negocios]]) |
 | Siniestros de tránsito (INEC) | **Por cantón** (no hay coordenadas) |
 | Población por cantón (INEC) | No se muestra; sirve para calcular tasas |
 | Robos | **Por definir** — no hay fuente oficial |
@@ -138,12 +141,9 @@ información. Debe explicar:
 | 4 | Mapa: capas, colores, íconos, mapa de calor, detalle | Es el corazón del producto |
 | 5 | Filtros | |
 | 6 | Población y estadísticas | La tasa necesita la población |
-| 7 | Siniestros por cantón | Otra forma de dibujar; va aparte |
+| 7 | Siniestros y riesgo de extorsión por cantón | Otra forma de dibujar; coropletos y semáforos cantonales |
 | 8 | Páginas: inicio, metodología, licencia y fuentes | Explican lo que ya existe |
 | 9 | PWA, despliegue, respaldos | Para publicarlo |
-
-**En paralelo**, cuando ya haya datos cargados: el experimento del
-[[Almacén Analítico]] con Redshift y Fabric.
 
 ## Qué evitar
 

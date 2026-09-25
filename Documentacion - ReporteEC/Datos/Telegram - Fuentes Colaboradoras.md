@@ -1,11 +1,11 @@
 ---
-tags: [datos, telegram, fuentes-colaboradoras, v3]
-actualizado: 2026-09-23
+tags: [datos, telegram, fuentes-colaboradoras, v4]
+actualizado: 2026-09-24
 ---
 
 # Telegram — Fuentes Colaboradoras
 
-Fuente de la [[V3 - Fuentes Colaboradoras e IA]]: canales y grupos de Telegram
+Fuente de la [[V4 - Red Colaborativa e IA]]: canales y grupos de Telegram
 donde los ciudadanos comparten robos, peleas y otros incidentes, y que
 **aceptan colaborar** con el proyecto.
 
@@ -51,7 +51,7 @@ Los mensajes no tienen formato: texto suelto, notas de voz, fotos y lugares
 dichos de memoria («en la 9 de Octubre y Boyacá»). La IA clasifica, descarta
 lo que no es incidente, extrae el lugar y agrupa mensajes sobre el mismo
 hecho; la geocodificación convierte el lugar en coordenadas. Detalle en
-[[V3 - Fuentes Colaboradoras e IA]].
+[[V4 - Red Colaborativa e IA]].
 
 ## Encaje en el sistema
 

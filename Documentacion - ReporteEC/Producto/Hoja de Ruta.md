@@ -1,6 +1,6 @@
 ---
 tags: [producto, hoja-de-ruta, versiones]
-actualizado: 2026-09-23
+actualizado: 2026-09-24
 ---
 
 # Hoja de Ruta
@@ -11,18 +11,19 @@ llegue. Pero cada una se diseña para que la siguiente se sume sin rehacer
 nada.
 
 ```
-Fase 0 ──► V1 Mapa histórico ──► V2 Tiempo real ──► V3 Fuentes colaboradoras + IA ──► Futuro
-(cimientos)                  └─► Experimento analítico (en paralelo)
+Fase 0 ──► V1 Observatorio Histórico ──► V2 Rutas e Inteligencia Horaria ──► V3 Tiempo Real y Comunidad ──► V4 Red Colaborativa e IA
+(cimientos)
 ```
 
 ## Las versiones
 
 | Versión | Qué resuelve | Documento |
 |---|---|---|
-| **Fase 0 + V1** | Mapa público con todos los datos oficiales desde 2019, estadísticas, metodología, licencia y página de inicio | [[V1 - Mapa Histórico]] |
-| **V2** | Reportes ciudadanos, cuentas verificadas por correo, moderación, vista «Actualidad», notificaciones por zona y noticias de la Policía | [[V2 - Tiempo Real]] |
-| **V3** | Canales y grupos de Telegram que colaboran, procesados con IA y geocodificación | [[V3 - Fuentes Colaboradoras e IA]] |
-| **Experimento** | Comparar Amazon Redshift con Microsoft Fabric Warehouse sobre una copia de los datos | [[Almacén Analítico]] |
+| **Fase 0 + V1** | Mapa público con datos oficiales desde 2019, semáforo cantonal de extorsión/vacunas a negocios, estadísticas, metodología y licencia | [[V1 - Mapa Histórico]] |
+| **V2** | Navegación e inteligencia de riesgo en rutas por franja horaria (origen $\rightarrow$ destino), tramos críticos y API B2B de logística | [[V2 - Rutas e Inteligencia Horaria]] |
+| **V3** | Reportes ciudadanos verificados, moderación, vista «Actualidad», notificaciones Web Push por zona y noticias de la Policía | [[V3 - Tiempo Real y Comunidad]] |
+| **V4** | Canales de Telegram colaboradores, ingesta automatizada con IA, geocodificación y monitoreo de fuentes | [[V4 - Red Colaborativa e IA]] |
+| **Negocio** | Modelo de sostenibilidad, API B2B para transporte y aseguradoras, y micro-suscripciones | [[Modelo de Monetización]] |
 
 Cada documento de versión incluye qué trae, el orden de desarrollo, qué
 evitar y **una lista para probarla uno mismo** antes de darla por terminada.

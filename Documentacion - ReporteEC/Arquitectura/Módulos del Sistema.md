@@ -2,7 +2,6 @@
 tags: [arquitectura, modulos, estructura]
 actualizado: 2026-09-22
 ---
-
 # Módulos del Sistema
 
 Cómo se divide el sistema para que cada versión de la [[Hoja de Ruta]] se sume
@@ -27,13 +26,13 @@ codigo/
 │   │   ├── api/             rutas HTTP (incidentes, estadísticas, fuentes, monitoreo…)
 │   │   ├── modules/         lógica de negocio, un módulo por dominio
 │   │   │   ├── incidents/
+│   │   │   ├── routes/          inteligencia de riesgo en trayectos según horario
+│   │   │   ├── extorsion/       indicadores de riesgo comercial y vacunas a negocios
 │   │   │   ├── sources/
 │   │   │   ├── ingestion/   adaptadores de fuente (un adaptador por fuente)
-│   │   │   ├── geocoding/
-│   │   │   ├── ai/          (futuro) extracción desde texto libre
-│   │   │   ├── telegram/    (futuro) fuentes colaboradoras
+│   │   │   ├── spatial/         buffers viales, polígonos DPA y geocodificación
 │   │   │   ├── storage/     imágenes: Azure Blob hoy, S3 mañana (v2)
-│   │   │   └── monitoring/
+│   │   │   └── notifications/   alertas zonales Web Push (v2)
 │   │   ├── workers/         procesos que corren aparte de la API
 │   │   │   ├── historical_worker.py   ingesta de datos oficiales (v1)
 │   │   │   ├── news_worker.py         noticias de la Policía (v2)
@@ -51,7 +50,7 @@ codigo/
 
 ## Flujo de datos
 
-```
+```Shell
  Fuentes externas                    Servidor                        Usuario
  ────────────────                    ────────                        ───────
  CKAN (Min. Interior) ─┐
@@ -73,20 +72,22 @@ Un **adaptador por fuente**, todos con la misma interfaz:
    columna, centinelas: ver [[Esquema de Campos]])
 3. **cargar** — inserta o actualiza en la tabla única de incidentes
 
-| Adaptador | Versión |
-|---|---|
-| `mdi_homicidios`, `mdi_desaparecidas`, `mdi_detenidos` | v1 |
-| `inec_siniestros` (por cantón) | v1 |
-| `inec_poblacion` | v1 |
-| `policia_noticias` | v2 |
-| `telegram` | V3 — ver [[Telegram - Fuentes Colaboradoras]] |
+| Adaptador                                                    | Versión  |
+| ------------------------------------------------------------ | --------- |
+| `mdi_homicidios`, `mdi_desaparecidas`, `mdi_detenidos` | v1        |
+| `fge_extorsion` (noticias del delito FGE / OECO)             | v1        |
+| `inec_siniestros` (por cantón)                            | v1        |
+| `inec_poblacion`                                           | v1        |
+| `policia_noticias`                                         | v2        |
+| `telegram`                                                 | V3 — ver[[Telegram - Fuentes Colaboradoras]] |
 
 ### backend — esquema (`migraciones/`)
 
 - **Tabla única de incidentes** con geometría `Point, 4326`, tipo,
   `nivel_confianza`, `vigencia`, `fuente`, `estado`, `fusionado_con`
-- Tabla de **cantones y provincias** (límites y códigos) para filtros,
-  siniestros y tasas
+- Tabla de **cantones y provincias** (límites y códigos DPA) para filtros,
+  siniestros, riesgo comercial de extorsión y tasas
+- Tabla de **red vial y corredores** para cálculo de buffers y evaluación de riesgo en rutas
 - Tabla de **población** por cantón y año
 - **Funciones SQL** que generan las teselas del mapa filtradas por año, tipo y
   zona

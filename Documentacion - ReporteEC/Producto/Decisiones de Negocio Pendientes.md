@@ -119,27 +119,25 @@ Ordenadas por impacto.
 >
 > Versiones del sistema en [[Hoja de Ruta]].
 
-> [!success] 2026-09-23 — Revisión de la propuesta de arquitectura
-> Ver [[Arquitectura de la Plataforma]]. Se mantiene el orden de versiones,
-> los cuatro niveles de confianza, el color por confianza (el tipo va con
-> ícono) y los reportes ciudadanos en v2. Se adopta el **monolito modular**
-> con la ingesta dentro de `backend/`. El campo de la IA se llama
-> `extraction_confidence`. Redshift no guarda los datos del sistema: se
-> prueba junto a Fabric Warehouse como experimento ([[Almacén Analítico]]).
-> **Año de inicio: 2019**, el primer año en que todos los datasets tienen
-> datos. Reemplaza la decisión anterior de empezar en 2014.
+> [!success] 2026-09-23 y 2026-09-24 — Arquitectura y stack consolidado
+> Ver [[Arquitectura de la Plataforma]]. Se adopta el **monolito modular**
+> con la ingesta y workers dentro de `backend/`. Se descarta definitivamente
+> cualquier base de datos externa (Redshift o Fabric, ver [[Almacén Analítico (Descartado)]]);
+> **PostgreSQL 17 + PostGIS 3** es el motor único operacional y analítico.
+> Se mantienen los cuatro niveles de confianza (color por confianza, ícono por tipo).
+> **Año de inicio: 2019**, el primer año en que todos los datasets tienen datos.
 
-> [!success] 2026-09-23 — Versiones, cuentas y fuentes
-> - **Documento por versión:** [[V1 - Mapa Histórico]], [[V2 - Tiempo Real]]
->   y [[V3 - Fuentes Colaboradoras e IA]], cada uno con una lista de pruebas
+> [!success] 2026-09-23 y 2026-09-24 — Versiones, rutas y cuentas
+> - **Documento por versión:** [[V1 - Mapa Histórico]], [[V2 - Rutas e Inteligencia Horaria]],
+>   [[V3 - Tiempo Real y Comunidad]] y [[V4 - Red Colaborativa e IA]], cada uno con una lista de pruebas
 >   para hacer a mano.
-> - **V1 incluye** página de inicio, página de metodología (con la explicación
->   de conteo frente a tasa) y página de licencia y fuentes.
-> - **Solo Telegram** para fuentes colaboradoras. WhatsApp y WhatsApp Business
->   quedan descartados.
+> - **V1 incluye** mapa histórico desde 2019, semáforo cantonal de extorsión a negocios, página de inicio,
+>   metodología (conteo frente a tasa) y licencias.
+> - **V2 incluye** navegación y cálculo de riesgo en trayectos por franja horaria y API B2B de logística.
+> - **V3 incluye** cuentas verificadas por correo (sin verificar no se puede reportar ni suscribirse),
+>   reportes ciudadanos, moderación, notificaciones por zona y noticias policiales.
+> - **Solo Telegram** para fuentes colaboradoras (V4). WhatsApp y WhatsApp Business quedan descartados.
 > - **Lista de tipos de incidente adoptada:** [[Tipos de Incidente]] (punto 8).
-> - **Cuentas (V2):** verificación por correo; sin verificar no se puede
->   reportar ni suscribirse.
 > - **Reportes falsos:** 1.ª falta → aviso; **2.ª falta → suspensión mínima de
 >   30 días**, con aviso. Reemplaza el umbral configurable anterior.
 > - **Límites de provincias, cantones y parroquias:** sin fuente todavía;
