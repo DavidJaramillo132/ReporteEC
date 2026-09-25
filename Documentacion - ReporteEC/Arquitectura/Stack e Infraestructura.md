@@ -120,6 +120,32 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN uv sync --frozen --no-cache
 ```
 
+### Con Docker (desarrollo)
+
+`codigo/docker-compose.yml` levanta todo el entorno de desarrollo:
+PostgreSQL + PostGIS, Martin, backend y frontend, con recarga automática al
+editar el código. El compose de producción, con Caddy, irá en
+`codigo/despliegue/`.
+
+| Archivo | Para qué |
+|---|---|
+| `codigo/docker-compose.yml` | Define los cuatro servicios |
+| `codigo/backend/Dockerfile` | Imagen del backend con uv (etapa `dev`) |
+| `codigo/frontend/Dockerfile` | Imagen del frontend con Bun (etapa `dev`) |
+| `codigo/.env.example` | Plantilla de variables, **sí** se sube a git |
+| `codigo/.env` | Tus valores reales, **no** se sube a git |
+
+```bash
+cd codigo
+docker compose up --build   # levantar
+docker compose down         # detener (conserva la base de datos)
+docker compose down -v      # detener y borrar la base de datos
+```
+
+Si falta el `.env`, el compose se detiene y dice qué variable falta. Las
+imágenes usan nombres completos de registro (`docker.io/…`, `ghcr.io/…`), así
+que también funcionan con Podman.
+
 ### Archivos de bloqueo
 
 **`uv.lock` y `bun.lock` se suben a git.** Guardan las versiones exactas de

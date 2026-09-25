@@ -1,0 +1,67 @@
+# Development environment for ReporteEC.
+# Usage (from codigo/):  create .env from .env.example, then
+#                        docker compose up --build
+name: reporteec
+
+services:
+  postgres:
+    image: docker.io/postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER in codigo/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in codigo/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB in codigo/.env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  maplibre-martin :
+    image: ghcr.io/maplibre/martin:latest
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "${MARTIN_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # File change events do not always cross into containers; polling keeps hot reload working.
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    environment:
+      # URLs the browser uses, so they point to the ports published on the host.
+      VITE_API_URL: http://localhost:${BACKEND_PORT:-8000}
+      VITE_TILES_URL: http://localhost:${MARTIN_PORT:-3000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      # Keep the container's own node_modules instead of the host's.
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

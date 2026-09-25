@@ -52,3 +52,13 @@ Documentacion - ReporteEC/.obsidian/workspace-mobile.json
 
 # raw open-data downloads (re-fetched by the ETL, never versioned)
 codigo/data/raw/
+
+# python (backend managed with uv)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# keep the example environment file in git
+!.env.example

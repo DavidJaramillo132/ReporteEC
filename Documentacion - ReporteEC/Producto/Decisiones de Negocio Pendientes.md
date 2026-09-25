@@ -124,7 +124,7 @@ Ordenadas por impacto.
 > con la ingesta y workers dentro de `backend/`. Se descarta definitivamente
 > cualquier base de datos externa (Redshift o Fabric, ver [[Almacén Analítico (Descartado)]]);
 > **PostgreSQL 17 + PostGIS 3** es el motor único operacional y analítico.
-> Se mantienen los cuatro niveles de confianza (color por confianza, ícono por tipo).
+> Se mantienen los cuatro niveles de confianza (desde el 2026-09-25 se dibujan como estilo de la marca; el color indica el tipo).
 > **Año de inicio: 2019**, el primer año en que todos los datasets tienen datos.
 
 > [!success] 2026-09-23 y 2026-09-24 — Versiones, rutas y cuentas
@@ -142,6 +142,13 @@ Ordenadas por impacto.
 >   30 días**, con aviso. Reemplaza el umbral configurable anterior.
 > - **Límites de provincias, cantones y parroquias:** sin fuente todavía;
 >   queda abierto.
+
+> [!success] 2026-09-25 — Color por tipo y ubicación del lector
+> - **El color de la marca indica el tipo de incidente**; la confianza pasa a
+>   ser el estilo de la marca (rellena, borde discontinuo, rayada, vacía).
+>   Reemplaza «color por confianza». Ver [[Niveles de Confianza]].
+> - **«Mi ubicación»**: el lector puede ver su posición en el mapa. Se calcula
+>   en el navegador y no se envía ni se guarda.
 
 ### Consecuencias verificadas de esta decisión
 

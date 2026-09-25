@@ -1,0 +1,23 @@
+{
+  "generado": "2026-09-25",
+  "periodo": {
+    "desde": "2026-01-01",
+    "hasta": "2026-08-31"
+  },
+  "conteos": {
+    "homicidio": 5609,
+    "sicariato": 23,
+    "femicidio": 44,
+    "desaparecida": 821
+  },
+  "detenidos_total": 50553,
+  "descartados": {
+    "desaparecidas_localizadas": 4395
+  },
+  "fuentes": {
+    "mdi_homicidios": "https://www.datosabiertos.gob.ec/dataset/homicidios-intencionales",
+    "mdi_desaparecidas": "https://www.datosabiertos.gob.ec/dataset/personas-desaparecidas",
+    "mdi_detenidos": "https://www.datosabiertos.gob.ec/dataset/personas-detenidas-aprehendidas"
+  },
+  "nota": "Muestra real de los archivos oficiales 2026 del Ministerio del Interior. Sin datos personales. Se reemplaza por teselas de Martin cuando exista la ingesta."
+}

@@ -24,6 +24,10 @@ A diferencia de los homicidios (que tienen coordenadas exactas de levantamiento 
 
 ---
 
+> [!success] Fuente descargable verificada (2026-09-25)
+> CSV del OECO «Noticias del Delito» (FGE), conteo mensual por cantón,
+> 2019–2025. Detalle en [[Fuentes]].
+
 ## 2. Comportamiento Estadístico del Fenómeno
 
 * **Crecimiento exponencial:** Según datos consolidados por OECO a partir de la FGE, las noticias del delito por extorsión pasaron de **1.616 en 2019 a más de 16.130 en 2025**, lo que representa un incremento del **898%**.

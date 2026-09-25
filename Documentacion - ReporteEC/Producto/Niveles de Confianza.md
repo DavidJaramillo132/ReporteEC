@@ -21,10 +21,17 @@ afirmación y quién la sostiene.
 
 ## Colores en el mapa
 
-> [!success] Decidido el 2026-09-23
-> **El color del marcador indica el nivel de confianza** (🟢🔵🟡🟠). El
-> **tipo de incidente** (robo, homicidio, siniestro…) se muestra con un
-> **ícono**. Así no hay dos sistemas de colores que se confundan en el mapa.
+> [!success] Decidido el 2026-09-25 (reemplaza la decisión del 2026-09-23)
+> **El color y la forma de la marca indican el tipo de incidente.** La
+> **confianza se dibuja como estilo de la marca**: rellena = Oficial, borde
+> discontinuo = Verificado, rayada = Reportado, vacía con borde discontinuo =
+> En revisión, además de su etiqueta en la ficha del caso.
+>
+> Motivo: en la V1 todos los datos son oficiales, así que con el color por
+> confianza todas las marcas salían del mismo verde y el color no informaba
+> nada.
+>
+> ~~2026-09-23: el color indica la confianza y el tipo va con ícono.~~
 
 ## Vigencia (eje independiente)
 

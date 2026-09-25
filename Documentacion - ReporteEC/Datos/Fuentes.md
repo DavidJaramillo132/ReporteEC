@@ -54,6 +54,33 @@ Fuente primordial para **Extorsión («Vacunas»)** y delitos a la propiedad.
 - **OECO (Observatorio Ecuatoriano de Crimen Organizado / PADF):** Sistematiza y normaliza las cifras de FGE y Policía Nacional, ofreciendo indicadores sobre extorsión, usura y mercados ilícitos.
 - Detalle y metodología en [[Extorsión y Vacunas a Negocios]].
 
+### Dataset descargado: OECO «Noticias del Delito» (verificado 2026-09-25)
+
+Descarga en CSV, previo formulario de registro, desde
+https://visualizador-oeco.up.railway.app/descargas (visualizador embebido en
+`oeco.padf.org/datos`). Fuente original: FGE, *Estadística de Noticias de
+Delito relacionados a Crimen Organizado*. Guardado en
+`codigo/data/raw/oeco/noticias_delito_2019_2025.csv` (no se versiona).
+
+- **Columnas:** `d_ANIO_PS`, `d_mes` (nombre en español), `d_PROVINCIA_INCIDENTE`,
+  `d_CANTON_INCIDENTE` (nombres, sin código DPA), `d_DELITO`, `d_TIPO_DELITO`
+  (Consumado / Tentativa), `d_total`.
+- **Nivel:** conteo **mensual por cantón y delito**. Sin coordenadas: encaja con
+  el semáforo cantonal. 171.689 filas, 2019–2025.
+- **Delitos útiles:** `Extorsión` y `Secuestro Extorsivo`, entre ~35 delitos de
+  crimen organizado.
+- **Extorsión (consumada + tentativa):** 2019: 1.616 · 2020: 2.080 · 2021: 2.801 ·
+  2022: 8.399 · 2023: 21.809 · 2024: 23.082 · 2025: 16.130. Confirma las cifras de
+  [[Extorsión y Vacunas a Negocios]]. 215 cantones con al menos una denuncia.
+- **Cuidado:** los cantones vienen por nombre; hay que cruzarlos con la tabla
+  DPA para obtener el código. Revisar licencia y condiciones de uso del OECO
+  antes de publicar.
+
+También existe el tablero de la FGE
+[Analítica de noticias del delito](https://www.fiscalia.gob.ec/analitica-noticias-del-delito/)
+(todos los delitos del COIP, 2015 – agosto 2026, por cantón y franja horaria),
+pero **sin descarga**; sirve solo como referencia para contrastar.
+
 ## Límites territoriales (DPA) — CONALI / INEC
 
 Identificada la fuente oficial para las geometrías de provincias, cantones y parroquias:
@@ -152,9 +179,57 @@ señalarían dónde viven las víctimas; no se recomienda publicarlas.
 
 Vías posibles, **pospuestas** (se retomarán más adelante):
 
-- Estadísticas de denuncias de la Fiscalía General del Estado
+- Estadísticas de denuncias de la Fiscalía General del Estado (candidata
+  principal, ver abajo)
 - Solicitud formal de acceso a la información pública (LOTAIP)
 - Reportes ciudadanos y noticias ([[Niveles de Confianza]] 🟡 / 🟠)
+
+### Candidata: Fiscalía — Analítica de cifras de robo (revisado 2026-09-25)
+
+https://www.fiscalia.gob.ec/analitica-cifras-de-robo/
+
+Tablero **Power BI publicado en la web** (6 páginas, fecha de corte 11 de
+septiembre de 2026). Se leyó la estructura del modelo de datos que descarga el
+visor, no las filas.
+
+**Origen según el propio informe:**
+
+- Son **noticias del delito** (denuncias) de robo registradas por la FGE,
+  delitos «de mayor connotación psicosocial» (manual de indicadores 2015).
+- **2019–2022:** cifras del Grupo de Fortalecimiento Estadístico de la
+  Comisión Especial de Estadística de Seguridad, Justicia, Crimen y
+  Transparencia.
+- **Desde 2023:** el tipo de robo lo asigna un **modelo de aprendizaje
+  automático** (procesamiento de lenguaje natural) de la FGE. El informe
+  advierte: *«Datos sujetos a variación»*.
+
+**Tablas del modelo:**
+
+| Tabla | Período | Campos útiles | Ubicación |
+|---|---|---|---|
+| `df` | 2019–2022 | número de denuncia, fecha y hora, modalidad, presunto delito, desagregación | ciudad, parroquia, códigos de cantón, parroquia y **barrio** |
+| `df2` | 2023 en adelante | número de denuncia, fecha y hora, tipo de robo, modalidad | parroquia, cantón, provincia, **latitud y longitud** |
+
+Tablas auxiliares: `CODUBI` (códigos de cantón) y `DescRobos`.
+
+> [!warning] Limitaciones
+> - **Sin descarga.** No hay archivo ni botón de exportar; la API de Power BI
+>   responde 403 fuera de su visor. Extraer filas sería scrapear una API
+>   interna no documentada: mismo criterio que con el visor de la ANT, **no se
+>   hace**.
+> - **Clasificación automática desde 2023:** el tipo de robo es una estimación
+>   del modelo, no un dato oficial puro. Debe indicarse en la ficha del
+>   registro y en [[Calidad de Datos]].
+> - **Datos personales en `df`:** género, sexo, edad, estatus migratorio y
+>   autoidentificación étnica. **Nunca se cargan** ([[Esquema de Campos]]).
+> - Son **denuncias**, no hechos confirmados: el subregistro aplica igual que
+>   en el resto de fuentes.
+
+**Siguiente paso (pospuesto):** solicitud formal a la FGE o por LOTAIP
+pidiendo exactamente: denuncias de robo desde 2019 con número anonimizado,
+fecha, hora, provincia, cantón, parroquia, tipo de robo, modalidad, latitud y
+longitud, **sin datos personales**, en CSV o XLSX. Nombrar la tabla y los
+campos hace la solicitud concreta y fácil de atender.
 
 ## No estructurada
 

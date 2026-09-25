@@ -3,7 +3,6 @@ tags: [version, v1, mapa-historico]
 actualizado: 2026-09-23
 estado: por empezar
 ---
-
 # V1 — Mapa Histórico
 
 > [!abstract] Objetivo
@@ -39,28 +38,28 @@ ese camino funciona, el [[Stack e Infraestructura]] queda probado.
 
 ### Datos
 
-| Fuente | Cómo se muestra |
-|---|---|
-| Homicidios intencionales | Puntos + mapa de calor |
-| Personas desaparecidas | Puntos + mapa de calor; las **localizadas se quitan del mapa** |
-| Detenidos y aprehendidos | **Capa aparte**, solo mapa de calor, rotulada como actividad policial |
-| Extorsión y vacunas a negocios (FGE / OECO) | **Por cantón**, semáforo de riesgo comercial ([[Extorsión y Vacunas a Negocios]]) |
-| Siniestros de tránsito (INEC) | **Por cantón** (no hay coordenadas) |
-| Población por cantón (INEC) | No se muestra; sirve para calcular tasas |
-| Robos | **Por definir** — no hay fuente oficial |
+| Fuente                                       | Cómo se muestra                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------- |
+| Homicidios intencionales                     | Puntos + mapa de calor                                                      |
+| Personas desaparecidas                       | Puntos + mapa de calor; las**localizadas se quitan del mapa**         |
+| Detenidos y aprehendidos                     | **Capa aparte**, solo mapa de calor, rotulada como actividad policial |
+| Extorsión y vacunas a negocios (FGE / OECO) | **Por cantón**, semáforo de riesgo comercial ([[Extorsión y Vacunas a Negocios]])                     |
+| Siniestros de tránsito (INEC)               | **Por cantón** (no hay coordenadas)                                  |
+| Población por cantón (INEC)                | No se muestra; sirve para calcular tasas                                    |
+| Robos                                        | **Por definir** — no hay fuente oficial                              |
 
 Todo desde **2019**, el primer año en que todos los datasets tienen datos.
 Tipos de incidente según [[Tipos de Incidente]].
 
 ### Páginas
 
-| Página | Qué contiene |
-|---|---|
-| **Inicio** | Qué es ReporteEC, qué muestra y qué no, cómo leer el mapa (colores = confianza, íconos = tipo) y accesos a las demás páginas |
-| **Mapa** | La vista principal: capas, filtros y detalle de cada incidente |
-| **Estadísticas** | Gráficos por tipo, provincia, cantón y mes, con conteo y tasa |
-| **Metodología** | Cómo se construye cada dato (ver abajo) |
-| **Licencia y fuentes** | Atribución de cada fuente, licencia de los datos abiertos, licencia de la plataforma y aviso de responsabilidad |
+| Página                      | Qué contiene                                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Inicio**             | Qué es ReporteEC, qué muestra y qué no, cómo leer el mapa (colores = confianza, íconos = tipo) y accesos a las demás páginas |
+| **Mapa**               | La vista principal: capas, filtros y detalle de cada incidente                                                                      |
+| **Estadísticas**      | Gráficos por tipo, provincia, cantón y mes, con conteo y tasa                                                                     |
+| **Metodología**       | Cómo se construye cada dato (ver abajo)                                                                                            |
+| **Licencia y fuentes** | Atribución de cada fuente, licencia de los datos abiertos, licencia de la plataforma y aviso de responsabilidad                    |
 
 ### Mapa
 
@@ -133,17 +132,17 @@ información. Debe explicar:
 
 ## Orden de desarrollo
 
-| # | Tarea | Por qué en este orden |
-|---|---|---|
-| 1 | Fase 0: esqueleto de punta a punta | Prueba el stack antes de invertir en funciones |
-| 2 | Modelo de datos definitivo | Cambiarlo después obliga a migrar todo |
-| 3 | Ingesta de los tres datasets del Ministerio, con tests | Sin datos no hay mapa |
-| 4 | Mapa: capas, colores, íconos, mapa de calor, detalle | Es el corazón del producto |
-| 5 | Filtros | |
-| 6 | Población y estadísticas | La tasa necesita la población |
-| 7 | Siniestros y riesgo de extorsión por cantón | Otra forma de dibujar; coropletos y semáforos cantonales |
-| 8 | Páginas: inicio, metodología, licencia y fuentes | Explican lo que ya existe |
-| 9 | PWA, despliegue, respaldos | Para publicarlo |
+| # | Tarea                                                  | Por qué en este orden                                    |
+| - | ------------------------------------------------------ | --------------------------------------------------------- |
+| 1 | Fase 0: esqueleto de punta a punta                     | Prueba el stack antes de invertir en funciones            |
+| 2 | Modelo de datos definitivo                             | Cambiarlo después obliga a migrar todo                   |
+| 3 | Ingesta de los tres datasets del Ministerio, con tests | Sin datos no hay mapa                                     |
+| 4 | Mapa: capas, colores, íconos, mapa de calor, detalle  | Es el corazón del producto                               |
+| 5 | Filtros                                                |                                                           |
+| 6 | Población y estadísticas                             | La tasa necesita la población                            |
+| 7 | Siniestros y riesgo de extorsión por cantón          | Otra forma de dibujar; coropletos y semáforos cantonales |
+| 8 | Páginas: inicio, metodología, licencia y fuentes     | Explican lo que ya existe                                 |
+| 9 | PWA, despliegue, respaldos                             | Para publicarlo                                           |
 
 ## Qué evitar
 
@@ -167,7 +166,7 @@ Lista para revisar a mano antes de dar la V1 por terminada.
 
 - [ ] Homicidios, desaparecidas y detenidos aparecen desde 2019
 - [ ] El total de homicidios de un año coincide con el total del archivo
-      oficial de ese año
+  oficial de ese año
 - [ ] Ningún punto cae fuera de Ecuador
 - [ ] Correr la ingesta dos veces no duplica registros
 - [ ] Una persona desaparecida con fecha de localización no aparece en el mapa
@@ -176,9 +175,9 @@ Lista para revisar a mano antes de dar la V1 por terminada.
 
 - [ ] Los puntos se ven al acercar y el mapa de calor al alejar
 - [ ] Los detenidos solo aparecen al activar su capa, y nunca mezclados con
-      los incidentes
+  los incidentes
 - [ ] Cada marcador tiene el color de su nivel de confianza y el ícono de su
-      tipo
+  tipo
 - [ ] Tocar un punto muestra tipo, fecha, lugar, fuente y enlace
 - [ ] Cambiar de año no cambia el color de los marcadores
 - [ ] El mapa carga rápido con todos los años activados

@@ -1,0 +1,199 @@
+@import "tailwindcss";
+@import "@fontsource-variable/archivo/wdth.css";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/*
+ * Registro Oficial world.
+ * A mineral paper and a night-blue ink carry the interface; the registry's
+ * stamp blue (sello) marks what is active and heads the page. On the map,
+ * hue belongs to the four incident types; confidence is drawn as mark style.
+ */
+@theme {
+  --font-sans: "Archivo Variable", "Archivo", system-ui, sans-serif;
+
+  --color-paper: #edf0ee;
+  --color-paper-deep: #dfe6e3;
+  --color-sheet: #f8f9f7;
+  --color-ink: #15212c;
+  --color-ink-2: #384552;
+  --color-ink-3: #56626e;
+  --color-rule-soft: #c3cbc8;
+
+  /* Registry stamp blue: masthead field, active and selected states. */
+  --color-sello: #1d4a73;
+  --color-sello-soft: #d3dfe8;
+
+  /* Incident types: the only hues on the map. */
+  --color-homicidio: #b23b2a;
+  --color-sicariato: #6d1f3b;
+  --color-femicidio: #8a55bd;
+  --color-desaparecida: #1d6f78;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-sello);
+    color: var(--color-paper);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-sello);
+    outline-offset: 2px;
+  }
+
+  a {
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-3) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-ink-3);
+    border: 2px solid var(--color-paper);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Gazette nameplate: condensed, heavy, tight. */
+  .nameplate {
+    font-stretch: 62%;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 0.9;
+  }
+
+  /* Section and control labels: narrow, semibold, never an eyebrow over a heading. */
+  .label {
+    font-stretch: 75%;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* The gazette's double rule: a heavy line over a hairline. */
+  .double-rule {
+    border-bottom: 3px solid var(--color-ink);
+    box-shadow: 0 3px 0 var(--color-paper), 0 4px 0 var(--color-ink);
+  }
+
+  /* Disabled is hatching, never a faded hue. */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 3px,
+      color-mix(in srgb, var(--color-ink) 22%, transparent) 3px 4px
+    );
+  }
+
+  /* The signature moment: an entry is inked onto the column top to bottom. */
+  .ink-in {
+    animation: ink-in 520ms var(--ease-out-expo) both;
+  }
+
+  @keyframes ink-in {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ink-in {
+      animation: none;
+    }
+  }
+}
+
+/* MapLibre chrome, rebuilt in the gazette's grammar. */
+.maplibregl-ctrl-geolocate {
+  /* Location is driven by the labeled button in the map, not the icon control. */
+  display: none !important;
+}
+
+.maplibregl-user-location-dot,
+.maplibregl-user-location-dot::before {
+  background-color: var(--color-sello);
+}
+
+.maplibregl-user-location-dot::after {
+  border-color: var(--color-sheet);
+  box-shadow: 0 0 0 1px var(--color-ink);
+}
+
+.maplibregl-user-location-accuracy-circle {
+  background-color: color-mix(in srgb, var(--color-sello) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-sello) 45%, transparent);
+}
+
+.maplibregl-map {
+  font-family: var(--font-sans);
+}
+
+.maplibregl-ctrl-group {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid var(--color-ink);
+  background: var(--color-sheet) !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--color-ink) !important;
+}
+
+.maplibregl-ctrl-group button:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: -3px;
+}
+
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--color-sheet) 88%, transparent) !important;
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--color-ink-2);
+}
+
+.maplibregl-ctrl-scale {
+  border-color: var(--color-ink);
+  border-width: 0 1px 1px;
+  background: color-mix(in srgb, var(--color-sheet) 80%, transparent);
+  color: var(--color-ink);
+  font-size: 11px;
+}
