@@ -174,7 +174,16 @@ Borders come in three weights: a 1px ink rule frames every ordinary control and 
 A single ~56px bar (`h-14`, `.double-rule` beneath it), entirely on the `sello` field: the nameplate at the left (a `Link` to `/`), inline section nav in the middle (Mapa · Estadísticas · Metodología · Fuentes; the active route inverts to `bg-paper`/`text-sello`, the rest sit at `text-paper/85`), and the compact data-cut readout plus the "Reportar" entry point at the right. Below `sm:` the nav, data cut and "Reportar" collapse behind a "Menú" disclosure button; open, they stack in a panel under the bar. "Reportar" itself is a bordered `text-paper` chip at rest (a `sello` field has no room left for the old ink-hatch texture) inverting to `bg-paper`/`text-sello` once opened, revealing the same `.ink-in`-animated popover stating plainly it arrives in a future version. The long subtitle and the separate "Fuente" line are gone; the masthead's only job now is orientation and navigation.
 
 ### Filter Strip
-A horizontally-scrollable row of bordered controls: `PlaceSelect` (a bordered field with a label chip, a native `<select>`, an inline SVG chevron — unchanged, still neutral ink/sheet), incident-type pill toggles (bordered rectangle with a `Mark` icon in its type hue and a tabular count, inverting to `bg-sello`/`text-paper` when active — previously `bg-ink`). The canton-layer switch and the detentions toggle (the strip's one dashed-border control, turning solid and `bg-sello`/`text-paper` once switched on) render only on the map page (`mapControls`, `components/FilterStrip.tsx`) — Estadísticas reuses the same strip without them, since neither means anything off the map.
+A single non-wrapping row of bordered controls, all 32px tall. On narrow screens the row scrolls horizontally.
+
+- **`PlaceSelect` (province, canton):** a bordered field with a label chip, a native `<select>` and an inline SVG chevron.
+- **Two `Dropdown` disclosures (`components/Dropdown.tsx`), in the same frame:**
+  - Label chip plus a short summary of the choice ("Todos", "3 de 4", "Extorsión + detenciones") and a chevron.
+  - The panel is `position: fixed` and measured from its button, so the scroller never clips it.
+  - The panel closes with Esc (focus returns to the button) or with a click outside.
+- **Tipos:** native checkboxes, each with its `Mark` and a tabular count, plus a "Mostrar todos" shortcut.
+- **Capas (map page only):** a radio group for the canton layer and a separate checkbox for detentions, labelled as police activity. The button turns `bg-sello`/`text-paper` while any layer is on, so an extra layer never goes unnoticed.
+- Estadísticas reuses the strip without Capas.
 
 ### Time Rule
 Two segmented strips (years, months) inside a single bordered box with internal 1px dividers. Active cells are `bg-sello`/`text-paper` (previously ink); unavailable months/years are hatched, `cursor-not-allowed`, with an explanatory `title`.

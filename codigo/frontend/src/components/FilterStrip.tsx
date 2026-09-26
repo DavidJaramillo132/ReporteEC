@@ -1,6 +1,8 @@
+import { Dropdown } from './Dropdown'
 import { Mark } from './Mark'
 import type { AdminUnitOut } from '../lib/api'
 import type { CantonLayer, IncidentType } from '../lib/registry'
+import { layersSummary, typesSummary } from '../lib/filterSummary'
 import { INCIDENT_TYPES, TYPE_LABEL, formatCount, placeName } from '../lib/registry'
 
 interface FilterStripProps {
@@ -35,7 +37,7 @@ const CANTON_LAYER_OPTIONS: { value: CantonLayer; label: string }[] = [
 export function FilterStrip(props: FilterStripProps) {
   const { provinces, cantons, province, canton, types, typeCounts, mapControls } = props
   return (
-    <div className="relative flex items-center gap-x-5 gap-y-2 overflow-x-auto border-b border-ink bg-paper px-4 py-2.5 lg:flex-wrap lg:overflow-visible lg:px-6">
+    <div className="relative flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-ink bg-paper px-4 py-2.5 lg:px-6">
       <div className="flex shrink-0 items-center gap-2">
         <PlaceSelect
           label="Provincia"
@@ -54,66 +56,72 @@ export function FilterStrip(props: FilterStripProps) {
         />
       </div>
 
-      <fieldset className="flex shrink-0 items-center gap-1.5 lg:flex-wrap">
-        <legend className="sr-only">Tipos de incidente</legend>
-        {INCIDENT_TYPES.map((type) => {
-          const active = types.includes(type)
-          return (
-            <button
-              key={type}
-              type="button"
-              aria-pressed={active}
-              onClick={() => props.onToggleType(type)}
-              className={`flex h-8 items-center gap-1.5 border border-ink pr-2.5 pl-1.5 text-[13px] transition-colors duration-150 ${
-                active ? 'bg-sello text-paper' : 'bg-transparent text-ink-2 hover:bg-sheet'
-              }`}
-            >
-              <span className={`grid place-items-center ${active ? 'bg-paper' : ''} rounded-full`}>
-                <Mark type={type} size={20} />
-              </span>
-              {TYPE_LABEL[type].many}
-              <span className={`tabular-nums ${active ? 'text-paper/75' : 'text-ink-3'}`}>
-                {formatCount(typeCounts[type] ?? 0)}
-              </span>
-            </button>
-          )
-        })}
-      </fieldset>
-
-      {mapControls && (
-        <>
-          <fieldset className="flex shrink-0 items-center gap-1.5 lg:flex-wrap">
-            <legend className="sr-only">Capas por cantón</legend>
-            {CANTON_LAYER_OPTIONS.map((opt) => {
-              const active = mapControls.cantonLayer === opt.value
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => mapControls.onCantonLayer(opt.value)}
-                  className={`flex h-8 items-center border border-ink px-2.5 text-[13px] transition-colors duration-150 ${
-                    active ? 'bg-sello text-paper' : 'bg-transparent text-ink-2 hover:bg-sheet'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              )
-            })}
-          </fieldset>
-
+      <Dropdown label="Tipos" value={typesSummary(types)}>
+        <fieldset>
+          <legend className="label mb-2 text-ink-3">Tipos de incidente</legend>
+          <ul className="divide-y divide-rule-soft">
+            {INCIDENT_TYPES.map((type) => (
+              <li key={type}>
+                <label className="flex cursor-pointer items-center gap-2 py-1.5">
+                  <input
+                    type="checkbox"
+                    checked={types.includes(type)}
+                    onChange={() => props.onToggleType(type)}
+                    className="size-4 accent-sello"
+                  />
+                  <Mark type={type} size={18} />
+                  <span className="flex-1">{TYPE_LABEL[type].many}</span>
+                  <span className="text-ink-3 tabular-nums">{formatCount(typeCounts[type] ?? 0)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+        {types.length < INCIDENT_TYPES.length && (
           <button
             type="button"
-            aria-pressed={mapControls.detentions}
-            onClick={() => mapControls.onDetentions(!mapControls.detentions)}
-            className={`flex h-8 shrink-0 items-center gap-2 border border-dashed lg:ml-auto border-ink px-2.5 text-[13px] transition-colors duration-150 ${
-              mapControls.detentions ? 'border-solid bg-sello text-paper' : 'text-ink-2 hover:bg-sheet'
-            }`}
+            onClick={() => INCIDENT_TYPES.filter((t) => !types.includes(t)).forEach(props.onToggleType)}
+            className="mt-2 text-[13px] font-medium underline hover:no-underline"
           >
-            <span aria-hidden="true" className="hatch inline-block size-3 border border-current" />
-            Actividad policial: detenciones
+            Mostrar todos
           </button>
-        </>
+        )}
+      </Dropdown>
+
+      {mapControls && (
+        <Dropdown
+          label="Capas"
+          value={layersSummary(mapControls.cantonLayer, mapControls.detentions)}
+          highlighted={mapControls.cantonLayer !== 'none' || mapControls.detentions}
+        >
+          <fieldset>
+            <legend className="label mb-2 text-ink-3">Capa por cantón</legend>
+            {CANTON_LAYER_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex cursor-pointer items-center gap-2 py-1.5">
+                <input
+                  type="radio"
+                  name="canton-layer"
+                  checked={mapControls.cantonLayer === opt.value}
+                  onChange={() => mapControls.onCantonLayer(opt.value)}
+                  className="size-4 accent-sello"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </fieldset>
+          <label className="mt-2 flex cursor-pointer items-start gap-2 border-t border-ink pt-3">
+            <input
+              type="checkbox"
+              checked={mapControls.detentions}
+              onChange={() => mapControls.onDetentions(!mapControls.detentions)}
+              className="mt-0.5 size-4 accent-sello"
+            />
+            <span>
+              Detenciones
+              <span className="block text-[12.5px] text-ink-3">Actividad policial, no inseguridad.</span>
+            </span>
+          </label>
+        </Dropdown>
       )}
     </div>
   )
