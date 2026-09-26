@@ -42,6 +42,8 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      # Official source files ingestion adapters read and download into.
+      - ./data:/data
     depends_on:
       postgres:
         condition: service_healthy

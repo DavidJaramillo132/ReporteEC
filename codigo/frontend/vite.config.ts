@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
@@ -11,5 +12,9 @@ export default defineConfig({
     // MapLibre 6 loads its worker relative to its own module URL; pre-bundling
     // moves the module and breaks that path in development.
     exclude: ['maplibre-gl'],
+  },
+  test: {
+    // Pure-function unit tests only; no DOM needed.
+    environment: 'node',
   },
 })
