@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 CKAN_BASE_URL = "https://www.datosabiertos.gob.ec"
 HOMICIDIOS_PACKAGE_ID = "homicidios-intencionales"
+DESAPARECIDAS_PACKAGE_ID = "personas-desaparecidas"
+DETENIDOS_PACKAGE_ID = "personas-detenidas-aprehendidas"
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +72,14 @@ def is_per_record_resource(resource: Resource) -> bool:
     return name.endswith(".xlsx") and "_pm_" in name
 
 
-def select_homicide_resources(resources: list[Resource]) -> list[Resource]:
+def select_per_record_resources(resources: list[Resource]) -> list[Resource]:
+    """Every per-record resource of a package, in the order the API returns them.
+
+    Shared by all three MDI datasets (homicides, missing persons,
+    detentions): each publishes its data as "_pm_" XLSX resources alongside
+    "_dd_" data dictionaries, so the same filter applies regardless of which
+    package_id was queried.
+    """
     return [resource for resource in resources if is_per_record_resource(resource)]
 
 

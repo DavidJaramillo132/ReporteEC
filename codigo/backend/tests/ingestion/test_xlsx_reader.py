@@ -94,3 +94,34 @@ def test_falls_back_to_scanning_when_the_data_is_not_on_the_second_sheet(tmp_pat
             "activo": "si",
         }
     ]
+
+
+def _make_large_sheet(row_count: int) -> str:
+    header = '<row r="1"><c r="A1" t="inlineStr"><is><t>provincia</t></is></c></row>'
+    rows = [
+        f'<row r="{n}"><c r="A{n}" t="inlineStr"><is><t>row-{n}</t></is></c></row>'
+        for n in range(2, row_count + 2)
+    ]
+    return (
+        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        f"<worksheet {NS}><sheetData>{header}{''.join(rows)}</sheetData></worksheet>"
+    )
+
+
+def test_reads_every_row_of_a_large_sheet_without_building_the_whole_tree(tmp_path: Path):
+    # Regression test for the ET.fromstring(archive.read(...)) approach: it
+    # parsed the entire worksheet into one in-memory tree before yielding
+    # anything, which does not scale to a 600k-row historical file.
+    # `read_rows` must still be a generator that streams rows one at a time
+    # (and yields every one of them, in order) once iterparse replaced it.
+    row_count = 5000
+    path = make_xlsx(tmp_path, {"sheet1.xml": _make_large_sheet(row_count)})
+
+    rows = read_rows(path)
+    assert hasattr(rows, "__next__"), "read_rows must be a generator, not a list-builder"
+
+    values = [row["provincia"] for row in rows]
+
+    assert len(values) == row_count
+    assert values[0] == "row-2"
+    assert values[-1] == f"row-{row_count + 1}"

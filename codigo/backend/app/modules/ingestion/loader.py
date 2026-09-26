@@ -10,17 +10,25 @@ import json
 import logging
 from collections import Counter
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.modules.detentions.models import Detention
 from app.modules.incidents.models import Confidence, Incident
 from app.modules.ingestion.admin_units import upsert_admin_units
 from app.modules.ingestion.models import PipelineRun, RunStatus
 from app.modules.ingestion.readers.xlsx import read_rows
-from app.modules.ingestion.records import NormalizedIncident, RowRejected, assign_record_ids
+from app.modules.ingestion.records import (
+    NormalizedDetention,
+    NormalizedIncident,
+    NormalizedRecord,
+    RowRejected,
+    assign_record_ids,
+)
 from app.modules.ingestion.sources import ensure_source
 
 logger = logging.getLogger(__name__)
@@ -30,6 +38,58 @@ BATCH_SIZE = 1000
 # Reasons that are an intentional filter, not a data problem -- tallied
 # apart so they never inflate the "errors" count a maintainer should react to.
 SKIPPED_REASONS = {"before_min_year"}
+
+
+@dataclass(frozen=True, slots=True)
+class LoadTarget:
+    """Which table one `load_file` call inserts into, and how.
+
+    `model` supplies both the insert statement's table and the
+    (source_id, source_record_id) conflict key -- every loadable model
+    shares that same unique constraint, so no per-target special-casing is
+    needed there. `values` maps one normalized row (plus the resolved
+    source id) to the dict `insert(...).values(...)` needs; it is the only
+    piece that actually differs between incidents and detentions.
+    """
+
+    model: type[Incident] | type[Detention]
+    values: Callable[[int, NormalizedRecord], dict[str, object]]
+    batch_size: int = BATCH_SIZE
+
+
+def _incident_values(source_id: int, row: NormalizedIncident) -> dict[str, object]:
+    return {
+        "source_id": source_id,
+        "source_record_id": row.source_record_id,
+        "type": row.type,
+        "confidence": Confidence.OFICIAL,
+        "occurred_at": row.occurred_at,
+        "geom": func.ST_SetSRID(func.ST_MakePoint(row.longitude, row.latitude), 4326),
+        "location_precision": row.location_precision,
+        "province_code": row.province_code,
+        "canton_code": row.canton_code,
+        "located_at": row.located_at,
+    }
+
+
+def _detention_values(source_id: int, row: NormalizedDetention) -> dict[str, object]:
+    return {
+        "source_id": source_id,
+        "source_record_id": row.source_record_id,
+        "detention_type": row.detention_type,
+        "iccs_code": row.iccs_code,
+        "occurred_at": row.occurred_at,
+        "geom": func.ST_SetSRID(func.ST_MakePoint(row.longitude, row.latitude), 4326),
+        "province_code": row.province_code,
+        "canton_code": row.canton_code,
+    }
+
+
+INCIDENT_TARGET = LoadTarget(model=Incident, values=_incident_values)
+# A historical detentions file runs to several hundred thousand rows; a
+# larger batch means far fewer round trips without the statement growing
+# unreasonably large.
+DETENTION_TARGET = LoadTarget(model=Detention, values=_detention_values, batch_size=5000)
 
 
 def _file_hash(path: Path) -> str:
@@ -42,9 +102,9 @@ def _file_hash(path: Path) -> str:
 
 def _normalize_all(
     rows: Iterable[dict[str, str]],
-    normalize: Callable[[dict[str, str]], NormalizedIncident],
-) -> tuple[list[NormalizedIncident], int, Counter[str], Counter[str]]:
-    accepted: list[NormalizedIncident] = []
+    normalize: Callable[[dict[str, str]], NormalizedRecord],
+) -> tuple[list[NormalizedRecord], int, Counter[str], Counter[str]]:
+    accepted: list[NormalizedRecord] = []
     processed = 0
     errors: Counter[str] = Counter()
     skipped: Counter[str] = Counter()
@@ -57,29 +117,20 @@ def _normalize_all(
     return accepted, processed, errors, skipped
 
 
-def _insert_batch(session: Session, source_id: int, batch: list[NormalizedIncident]) -> int:
-    values = [
-        {
-            "source_id": source_id,
-            "source_record_id": row.source_record_id,
-            "type": row.type,
-            "confidence": Confidence.OFICIAL,
-            "occurred_at": row.occurred_at,
-            "geom": func.ST_SetSRID(func.ST_MakePoint(row.longitude, row.latitude), 4326),
-            "location_precision": row.location_precision,
-            "province_code": row.province_code,
-            "canton_code": row.canton_code,
-        }
-        for row in batch
-    ]
+def _insert_batch(
+    session: Session, target: LoadTarget, source_id: int, batch: list[NormalizedRecord]
+) -> int:
+    values = [target.values(source_id, row) for row in batch]
     statement = (
-        insert(Incident)
+        insert(target.model)
         .values(values)
-        .on_conflict_do_nothing(index_elements=[Incident.source_id, Incident.source_record_id])
+        .on_conflict_do_nothing(
+            index_elements=[target.model.source_id, target.model.source_record_id]
+        )
         # cursor.rowcount is unreliable (-1) for a multi-row VALUES insert
         # under psycopg; RETURNING only yields the rows actually inserted,
         # since ON CONFLICT DO NOTHING excludes skipped ones from it.
-        .returning(Incident.id)
+        .returning(target.model.id)
     )
     return len(session.execute(statement).all())
 
@@ -88,9 +139,16 @@ def load_file(
     session: Session,
     source_slug: str,
     path: str | Path,
-    normalize: Callable[[dict[str, str]], NormalizedIncident],
+    normalize: Callable[[dict[str, str]], NormalizedRecord],
+    target: LoadTarget = INCIDENT_TARGET,
 ) -> PipelineRun:
-    """Read, normalize and insert one source file, recorded as one PipelineRun."""
+    """Read, normalize and insert one source file, recorded as one PipelineRun.
+
+    `target` picks the destination table (incidents by default, via
+    INCIDENT_TARGET; pass DETENTION_TARGET to load into detentions instead).
+    Hashing, batching, ON CONFLICT DO NOTHING, PipelineRun bookkeeping and the
+    already-loaded skip are the same code path either way.
+    """
     path = Path(path)
     source = ensure_source(session, source_slug)
     file_hash = _file_hash(path)
@@ -126,8 +184,9 @@ def load_file(
         rows = assign_record_ids(rows)
 
         inserted = 0
-        for start in range(0, len(rows), BATCH_SIZE):
-            inserted += _insert_batch(session, source.id, rows[start : start + BATCH_SIZE])
+        for start in range(0, len(rows), target.batch_size):
+            batch = rows[start : start + target.batch_size]
+            inserted += _insert_batch(session, target, source.id, batch)
 
         run.processed = processed
         run.inserted = inserted

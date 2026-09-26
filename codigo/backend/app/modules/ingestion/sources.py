@@ -30,7 +30,25 @@ MDI_HOMICIDIOS = SourceSeed(
     license="Datos abiertos del Gobierno del Ecuador (datosabiertos.gob.ec)",
 )
 
-SEEDS: dict[str, SourceSeed] = {seed.slug: seed for seed in (MDI_HOMICIDIOS,)}
+MDI_DESAPARECIDAS = SourceSeed(
+    slug="mdi-desaparecidas",
+    name="Personas desaparecidas",
+    publisher="Ministerio del Interior",
+    url="https://www.datosabiertos.gob.ec/dataset/personas-desaparecidas",
+    license="Datos abiertos del Gobierno del Ecuador (datosabiertos.gob.ec)",
+)
+
+MDI_DETENIDOS = SourceSeed(
+    slug="mdi-detenidos",
+    name="Personas detenidas y aprehendidas",
+    publisher="Ministerio del Interior",
+    url="https://www.datosabiertos.gob.ec/dataset/personas-detenidas-aprehendidas",
+    license="Datos abiertos del Gobierno del Ecuador (datosabiertos.gob.ec)",
+)
+
+SEEDS: dict[str, SourceSeed] = {
+    seed.slug: seed for seed in (MDI_HOMICIDIOS, MDI_DESAPARECIDAS, MDI_DETENIDOS)
+}
 
 
 def ensure_source(session: Session, slug: str) -> Source:

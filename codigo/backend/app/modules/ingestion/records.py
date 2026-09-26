@@ -1,8 +1,8 @@
 """Shapes and errors shared by every ingestion adapter.
 
-Kept apart from any single adapter (mdi_homicidios, and later missing
-persons / detentions) because the id-assignment and rejection contract is
-the same for all of them.
+Kept apart from any single adapter (mdi_homicidios, mdi_desaparecidas,
+mdi_detenidos) because the id-assignment and rejection contract is the same
+for all of them.
 """
 
 import hashlib
@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 
+from app.modules.detentions.models import DetentionType
 from app.modules.incidents.models import IncidentType, LocationPrecision
 
 
@@ -44,6 +45,36 @@ class NormalizedIncident:
     province_code: str
     canton_code: str
     location_precision: LocationPrecision = LocationPrecision.EXACTA
+    # Missing persons only: once located, the row keeps its place in the
+    # incidents table (for statistics) but the map view hides it (see the
+    # Phase 3 migration's map_incidents WHERE clause). Every other adapter
+    # leaves this None.
+    located_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedDetention:
+    """One detention/apprehension ready to load, with no personal-data column.
+
+    Detentions are police activity, not insecurity, so they are never
+    normalized into a NormalizedIncident: a separate shape keeps them out of
+    the incidents table (and the crime map) by construction, not by a filter
+    that could be forgotten.
+    """
+
+    source_record_id: str
+    detention_type: DetentionType
+    occurred_at: datetime
+    latitude: float
+    longitude: float
+    province_code: str
+    canton_code: str
+    iccs_code: str | None = None
+
+
+# What `assign_record_ids` and the loader operate over: any adapter's output,
+# regardless of which table it ultimately loads into.
+NormalizedRecord = NormalizedIncident | NormalizedDetention
 
 
 def hash_row(row: dict[str, str]) -> str:
@@ -63,17 +94,18 @@ def hash_row(row: dict[str, str]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def assign_record_ids(rows: Sequence[NormalizedIncident]) -> list[NormalizedIncident]:
+def assign_record_ids(rows: Sequence[NormalizedRecord]) -> list[NormalizedRecord]:
     """Suffix each row's content hash with its 1-based occurrence ordinal.
 
     Two rows can hash identically -- e.g. two victims sharing every recorded
     attribute -- and without a disambiguator the second would look like a
     duplicate of the first and silently vanish on insert. Ordinals are
     assigned in row order, so re-running over an unchanged file reproduces
-    the exact same ids (deterministic across reruns).
+    the exact same ids (deterministic across reruns). Works the same for any
+    adapter's output: only `.source_record_id` and dataclass `replace` matter.
     """
     seen: dict[str, int] = {}
-    result: list[NormalizedIncident] = []
+    result: list[NormalizedRecord] = []
     for row in rows:
         seen[row.source_record_id] = seen.get(row.source_record_id, 0) + 1
         ordinal = seen[row.source_record_id]

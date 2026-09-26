@@ -1,6 +1,6 @@
 """Resource-selection tests against a captured CKAN payload -- no network involved."""
 
-from app.modules.ingestion.ckan import _resources_from_payload, select_homicide_resources
+from app.modules.ingestion.ckan import _resources_from_payload, select_per_record_resources
 
 # A trimmed, real response shape from datosabiertos.gob.ec's package_show for
 # "homicidios-intencionales": two per-record ("_pm_") files and two data
@@ -63,7 +63,7 @@ PACKAGE_SHOW_PAYLOAD = {
 def test_selects_only_per_record_xlsx_resources():
     resources = _resources_from_payload(PACKAGE_SHOW_PAYLOAD)
 
-    selected = select_homicide_resources(resources)
+    selected = select_per_record_resources(resources)
 
     assert {resource.id for resource in selected} == {
         "cb8f704e-2b27-4d7f-9431-d40c4e27fa48",
@@ -74,6 +74,6 @@ def test_selects_only_per_record_xlsx_resources():
 def test_excludes_data_dictionary_resources():
     resources = _resources_from_payload(PACKAGE_SHOW_PAYLOAD)
 
-    selected = select_homicide_resources(resources)
+    selected = select_per_record_resources(resources)
 
     assert all("_dd_" not in resource.url for resource in selected)
