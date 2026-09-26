@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -21,6 +22,8 @@ from app.core.config import database_url
 # Importing app.database.models (not just app.database.base) registers every
 # module's tables on Base.metadata, regardless of which fixtures a test uses.
 from app.database.models import Base
+from app.database.session import get_session
+from app.main import app
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -80,6 +83,16 @@ def db_session(_migrated_database: str) -> Iterator[Session]:
         session.close()
         _truncate_all_tables(engine)
         engine.dispose()
+
+
+@pytest.fixture
+def client(db_session: Session) -> Iterator[TestClient]:
+    """A FastAPI TestClient whose `get_session` dependency is the test session."""
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_session, None)
 
 
 def _truncate_all_tables(engine) -> None:

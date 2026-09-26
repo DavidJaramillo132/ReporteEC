@@ -5,7 +5,7 @@ import type { Filters } from './registry'
 export interface SavedView {
   filters: Filters
   map: MapView
-  selectedId: string | null
+  selectedId: number | null
 }
 
 const KEY = 'reporteec:consulta:v1'

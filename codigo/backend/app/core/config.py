@@ -23,3 +23,20 @@ def database_url() -> str:
             "or export DATABASE_URL (driver postgresql+psycopg://)."
         )
     return url
+
+
+# The Vite dev server (see docker-compose.yml) is reachable at either host.
+DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+@lru_cache
+def cors_origins() -> list[str]:
+    """Browser origins allowed to call the API.
+
+    CORS_ORIGINS overrides the dev defaults with a comma-separated list, e.g.
+    for a deployed frontend origin.
+    """
+    raw = os.environ.get("CORS_ORIGINS")
+    if not raw:
+        return DEFAULT_CORS_ORIGINS
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]

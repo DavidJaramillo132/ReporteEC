@@ -1,0 +1,43 @@
+# Martin tile server config: publishes ONLY the two read-only map views
+# (map_incidents, map_detentions) -- never the raw tables, and never anything
+# auto-discovered. See migrations/versions/*_admin_units_and_map_views.py for
+# the views themselves and app/database/views.py for the API's matching Core
+# table definitions.
+listen_addresses: '0.0.0.0:3000'
+
+# Dev only: the frontend is served from a different origin (Vite on 5173).
+cors: true
+
+postgres:
+  connection_string: ${DATABASE_URL}
+  auto_publish: false
+
+  tables:
+    map_incidents:
+      schema: public
+      table: map_incidents
+      srid: 4326
+      geometry_column: geom
+      geometry_type: POINT
+      id_column: id
+      properties:
+        type: text
+        confidence: text
+        year: int4
+        month: int4
+        province_code: text
+        canton_code: text
+
+    map_detentions:
+      schema: public
+      table: map_detentions
+      srid: 4326
+      geometry_column: geom
+      geometry_type: POINT
+      id_column: id
+      properties:
+        year: int4
+        month: int4
+        province_code: text
+        canton_code: text
+        detention_type: text

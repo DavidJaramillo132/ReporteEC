@@ -12,34 +12,55 @@ import { MapLegend } from './components/MapLegend'
 import { type ColumnTab, Masthead } from './components/Masthead'
 import { RegistryColumn } from './components/RegistryColumn'
 import { TimeRule } from './components/TimeRule'
+import type { AdminUnitsResponse, IncidentDetail, IncidentListResponse, MetaResponse } from './lib/api'
+import { getAdminUnits, getIncident, getIncidents, getMeta } from './lib/api'
 import { clearSavedView, loadSavedView, saveView } from './lib/persist'
-import type { Confidence, Filters, Incident, IncidentType, RegistryMeta } from './lib/registry'
-import { INCIDENT_TYPES, MONTHS, applyFilters, byNewest, loadRegistry } from './lib/registry'
+import type { Confidence, Filters } from './lib/registry'
+import { INCIDENT_TYPES, MONTHS } from './lib/registry'
 
 const SAVED = loadSavedView()
+const PAGE_SIZE = 40
+const LIST_DEBOUNCE_MS = 250
+const EMPTY_LIST: IncidentListResponse = { total: 0, counts_by_type: {}, items: [] }
+
+// Lets the map mount (and show data) immediately, before the bootstrap fetch
+// (meta + admin units) resolves and a real Filters exists.
+const FALLBACK_FILTERS: Filters = {
+  year: new Date().getFullYear(),
+  months: Array.from({ length: 12 }, (_, i) => i + 1),
+  types: [...INCIDENT_TYPES],
+  province: null,
+  canton: null,
+  detentions: false,
+}
 
 export default function App() {
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
-  const [incidents, setIncidents] = useState<Incident[]>([])
-  const [meta, setMeta] = useState<RegistryMeta | null>(null)
-  const [attempt, setAttempt] = useState(0)
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0)
+  const [meta, setMeta] = useState<MetaResponse | null>(null)
+  const [adminUnits, setAdminUnits] = useState<AdminUnitsResponse | null>(null)
 
   const [filters, setFilters] = useState<Filters | null>(SAVED?.filters ?? null)
-  const [selectedId, setSelectedId] = useState<string | null>(SAVED?.selectedId ?? null)
+  const [selectedId, setSelectedId] = useState<number | null>(SAVED?.selectedId ?? null)
+  const [selectedDetail, setSelectedDetail] = useState<IncidentDetail | null>(null)
   const [bounds, setBounds] = useState<ViewBounds | null>(null)
   const [mapView, setMapView] = useState<MapView | null>(SAVED?.map ?? null)
   const [focus, setFocus] = useState<FocusRequest | null>(null)
   const [tab, setTab] = useState<ColumnTab>('registro')
   const [restored, setRestored] = useState(Boolean(SAVED))
-  const [detentionsState, setDetentionsState] = useState<'idle' | 'loading' | 'error'>('idle')
   const columnRef = useRef<HTMLDivElement>(null)
+
+  const [listStatus, setListStatus] = useState<'loading' | 'error' | 'ready'>('loading')
+  const [listResult, setListResult] = useState<IncidentListResponse>(EMPTY_LIST)
+  const [listAttempt, setListAttempt] = useState(0)
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     const controller = new AbortController()
-    loadRegistry(controller.signal)
-      .then(({ incidents, meta }) => {
-        setIncidents(incidents)
+    Promise.all([getMeta(controller.signal), getAdminUnits(controller.signal)])
+      .then(([meta, adminUnits]) => {
         setMeta(meta)
+        setAdminUnits(adminUnits)
         setFilters((current) => current ?? defaultFilters(meta))
         setStatus('ready')
       })
@@ -50,82 +71,133 @@ export default function App() {
         }
       })
     return () => controller.abort()
-  }, [attempt])
+  }, [bootstrapAttempt])
 
-  const lastMonth = meta?.periodo.hasta ? Number(meta.periodo.hasta.slice(5, 7)) : 12
-  const availableYears = useMemo(
-    () => [...new Set(incidents.map((i) => Number(i.properties.fecha?.slice(0, 4))).filter(Boolean))],
-    [incidents],
-  )
+  const lastMonth = meta?.period.to ? Number(meta.period.to.slice(5, 7)) : 12
 
-  const filtered = useMemo(
-    () => (filters ? applyFilters(incidents, filters).sort(byNewest) : []),
-    [incidents, filters],
-  )
+  // The registry column's data: fetched from the API for the current
+  // filters + map viewport, debounced so panning does not flood the backend.
+  useEffect(() => {
+    if (!filters || !bounds) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      requestIdRef.current += 1
+      const requestId = requestIdRef.current
+      setListStatus('loading')
+      getIncidents(
+        {
+          year: filters.year,
+          months: filters.months,
+          types: filters.types,
+          province: filters.province,
+          canton: filters.canton,
+          bbox: [bounds.west, bounds.south, bounds.east, bounds.north],
+          limit: PAGE_SIZE,
+          offset: 0,
+        },
+        controller.signal,
+      )
+        .then((result) => {
+          if (requestIdRef.current !== requestId) return
+          setListResult(result)
+          setListStatus('ready')
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) {
+            console.error(error)
+            setListStatus('error')
+          }
+        })
+    }, LIST_DEBOUNCE_MS)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [filters, bounds, listAttempt])
 
-  const inView = useMemo(() => {
-    if (!bounds) return filtered
-    return filtered.filter(({ geometry }) => {
-      const [lng, lat] = geometry.coordinates
-      return lng >= bounds.west && lng <= bounds.east && lat >= bounds.south && lat <= bounds.north
+  const loadMore = useCallback(() => {
+    if (!filters || !bounds) return
+    const requestId = requestIdRef.current
+    getIncidents({
+      year: filters.year,
+      months: filters.months,
+      types: filters.types,
+      province: filters.province,
+      canton: filters.canton,
+      bbox: [bounds.west, bounds.south, bounds.east, bounds.north],
+      limit: PAGE_SIZE,
+      offset: listResult.items.length,
     })
-  }, [filtered, bounds])
+      .then((page) => {
+        // Filters or the viewport moved on while this was in flight: its
+        // rows no longer belong to what listResult currently holds.
+        if (requestIdRef.current !== requestId) return
+        setListResult((current) => ({
+          total: page.total,
+          counts_by_type: page.counts_by_type,
+          items: [...current.items, ...page.items],
+        }))
+      })
+      .catch((error: unknown) => console.error(error))
+  }, [filters, bounds, listResult.items.length])
 
-  const provinces = useMemo(() => [...new Set(incidents.map((i) => i.properties.provincia))].sort(), [incidents])
-  const provincia = filters?.provincia ?? null
-  const cantons = useMemo(
+  // The full detail (source, record id) for whichever entry is selected,
+  // from either a map click or a registry row. Left in place (not reset)
+  // when selectedId clears; `visibleDetail` below masks it instead.
+  useEffect(() => {
+    if (selectedId === null) return
+    const controller = new AbortController()
+    getIncident(selectedId, controller.signal)
+      .then((detail) => setSelectedDetail(detail))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error)
+      })
+    return () => controller.abort()
+  }, [selectedId])
+
+  // Guards against showing the previous selection's detail while the new
+  // one is still in flight, and hides it once the panel is closed.
+  const visibleDetail = selectedId !== null && selectedDetail?.id === selectedId ? selectedDetail : null
+
+  const provinceOptions = adminUnits?.provinces ?? []
+  const selectedProvince = filters?.province ?? null
+  const cantonOptions = useMemo(
     () =>
-      provincia
-        ? [...new Set(incidents.filter((i) => i.properties.provincia === provincia).map((i) => i.properties.canton))].sort()
+      selectedProvince
+        ? (adminUnits?.cantons ?? []).filter((c) => c.province_code === selectedProvince)
         : [],
-    [incidents, provincia],
+    [adminUnits, selectedProvince],
   )
-
-  /** Counts per type under every filter except the type toggles themselves. */
-  const typeCounts = useMemo(() => {
-    const counts = Object.fromEntries(INCIDENT_TYPES.map((t) => [t, 0])) as Record<IncidentType, number>
-    if (!filters) return counts
-    for (const i of applyFilters(incidents, { ...filters, types: INCIDENT_TYPES })) counts[i.properties.tipo] += 1
-    return counts
-  }, [incidents, filters])
 
   const presentConfidence = useMemo(
-    () => [...new Set(filtered.map((i) => i.properties.confianza))] as Confidence[],
-    [filtered],
+    () => [...new Set(listResult.items.map((i) => i.confidence))] as Confidence[],
+    [listResult.items],
   )
 
-  const selected = useMemo(
-    () => (selectedId ? (filtered.find((i) => i.id === selectedId) ?? null) : null),
-    [filtered, selectedId],
-  )
+  const lastUpdatedAt = useMemo(() => {
+    if (!meta || !visibleDetail) return null
+    return meta.last_runs.find((run) => run.slug === visibleDetail.source_slug)?.finished_at ?? null
+  }, [meta, visibleDetail])
 
   useEffect(() => {
-    if (filters && mapView) saveView({ filters, map: mapView, selectedId: selected?.id ?? null })
-  }, [filters, mapView, selected])
+    if (filters && mapView) saveView({ filters, map: mapView, selectedId })
+  }, [filters, mapView, selectedId])
 
   const update = (patch: Partial<Filters>) => setFilters((f) => (f ? { ...f, ...patch } : f))
 
-  const selectIncident = useCallback((incident: Incident, fly: boolean) => {
-    setSelectedId(incident.id)
+  const selectIncident = useCallback((id: number, coordinates: [number, number] | null, fly: boolean) => {
+    setSelectedId(id)
     setTab('registro')
-    if (fly) setFocus({ id: incident.id, coordinates: incident.geometry.coordinates as [number, number], nonce: Date.now() })
+    if (fly && coordinates) setFocus({ id, coordinates, nonce: Date.now() })
     columnRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
-  const handleMapSelect = useCallback(
-    (id: string) => {
-      const incident = incidents.find((i) => i.id === id)
-      if (incident) selectIncident(incident, false)
-    },
-    [incidents, selectIncident],
-  )
+  const handleMapSelect = useCallback((id: number) => selectIncident(id, null, false), [selectIncident])
 
   const handleViewChange = useCallback((b: ViewBounds, v: MapView) => {
     setBounds(b)
     setMapView(v)
   }, [])
-
-  const handleDetentionsLoaded = useCallback((ok: boolean) => setDetentionsState(ok ? 'idle' : 'error'), [])
 
   const resetConsultation = () => {
     clearSavedView()
@@ -137,19 +209,18 @@ export default function App() {
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
-      <Masthead cutDate={meta?.periodo.hasta ?? null} tab={tab} onTab={setTab} />
+      <Masthead cutDate={meta?.period.to ?? null} tab={tab} onTab={setTab} />
 
       {filters && (
         <FilterStrip
-          provinces={provinces}
-          cantons={cantons}
-          provincia={filters.provincia}
+          provinces={provinceOptions}
+          cantons={cantonOptions}
+          province={filters.province}
           canton={filters.canton}
           types={filters.types}
-          typeCounts={typeCounts}
+          typeCounts={listResult.counts_by_type}
           detentions={filters.detentions}
-          detentionsState={detentionsState}
-          onProvincia={(provincia) => update({ provincia, canton: null })}
+          onProvince={(province) => update({ province, canton: null })}
           onCanton={(canton) => update({ canton })}
           onToggleType={(type) =>
             update({
@@ -158,10 +229,7 @@ export default function App() {
                 : [...filters.types, type],
             })
           }
-          onDetentions={(detentions) => {
-            if (detentions) setDetentionsState('loading')
-            update({ detentions })
-          }}
+          onDetentions={(detentions) => update({ detentions })}
         />
       )}
 
@@ -169,14 +237,13 @@ export default function App() {
         <div className="flex flex-col lg:min-h-0 lg:border-r lg:border-ink">
           <div className="relative h-[62svh] min-h-[340px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink">
             <IncidentMap
-              incidents={filtered}
+              filters={filters ?? FALLBACK_FILTERS}
               showDetentions={Boolean(filters?.detentions)}
-              selectedId={selected?.id ?? null}
+              selectedId={selectedId}
               initialView={SAVED?.map ?? null}
               focus={focus}
               onSelect={handleMapSelect}
               onViewChange={handleViewChange}
-              onDetentionsLoaded={handleDetentionsLoaded}
             />
             {filters && (
               <MapLegend
@@ -202,7 +269,7 @@ export default function App() {
             <TimeRule
               year={filters.year}
               months={filters.months}
-              availableYears={availableYears}
+              availableYears={meta?.years ?? []}
               lastMonth={lastMonth}
               onYear={(year) => update({ year })}
               onMonths={(months) => update({ months })}
@@ -213,16 +280,26 @@ export default function App() {
         <div ref={columnRef} className="min-h-0 bg-paper lg:overflow-y-auto" aria-label="Columna del registro">
           {tab === 'registro' && (
             <RegistryColumn
-              status={status}
-              inView={inView}
+              status={status === 'error' ? 'error' : listStatus}
+              items={listResult.items}
+              total={listResult.total}
+              countsByType={listResult.counts_by_type}
+              hasMore={listResult.items.length < listResult.total}
+              onLoadMore={loadMore}
               periodLabel={periodLabel}
               zoomedOut={zoomedOut}
-              selected={selected}
-              onSelect={(incident) => selectIncident(incident, true)}
+              selectedId={selectedId}
+              selected={visibleDetail}
+              lastUpdatedAt={lastUpdatedAt}
+              onSelect={(item) => selectIncident(item.id, [item.lon, item.lat], true)}
               onCloseDetail={() => setSelectedId(null)}
               onRetry={() => {
-                setStatus('loading')
-                setAttempt((n) => n + 1)
+                if (status === 'error') {
+                  setStatus('loading')
+                  setBootstrapAttempt((n) => n + 1)
+                } else {
+                  setListAttempt((n) => n + 1)
+                }
               }}
               onOpenMethodology={() => setTab('metodologia')}
             />
@@ -235,15 +312,15 @@ export default function App() {
   )
 }
 
-function defaultFilters(meta: RegistryMeta): Filters {
-  const until = meta.periodo.hasta
+function defaultFilters(meta: MetaResponse): Filters {
+  const until = meta.period.to
   const year = until ? Number(until.slice(0, 4)) : new Date().getFullYear()
   const lastMonth = until ? Number(until.slice(5, 7)) : 12
   return {
     year,
     months: Array.from({ length: lastMonth }, (_, i) => i + 1),
     types: [...INCIDENT_TYPES],
-    provincia: null,
+    province: null,
     canton: null,
     detentions: false,
   }

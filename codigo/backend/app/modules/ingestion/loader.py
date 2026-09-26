@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.modules.incidents.models import Confidence, Incident
+from app.modules.ingestion.admin_units import upsert_admin_units
 from app.modules.ingestion.models import PipelineRun, RunStatus
 from app.modules.ingestion.readers.xlsx import read_rows
 from app.modules.ingestion.records import NormalizedIncident, RowRejected, assign_record_ids
@@ -93,6 +94,12 @@ def load_file(
     path = Path(path)
     source = ensure_source(session, source_slug)
     file_hash = _file_hash(path)
+    raw_rows = list(read_rows(path))
+
+    # Runs even when the file was already loaded (see the early return below),
+    # so re-running a past file still backfills admin_units names.
+    upsert_admin_units(session, raw_rows)
+    session.commit()
 
     existing = session.scalar(
         select(PipelineRun).where(
@@ -115,7 +122,7 @@ def load_file(
     session.flush()
 
     try:
-        rows, processed, errors, skipped = _normalize_all(read_rows(path), normalize)
+        rows, processed, errors, skipped = _normalize_all(raw_rows, normalize)
         rows = assign_record_ids(rows)
 
         inserted = 0

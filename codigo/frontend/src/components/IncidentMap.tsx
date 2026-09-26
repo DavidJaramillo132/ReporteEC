@@ -1,17 +1,17 @@
-import type { FeatureCollection, Point } from 'geojson'
 import {
   AttributionControl,
   GeolocateControl,
-  type GeoJSONSource,
   type LngLatBoundsLike,
   Map as MapLibreMap,
   NavigationControl,
   ScaleControl,
 } from 'maplibre-gl'
 import { useEffect, useRef, useState } from 'react'
+import { TILES_URL } from '../lib/api'
 import { ECUADOR_BOUNDS, gazetteBasemap } from '../lib/basemap'
 import { buildMarkImages } from '../lib/marks'
-import type { Incident } from '../lib/registry'
+import type { Filters } from '../lib/registry'
+import { buildTileFilter } from '../lib/tileFilter'
 
 export interface MapView {
   center: [number, number]
@@ -27,55 +27,46 @@ export interface ViewBounds {
 }
 
 export interface FocusRequest {
-  id: string
+  id: number
   coordinates: [number, number]
   nonce: number
 }
 
 interface IncidentMapProps {
-  incidents: Incident[]
+  filters: Filters
   showDetentions: boolean
-  selectedId: string | null
+  selectedId: number | null
   initialView: MapView | null
   focus: FocusRequest | null
-  onSelect: (id: string) => void
+  onSelect: (id: number) => void
   onViewChange: (bounds: ViewBounds, view: MapView) => void
-  onDetentionsLoaded?: (ok: boolean) => void
 }
 
 /** Zoom at which the ink heatmap hands over to individual registry marks. */
 export const MARKS_ZOOM = 8.5
 
-const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
-
-function toSourceData(incidents: Incident[]): FeatureCollection<Point> {
-  return {
-    type: 'FeatureCollection',
-    features: incidents.map((i) => ({ ...i, properties: { ...i.properties, rid: i.id } })),
-  }
-}
+/** No incident id is ever this value: a filter that must never match anything. */
+const NO_SELECTION = -1
 
 export function IncidentMap({
-  incidents,
+  filters,
   showDetentions,
   selectedId,
   initialView,
   focus,
   onSelect,
   onViewChange,
-  onDetentionsLoaded,
 }: IncidentMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const readyRef = useRef(false)
-  const detentionsRequested = useRef(false)
   const [baseFailed, setBaseFailed] = useState(false)
   const geolocateRef = useRef<GeolocateControl | null>(null)
   const [location, setLocation] = useState<'off' | 'locating' | 'following' | 'shown' | 'denied' | 'unavailable'>('off')
   // Latest props for handlers bound once at map creation.
-  const latest = useRef({ incidents, onSelect, onViewChange, selectedId })
+  const latest = useRef({ filters, onSelect, onViewChange, selectedId })
   useEffect(() => {
-    latest.current = { incidents, onSelect, onViewChange, selectedId }
+    latest.current = { filters, onSelect, onViewChange, selectedId }
   })
 
   useEffect(() => {
@@ -136,14 +127,23 @@ export function IncidentMap({
         map.addImage(id, data, { pixelRatio: window.devicePixelRatio || 1 })
       }
 
-      map.addSource('detentions', { type: 'geojson', data: EMPTY })
+      // Detentions: empty until the Phase 4 loader runs, but the source and
+      // layer exist from the start -- MapLibre only requests tiles for a
+      // source-layer combination a visible layer actually needs.
+      map.addSource('detentions', {
+        type: 'vector',
+        tiles: [`${TILES_URL}/map_detentions/{z}/{x}/{y}`],
+        minzoom: 0,
+        maxzoom: 14,
+      })
       map.addLayer({
         id: 'detentions-heat',
         type: 'heatmap',
         source: 'detentions',
+        'source-layer': 'map_detentions',
         layout: { visibility: 'none' },
         paint: {
-          'heatmap-weight': ['interpolate', ['linear'], ['get', 'n'], 1, 0.3, 20, 1],
+          'heatmap-weight': 0.5,
           'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 12, 2.2],
           'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 9, 16, 14, 34],
           'heatmap-color': [
@@ -163,11 +163,19 @@ export function IncidentMap({
         },
       })
 
-      map.addSource('incidents', { type: 'geojson', data: toSourceData(latest.current.incidents) })
+      map.addSource('incidents', {
+        type: 'vector',
+        tiles: [`${TILES_URL}/map_incidents/{z}/{x}/{y}`],
+        minzoom: 0,
+        maxzoom: 14,
+      })
+      const tileFilter = buildTileFilter(latest.current.filters)
       map.addLayer({
         id: 'incidents-heat',
         type: 'heatmap',
         source: 'incidents',
+        'source-layer': 'map_incidents',
+        filter: tileFilter,
         maxzoom: MARKS_ZOOM + 1.5,
         paint: {
           'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.45, 9, 1.2],
@@ -194,7 +202,8 @@ export function IncidentMap({
         id: 'selected-ring',
         type: 'circle',
         source: 'incidents',
-        filter: ['==', ['get', 'rid'], latest.current.selectedId ?? ''],
+        'source-layer': 'map_incidents',
+        filter: ['==', ['id'], latest.current.selectedId ?? NO_SELECTION],
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 9, 12, 16],
           'circle-color': 'rgba(0,0,0,0)',
@@ -206,13 +215,15 @@ export function IncidentMap({
         id: 'incidents-marks',
         type: 'symbol',
         source: 'incidents',
+        'source-layer': 'map_incidents',
+        filter: tileFilter,
         minzoom: MARKS_ZOOM,
         layout: {
-          'icon-image': ['concat', 'mark-', ['get', 'tipo'], '-', ['get', 'confianza']],
+          'icon-image': ['concat', 'mark-', ['get', 'type'], '-', ['get', 'confidence']],
           'icon-size': ['interpolate', ['linear'], ['zoom'], MARKS_ZOOM, 0.5, 12, 0.85, 16, 1.1],
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
-          'symbol-sort-key': ['match', ['get', 'tipo'], 'desaparecida', 0, 1],
+          'symbol-sort-key': ['match', ['get', 'type'], 'desaparecida', 0, 1],
         },
         paint: {
           'icon-opacity': ['interpolate', ['linear'], ['zoom'], MARKS_ZOOM, 0, MARKS_ZOOM + 0.6, 1],
@@ -220,8 +231,8 @@ export function IncidentMap({
       })
 
       map.on('click', 'incidents-marks', (event) => {
-        const rid = event.features?.[0]?.properties?.rid
-        if (typeof rid === 'string') latest.current.onSelect(rid)
+        const id = event.features?.[0]?.id
+        if (typeof id === 'number') latest.current.onSelect(id)
       })
       map.on('mouseenter', 'incidents-marks', () => (map.getCanvas().style.cursor = 'pointer'))
       map.on('mouseleave', 'incidents-marks', () => (map.getCanvas().style.cursor = ''))
@@ -249,13 +260,15 @@ export function IncidentMap({
   useEffect(() => {
     const map = mapRef.current
     if (!map || !readyRef.current) return
-    ;(map.getSource('incidents') as GeoJSONSource | undefined)?.setData(toSourceData(incidents))
-  }, [incidents])
+    const tileFilter = buildTileFilter(filters)
+    map.setFilter('incidents-heat', tileFilter)
+    map.setFilter('incidents-marks', tileFilter)
+  }, [filters])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !readyRef.current) return
-    map.setFilter('selected-ring', ['==', ['get', 'rid'], selectedId ?? ''])
+    map.setFilter('selected-ring', ['==', ['id'], selectedId ?? NO_SELECTION])
   }, [selectedId])
 
   useEffect(() => {
@@ -266,23 +279,10 @@ export function IncidentMap({
       // Two ink heatmaps on one plate would read as one; police activity
       // replaces the incident heat while it is shown (marks stay).
       map.setLayoutProperty('incidents-heat', 'visibility', showDetentions ? 'none' : 'visible')
-      if (showDetentions && !detentionsRequested.current) {
-        detentionsRequested.current = true
-        fetch('/data/detenidos-2026.geojson')
-          .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-          .then((data: FeatureCollection) => {
-            ;(map.getSource('detentions') as GeoJSONSource | undefined)?.setData(data)
-            onDetentionsLoaded?.(true)
-          })
-          .catch(() => {
-            detentionsRequested.current = false
-            onDetentionsLoaded?.(false)
-          })
-      }
     }
     if (readyRef.current) apply()
     else map.once('style.load', apply)
-  }, [showDetentions, onDetentionsLoaded])
+  }, [showDetentions])
 
   useEffect(() => {
     const map = mapRef.current

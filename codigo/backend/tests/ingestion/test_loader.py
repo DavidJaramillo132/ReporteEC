@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.modules.admin_units.models import AdminUnit
 from app.modules.incidents.models import Incident
 from app.modules.ingestion.adapters.mdi_homicidios import normalize_row
 from app.modules.ingestion.loader import load_file
@@ -118,3 +119,53 @@ def test_rows_before_min_year_are_skipped_not_counted_as_errors(
     assert _incident_count(db_session) == 1
     detail = json.loads(run.error_detail)
     assert detail["skipped"] == {"before_min_year": 1}
+
+
+# HEADER extended with the raw province/canton name columns real MDI files
+# carry (VALID_ROWS/_row above never set them, so those tests are unaffected).
+NAMED_HEADER = [*HEADER, "provincia", "canton"]
+
+
+def _named_row(**overrides: str) -> list[str]:
+    values = {
+        "tipo_muerte": "ASESINATO",
+        "codigo_provincia": "07",
+        "codigo_canton": "0701",
+        "coordenada_y": "-3,28012",
+        "coordenada_x": "-79,96541",
+        "fecha_infraccion": "46023",
+        "hora_infraccion": "01:25:00",
+        "provincia": "EL ORO",
+        "canton": "MACHALA",
+    }
+    values.update(overrides)
+    return [values[column] for column in NAMED_HEADER]
+
+
+def test_loading_a_file_backfills_admin_unit_names(db_session: Session, tmp_path: Path):
+    path = write_xlsx(tmp_path / "homicidios.xlsx", NAMED_HEADER, [_named_row()])
+
+    load_file(db_session, SOURCE_SLUG, path, normalize_row)
+
+    province = db_session.get(AdminUnit, "07")
+    canton = db_session.get(AdminUnit, "0701")
+    assert province.name == "El Oro"
+    assert canton.name == "Machala"
+    assert canton.province_code == "07"
+
+
+def test_rerunning_an_already_loaded_file_still_backfills_names(
+    db_session: Session, tmp_path: Path
+):
+    path = write_xlsx(tmp_path / "homicidios.xlsx", NAMED_HEADER, [_named_row()])
+    load_file(db_session, SOURCE_SLUG, path, normalize_row)
+    # Wipe the name (simulating a name that changed upstream) to prove the
+    # second, "already loaded" run still refreshes it.
+    db_session.get(AdminUnit, "07").name = "Placeholder"
+    db_session.commit()
+
+    run = load_file(db_session, SOURCE_SLUG, path, normalize_row)
+
+    assert run.status == RunStatus.SUCCEEDED
+    db_session.expire_all()
+    assert db_session.get(AdminUnit, "07").name == "El Oro"

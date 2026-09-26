@@ -89,8 +89,12 @@ Un **adaptador por fuente**, todos con la misma interfaz:
   siniestros, riesgo comercial de extorsión y tasas
 - Tabla de **red vial y corredores** para cálculo de buffers y evaluación de riesgo en rutas
 - Tabla de **población** por cantón y año
-- **Funciones SQL** que generan las teselas del mapa filtradas por año, tipo y
-  zona
+- **Vistas de solo lectura** `map_incidents` y `map_detentions` (v1): year/month
+  ya calculados en hora local (America/Guayaquil), con la misma regla de
+  visibilidad que usa la API (`status='activo'`, sin `located_at`,
+  `location_precision <> 'canton'`, desde 2019). Son la única fuente que Martin
+  publica como teselas, y la API las reutiliza (unidas a `incidents`/`sources`/
+  `admin_units`) para no duplicar esa regla en dos lugares
 - v2: usuarios, reportes, votos, suscripciones de zona
 
 ### backend — API (`app/`)
@@ -103,7 +107,10 @@ Un **adaptador por fuente**, todos con la misma interfaz:
 
 Sirve el mapa en **teselas vectoriales** generadas en PostGIS. Es necesario
 porque son cientos de miles de puntos: mandarlos todos al navegador de una vez
-sería lentísimo.
+sería lentísimo. Martin (v1) publica **solo** `map_incidents` y
+`map_detentions` como fuentes de tabla, con descubrimiento automático
+desactivado (`auto_publish: false`): nunca expone `incidents`, `detentions`
+ni ninguna otra tabla directamente.
 
 ### backend — almacenamiento (`app/modules/storage/`, V2)
 

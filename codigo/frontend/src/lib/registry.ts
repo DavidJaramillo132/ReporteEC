@@ -1,28 +1,6 @@
-import type { Feature, FeatureCollection, Point } from 'geojson'
-
 export type IncidentType = 'homicidio' | 'sicariato' | 'femicidio' | 'desaparecida'
 export type Confidence = 'oficial' | 'verificado' | 'reportado' | 'en_revision'
 export type SourceId = 'mdi_homicidios' | 'mdi_desaparecidas'
-
-export interface IncidentProperties {
-  tipo: IncidentType
-  fecha: string | null
-  hora: string | null
-  provincia: string
-  canton: string
-  fuente: SourceId
-  confianza: Confidence
-}
-
-export type Incident = Feature<Point, IncidentProperties> & { id: string }
-export type IncidentCollection = FeatureCollection<Point, IncidentProperties>
-
-export interface RegistryMeta {
-  generado: string
-  periodo: { desde: string | null; hasta: string | null }
-  conteos: Partial<Record<IncidentType, number>>
-  detenidos_total: number
-}
 
 export const INCIDENT_TYPES: IncidentType[] = ['homicidio', 'sicariato', 'femicidio', 'desaparecida']
 
@@ -102,47 +80,16 @@ export interface Filters {
   year: number
   months: number[]
   types: IncidentType[]
-  provincia: string | null
+  /** DPA province code (e.g. "09"), not the name. */
+  province: string | null
+  /** DPA canton code (e.g. "0901"), not the name. */
   canton: string | null
   detentions: boolean
 }
 
-export async function loadRegistry(signal?: AbortSignal) {
-  const [incidents, meta] = await Promise.all([
-    fetchJson<IncidentCollection>('/data/incidentes-2026.geojson', signal),
-    fetchJson<RegistryMeta>('/data/meta-2026.json', signal),
-  ])
-  return { incidents: incidents.features as Incident[], meta }
-}
-
-async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error(`${url} respondió ${response.status}`)
-  return (await response.json()) as T
-}
-
-export function applyFilters(incidents: Incident[], filters: Filters): Incident[] {
-  const types = new Set(filters.types)
-  const months = new Set(filters.months)
-  return incidents.filter(({ properties: p }) => {
-    if (!types.has(p.tipo)) return false
-    if (filters.provincia && p.provincia !== filters.provincia) return false
-    if (filters.canton && p.canton !== filters.canton) return false
-    if (!p.fecha) return false
-    const [year, month] = p.fecha.split('-').map(Number)
-    return year === filters.year && months.has(month)
-  })
-}
-
-/** Newest first; entries without a time sort after timed ones on the same day. */
-export function byNewest(a: Incident, b: Incident) {
-  const key = (i: Incident) => `${i.properties.fecha ?? ''}T${i.properties.hora ?? '00:00'}`
-  return key(b).localeCompare(key(a))
-}
-
-/** The source row number, shown as the entry number of the registry. */
-export function entryNumber(id: string) {
-  return id.split('-').pop()!.padStart(5, '0')
+/** The database id, shown as the entry number of the registry. */
+export function entryNumber(id: number) {
+  return String(id).padStart(5, '0')
 }
 
 const numberFormat = new Intl.NumberFormat('es-EC')

@@ -1,40 +1,40 @@
 import { Mark } from './Mark'
+import type { AdminUnitOut } from '../lib/api'
 import type { IncidentType } from '../lib/registry'
 import { INCIDENT_TYPES, TYPE_LABEL, formatCount, placeName } from '../lib/registry'
 
 interface FilterStripProps {
-  provinces: string[]
-  cantons: string[]
-  provincia: string | null
+  provinces: AdminUnitOut[]
+  cantons: AdminUnitOut[]
+  province: string | null
   canton: string | null
   types: IncidentType[]
-  typeCounts: Record<IncidentType, number>
+  typeCounts: Record<string, number>
   detentions: boolean
-  detentionsState: 'idle' | 'loading' | 'error'
-  onProvincia: (value: string | null) => void
+  onProvince: (value: string | null) => void
   onCanton: (value: string | null) => void
   onToggleType: (type: IncidentType) => void
   onDetentions: (value: boolean) => void
 }
 
 export function FilterStrip(props: FilterStripProps) {
-  const { provinces, cantons, provincia, canton, types, typeCounts, detentions, detentionsState } = props
+  const { provinces, cantons, province, canton, types, typeCounts, detentions } = props
   return (
     <div className="relative flex items-center gap-x-5 gap-y-2 overflow-x-auto border-b border-ink bg-paper px-4 py-2.5 lg:flex-wrap lg:overflow-visible lg:px-6">
       <div className="flex shrink-0 items-center gap-2">
         <PlaceSelect
           label="Provincia"
-          value={provincia}
+          value={province}
           options={provinces}
           allLabel="Todo el país"
-          onChange={props.onProvincia}
+          onChange={props.onProvince}
         />
         <PlaceSelect
           label="Cantón"
           value={canton}
           options={cantons}
-          allLabel={provincia ? 'Toda la provincia' : 'Elige una provincia'}
-          disabled={!provincia}
+          allLabel={province ? 'Toda la provincia' : 'Elige una provincia'}
+          disabled={!province}
           onChange={props.onCanton}
         />
       </div>
@@ -58,7 +58,7 @@ export function FilterStrip(props: FilterStripProps) {
               </span>
               {TYPE_LABEL[type].many}
               <span className={`tabular-nums ${active ? 'text-paper/75' : 'text-ink-3'}`}>
-                {formatCount(typeCounts[type])}
+                {formatCount(typeCounts[type] ?? 0)}
               </span>
             </button>
           )
@@ -75,8 +75,6 @@ export function FilterStrip(props: FilterStripProps) {
       >
         <span aria-hidden="true" className="hatch inline-block size-3 border border-current" />
         Actividad policial: detenciones
-        {detentionsState === 'loading' && <span className="text-[12px] opacity-80">cargando…</span>}
-        {detentionsState === 'error' && <span className="text-[12px] font-semibold">no se pudo cargar</span>}
       </button>
     </div>
   )
@@ -85,7 +83,7 @@ export function FilterStrip(props: FilterStripProps) {
 interface PlaceSelectProps {
   label: string
   value: string | null
-  options: string[]
+  options: AdminUnitOut[]
   allLabel: string
   disabled?: boolean
   onChange: (value: string | null) => void
@@ -109,8 +107,8 @@ function PlaceSelect({ label, value, options, allLabel, disabled, onChange }: Pl
       >
         <option value="">{allLabel}</option>
         {options.map((o) => (
-          <option key={o} value={o}>
-            {placeName(o)}
+          <option key={o.code} value={o.code}>
+            {placeName(o.name)}
           </option>
         ))}
       </select>

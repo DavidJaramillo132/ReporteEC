@@ -32,6 +32,11 @@ extend-exclude = ["migrations/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's own dependency-injection idiom: a `Depends(...)`/`Query(...)` call
+# as a parameter default is required, not a mutable-default bug.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

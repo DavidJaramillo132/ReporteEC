@@ -24,6 +24,9 @@ services:
     image: ghcr.io/maplibre/martin:latest
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./martin/config.yaml:/config.yaml:ro
+    command: ["--config", "/config.yaml"]
     ports:
       - "${MARTIN_PORT:-3000}:3000"
     depends_on:
@@ -38,6 +41,9 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # File change events do not always cross into containers; polling keeps hot reload working.
       WATCHFILES_FORCE_POLLING: "true"
+      # The browser calls the API from whatever host port the frontend is
+      # actually published on; app/core/config.py falls back to 5173 without this.
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
