@@ -57,6 +57,28 @@ services:
       postgres:
         condition: service_healthy
 
+  # Daily ingestion worker (see backend/app/workers/historical_worker.py).
+  # Under the "worker" profile so plain `docker compose up` never starts it:
+  # each run downloads/loads homicidios+desaparecidas+detenidos, and while
+  # already-loaded files are skipped by hash, a genuinely new upstream file
+  # is still 100+ MB to fetch. Start it explicitly with
+  # `docker compose --profile worker up -d worker`.
+  worker:
+    build:
+      context: ./backend
+      target: dev
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    command: ["python", "-m", "app.workers.historical_worker", "--loop", "--interval-hours", "24"]
+    restart: unless-stopped
+    profiles: ["worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

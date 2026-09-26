@@ -98,7 +98,13 @@ def _run(
             _print_summary(path, run)
 
 
-def _run_homicidios(files: list[Path] | None, *, force: bool = False) -> None:
+def run_homicidios(files: list[Path] | None, *, force: bool = False) -> None:
+    """Load intentional-homicide records (from CKAN unless `files` is given).
+
+    Public (no leading underscore) so it can be imported and run on its own
+    -- e.g. by `app.workers.historical_worker`, which runs this, run_desaparecidas
+    and run_detenidos each in their own try/except and DB session.
+    """
     _run(
         HOMICIDIOS_SOURCE_SLUG,
         files or _download(HOMICIDIOS_PACKAGE_ID, DEFAULT_RAW_DIR),
@@ -107,7 +113,8 @@ def _run_homicidios(files: list[Path] | None, *, force: bool = False) -> None:
     )
 
 
-def _run_desaparecidas(files: list[Path] | None, *, force: bool = False) -> None:
+def run_desaparecidas(files: list[Path] | None, *, force: bool = False) -> None:
+    """Load missing-person records (from CKAN unless `files` is given). See run_homicidios."""
     _run(
         DESAPARECIDAS_SOURCE_SLUG,
         files or _download(DESAPARECIDAS_PACKAGE_ID, DEFAULT_RAW_DIR),
@@ -116,7 +123,11 @@ def _run_desaparecidas(files: list[Path] | None, *, force: bool = False) -> None
     )
 
 
-def _run_detenidos(files: list[Path] | None, *, force: bool = False) -> None:
+def run_detenidos(files: list[Path] | None, *, force: bool = False) -> None:
+    """Load detention/apprehension records (from CKAN unless `files` is given).
+
+    See run_homicidios.
+    """
     _run(
         DETENIDOS_SOURCE_SLUG,
         files or _download(DETENIDOS_PACKAGE_ID, DEFAULT_RAW_DIR),
@@ -261,15 +272,15 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.command == "homicidios":
-        _run_homicidios(args.files, force=args.force)
+        run_homicidios(args.files, force=args.force)
     elif args.command == "desaparecidas":
-        _run_desaparecidas(args.files, force=args.force)
+        run_desaparecidas(args.files, force=args.force)
     elif args.command == "detenidos":
-        _run_detenidos(args.files, force=args.force)
+        run_detenidos(args.files, force=args.force)
     elif args.command == "all":
-        _run_homicidios(None)
-        _run_desaparecidas(None)
-        _run_detenidos(None)
+        run_homicidios(None)
+        run_desaparecidas(None)
+        run_detenidos(None)
     elif args.command == "cantons":
         _run_cantons(args.files)
     elif args.command == "population":
