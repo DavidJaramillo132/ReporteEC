@@ -1,0 +1,105 @@
+# Production stack. See codigo/despliegue/README.md for the full guide
+# (prerequisites, DNS, first deploy, backups, updates).
+#
+# Usage (from codigo/despliegue/, with a .env file next to this one --
+# see README.md "Variables de entorno" for exactly which keys it needs):
+#   docker compose -f compose.prod.yml --env-file .env up -d --build
+#   docker compose -f compose.prod.yml --env-file .env run --rm backend alembic upgrade head
+name: reporteec-prod
+
+services:
+  postgres:
+    image: docker.io/postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER (see despliegue/README.md)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD (see despliegue/README.md)}
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB (see despliegue/README.md)}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  martin:
+    image: ghcr.io/maplibre/martin:latest
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./martin.prod.yaml:/config.yaml:ro
+    command: ["--config", "/config.yaml"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+      target: prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Same-origin in production (Caddy serves the frontend and proxies
+      # /api -- see despliegue/Caddyfile), so this is only ever the one domain.
+      CORS_ORIGINS: ${CORS_ORIGINS:?Define CORS_ORIGINS, e.g. https://tudominio.com (see despliegue/README.md)}
+    volumes:
+      # Raw source files for the initial/manual loads (cantons, population,
+      # extorsion, siniestros -- see despliegue/README.md "Carga inicial de
+      # datos"); ./data/raw/mdi is where the CKAN-downloadable sources land.
+      - ../data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../backend
+      target: prod
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ../data:/data
+    command: ["python", "-m", "app.workers.historical_worker", "--loop", "--interval-hours", "24"]
+    # The backend image's own HEALTHCHECK probes :8000/health -- meaningless
+    # here, since the worker never runs an HTTP server. Nothing depends on
+    # this service's health, so disable it instead of reporting a false
+    # "unhealthy".
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: ..
+      dockerfile: despliegue/Caddy.Dockerfile
+    environment:
+      # A bare domain (e.g. reporteec.example.com) for automatic HTTPS in
+      # real deployments; see despliegue/Caddyfile's own comment for the
+      # local-smoke-test override.
+      DOMAIN: ${DOMAIN:?Define DOMAIN (see despliegue/README.md)}
+    # Container-side port matches whatever port DOMAIN itself encodes: 80/443
+    # for a real domain (automatic HTTPS), or the port named in a
+    # DOMAIN=http://localhost:PORT smoke-test override (see the Caddyfile).
+    ports:
+      - "${HTTP_PORT:-80}:${HTTP_PORT:-80}"
+      - "${HTTPS_PORT:-443}:${HTTPS_PORT:-443}"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      martin:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

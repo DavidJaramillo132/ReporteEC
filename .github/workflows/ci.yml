@@ -73,3 +73,27 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  build-prod-images:
+    # Validates the production images build on every push, without pushing
+    # them anywhere -- see codigo/despliegue/README.md for the actual deploy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend prod image
+        uses: docker/build-push-action@v6
+        with:
+          context: codigo/backend
+          target: prod
+          push: false
+
+      - name: Build Caddy (frontend build + reverse proxy) image
+        uses: docker/build-push-action@v6
+        with:
+          context: codigo
+          file: codigo/despliegue/Caddy.Dockerfile
+          push: false

@@ -1,0 +1,52 @@
+# Production Martin config: the same read-only map views as
+# codigo/martin/config.yaml (keep both in sync -- see that file's own
+# comment for why only these three views are published), plus base_path so
+# TileJSON responses read /tiles/... instead of Martin's own root, matching
+# Caddy's `handle_path /tiles/*` reverse proxy (see despliegue/Caddyfile and
+# https://github.com/maplibre/martin/blob/main/docs/content/files/generated_config.md#base_path).
+# No `cors: true` here: same origin in production, unlike dev's separate
+# Vite port.
+listen_addresses: '0.0.0.0:3000'
+base_path: /tiles
+
+postgres:
+  connection_string: ${DATABASE_URL}
+  auto_publish: false
+
+  tables:
+    map_incidents:
+      schema: public
+      table: map_incidents
+      srid: 4326
+      geometry_column: geom
+      geometry_type: POINT
+      id_column: id
+      properties:
+        type: text
+        confidence: text
+        year: int4
+        month: int4
+        province_code: text
+        canton_code: text
+
+    map_detentions:
+      schema: public
+      table: map_detentions
+      srid: 4326
+      geometry_column: geom
+      geometry_type: POINT
+      id_column: id
+      properties:
+        year: int4
+        month: int4
+        province_code: text
+        canton_code: text
+        detention_type: text
+
+    map_cantons:
+      schema: public
+      table: map_cantons
+      srid: 4326
+      geometry_column: geom
+      geometry_type: MULTIPOLYGON
+      properties: { code: text, name: text, province_code: text }

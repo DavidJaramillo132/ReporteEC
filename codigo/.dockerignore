@@ -1,0 +1,14 @@
+# Applies only to a build whose context is codigo/ itself -- currently just
+# codigo/despliegue/Caddy.Dockerfile (it needs both frontend/ and
+# despliegue/ in one context). backend/ and frontend/'s own Dockerfiles use
+# their own .dockerignore next to them and are unaffected by this file.
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+.git
+data/raw
+**/.env
