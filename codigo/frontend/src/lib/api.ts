@@ -132,3 +132,71 @@ export function getIncidents(
 export function getIncident(id: number, signal?: AbortSignal): Promise<IncidentDetail> {
   return fetchJson<IncidentDetail>(`/incidents/${id}`, undefined, signal)
 }
+
+export type StatsDimension = 'type' | 'province' | 'canton' | 'month' | 'year'
+export type StatsLayer = 'incidents' | 'detentions'
+
+export interface StatsRow {
+  key: string
+  label: string
+  count: number
+  population: number
+  rate_per_100k: number | null
+  low_population_warning: boolean
+}
+
+export interface StatsResponse {
+  dimension: StatsDimension
+  layer: StatsLayer
+  rows: StatsRow[]
+}
+
+export interface TimeseriesPoint {
+  year: number
+  month: number
+  count: number
+}
+
+export interface TimeseriesResponse {
+  layer: StatsLayer
+  points: TimeseriesPoint[]
+}
+
+interface StatsQueryBase {
+  year?: number | null
+  months?: number[]
+  types?: IncidentType[]
+  province?: string | null
+  canton?: string | null
+  layer?: StatsLayer
+}
+
+export interface StatsQuery extends StatsQueryBase {
+  dimension: StatsDimension
+}
+
+function statsParams(query: StatsQueryBase) {
+  return {
+    year: query.year ?? undefined,
+    months: query.months?.length ? query.months.join(',') : undefined,
+    types: query.types?.length ? query.types.join(',') : undefined,
+    province: query.province,
+    canton: query.canton,
+    layer: query.layer,
+  }
+}
+
+export function getStats(query: StatsQuery, signal?: AbortSignal): Promise<StatsResponse> {
+  return fetchJson<StatsResponse>(
+    '/stats',
+    { dimension: query.dimension, ...statsParams(query) },
+    signal,
+  )
+}
+
+export function getStatsTimeseries(
+  query: StatsQueryBase,
+  signal?: AbortSignal,
+): Promise<TimeseriesResponse> {
+  return fetchJson<TimeseriesResponse>('/stats/timeseries', statsParams(query), signal)
+}

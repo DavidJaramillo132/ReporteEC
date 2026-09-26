@@ -81,17 +81,58 @@ También existe el tablero de la FGE
 (todos los delitos del COIP, 2015 – agosto 2026, por cantón y franja horaria),
 pero **sin descarga**; sirve solo como referencia para contrastar.
 
-## Límites territoriales (DPA) — CONALI / INEC
+## Límites territoriales — geoBoundaries.org (no CONALI/INEC)
 
-Identificada la fuente oficial para las geometrías de provincias, cantones y parroquias:
-- **CONALI** (Comité Nacional de Límites Internos) e **INEC** mediante el *Marco Geoestadístico y Cartografía Censal 2022*.
-- Proveen las geometrías oficiales en Shapefile / GeoJSON (WGS84) para dibujar polígonos cantonales, calcular coropletos de siniestros, estimar el riesgo comercial y cruzar buffers viales.
+> [!warning] Corrección (2026-09-26)
+> Se había registrado aquí que `codigo/data/raw/dpa/cantones_ecuador_simplificado.geojson`
+> y `provincias_ecuador_simplificado.geojson` venían de **CONALI/INEC** (*Marco
+> Geoestadístico y Cartografía Censal 2022*). Al inspeccionar los archivos para
+> la carga de la Fase 5, sus propiedades resultaron ser
+> `shapeName`/`shapeISO`/`shapeID`/`shapeGroup`/`shapeType` con
+> `shapeType: "ADM1"`/`"ADM2"` — la firma exacta de una exportación de
+> **[geoBoundaries.org](https://www.geoboundaries.org)**, no de CONALI/INEC.
+> Ninguno de los dos archivos trae código DPA alguno.
 
-## Población por cantón — INEC (pendiente)
+- **Origen real:** geoBoundaries.org, extracto ADM1 (24 provincias) y ADM2
+  (224 cantones) para Ecuador (`shapeGroup: "ECU"`).
+- **Sin código DPA:** cada cantón se identifica solo por `shapeName` (nombre),
+  no por código. La carga (`cantons --file`, ver
+  `app/modules/ingestion/territory.py`) resuelve el código DPA cruzando el
+  nombre contra `admin_units` (poblada por los propios archivos oficiales del
+  Ministerio del Interior), y para los nombres duplicados a nivel nacional —
+  "Bolívar" (Carchi y Manabí) y "Olmedo" (Loja y Manabí) — desambigua por
+  contención espacial contra las provincias, ya que el archivo de cantones no
+  trae ninguna referencia a su provincia.
+- **216 de 224 formas coinciden** con un cantón de `admin_units` (los otros 5
+  necesitan un alias por abreviatura/nombre alterno: "Crnel. Marcelino
+  Maridueña", "Gnral. Antonio Elizalde", "Empalme", "Alfredo Baquerizo Moreno"
+  y "Orellana"). **Tres formas no tienen equivalente:** "El Piedrero", "Las
+  Golondrinas" y "Manga del Cura" — ninguna aparece todavía en los archivos
+  oficiales de incidentes/detenciones (cantones nuevos o zonas no
+  delimitadas); la carga los reporta como no coincidentes en vez de
+  descartarlos en silencio.
+- **Aún pendiente:** confirmar si CONALI/INEC publican un Shapefile/GeoJSON
+  propio, con código DPA incluido, que reemplace este archivo con una fuente
+  verificada de primera mano.
 
-Necesaria para calcular tasas por 100.000 habitantes en las estadísticas
-(ver [[Decisiones de Negocio Pendientes]], punto 5). Fuente prevista: Censo de
-Población y Vivienda 2022 y proyecciones del INEC. **No verificada todavía.**
+## Población por cantón — INEC (verificado 2026-09-26)
+
+- **Archivo:** `codigo/data/raw/poblacion/Total_cantonal_2010-2035.xlsx`
+  (más `Cantonal.zip`, el mismo contenido comprimido).
+- **Fuente:** INEC, *Proyección de la Población Ecuatoriana por años
+  calendario, según cantones, 2010-2035* (Cuadro N° 1.1 "Provincia y cantón").
+  Un libro por provincia (24 hojas + "Índice"), con una fila por cantón y una
+  columna por año (2010 a 2035, "Estimación" hasta 2022 y "Proyección" desde
+  2023).
+- **Carga:** `population --file <xlsx>` (`app/modules/ingestion/territory.py`),
+  cruzando cada nombre de cantón/provincia contra `admin_units` -- igual
+  criterio que la carga de cantones. Único ajuste necesario: la hoja de
+  Pichincha nombra a la capital "Distrito Metropolitano de Quito"
+  (`admin_units` la tiene como "Quito").
+- **Cobertura confirmada en el ambiente de desarrollo:** 221 cantones × 26
+  años (2010-2035) = 5.746 filas cargadas, sin cantón ni provincia sin
+  emparejar. Usada para la tasa por 100.000 habitantes de `GET /api/stats`
+  (ver [[Decisiones de Negocio Pendientes]], punto 5, ya resuelto).
 
 ## Siniestros de tránsito — INEC (ESTRA)
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Estadisticas } from './components/Estadisticas'
 import { FilterStrip } from './components/FilterStrip'
 import { MethodologyPanel, SourcesPanel } from './components/InfoPanels'
 import {
@@ -12,8 +13,14 @@ import { MapLegend } from './components/MapLegend'
 import { type ColumnTab, Masthead } from './components/Masthead'
 import { RegistryColumn } from './components/RegistryColumn'
 import { TimeRule } from './components/TimeRule'
-import type { AdminUnitsResponse, IncidentDetail, IncidentListResponse, MetaResponse } from './lib/api'
-import { getAdminUnits, getIncident, getIncidents, getMeta } from './lib/api'
+import type {
+  AdminUnitsResponse,
+  IncidentDetail,
+  IncidentListResponse,
+  MetaResponse,
+  StatsRow,
+} from './lib/api'
+import { getAdminUnits, getIncident, getIncidents, getMeta, getStats } from './lib/api'
 import { clearSavedView, loadSavedView, saveView } from './lib/persist'
 import type { Confidence, Filters } from './lib/registry'
 import { INCIDENT_TYPES, MONTHS } from './lib/registry'
@@ -54,6 +61,30 @@ export default function App() {
   const [listResult, setListResult] = useState<IncidentListResponse>(EMPTY_LIST)
   const [listAttempt, setListAttempt] = useState(0)
   const requestIdRef = useRef(0)
+
+  // The registry's "Tasa ×100.000" column: one nationwide/province/canton
+  // rate per type, from the SAME year/months/place filters as everything
+  // else -- never the map's bbox, which is not a meaningful population scope.
+  const [typeStats, setTypeStats] = useState<StatsRow[]>([])
+  useEffect(() => {
+    if (!filters) return
+    const controller = new AbortController()
+    getStats(
+      {
+        dimension: 'type',
+        year: filters.year,
+        months: filters.months,
+        province: filters.province,
+        canton: filters.canton,
+      },
+      controller.signal,
+    )
+      .then((result) => setTypeStats(result.rows))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error)
+      })
+    return () => controller.abort()
+  }, [filters])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -206,6 +237,7 @@ export default function App() {
 
   const periodLabel = filters ? describePeriod(filters.year, filters.months, lastMonth) : ''
   const zoomedOut = (bounds?.zoom ?? 0) < MARKS_ZOOM
+  const rateAreaLabel = filters?.canton ? 'el cantón' : filters?.province ? 'la provincia' : 'Ecuador'
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
@@ -233,80 +265,111 @@ export default function App() {
         />
       )}
 
-      <main className="flex flex-1 flex-col lg:min-h-0 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:grid-rows-[minmax(0,1fr)]">
-        <div className="flex flex-col lg:min-h-0 lg:border-r lg:border-ink">
-          <div className="relative h-[62svh] min-h-[340px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink">
-            <IncidentMap
-              filters={filters ?? FALLBACK_FILTERS}
-              showDetentions={Boolean(filters?.detentions)}
-              selectedId={selectedId}
-              initialView={SAVED?.map ?? null}
-              focus={focus}
-              onSelect={handleMapSelect}
-              onViewChange={handleViewChange}
-            />
+      <main
+        className={
+          tab === 'estadisticas'
+            ? 'flex flex-1 flex-col lg:min-h-0'
+            : 'flex flex-1 flex-col lg:min-h-0 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:grid-rows-[minmax(0,1fr)]'
+        }
+      >
+        {tab === 'estadisticas' ? (
+          <>
+            {/* The map itself is hidden while Estadísticas is active (a
+                full-width page has no room for it), but the same time rule
+                that drives the map stays visible: it drives this page too. */}
             {filters && (
-              <MapLegend
-                types={filters.types.length ? filters.types : INCIDENT_TYPES}
-                presentConfidence={presentConfidence}
-                detentions={filters.detentions}
-                zoomedOut={zoomedOut}
+              <TimeRule
+                year={filters.year}
+                months={filters.months}
+                availableYears={meta?.years ?? []}
+                lastMonth={lastMonth}
+                onYear={(year) => update({ year })}
+                onMonths={(months) => update({ months })}
               />
             )}
-            {restored && (
-              <div className="ink-in absolute top-3 left-3 z-10 flex items-center gap-3 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
-                Retomaste tu última consulta.
-                <button type="button" onClick={resetConsultation} className="underline hover:no-underline">
-                  Empezar de nuevo
-                </button>
-                <button type="button" onClick={() => setRestored(false)} aria-label="Ocultar aviso" className="text-ink-3 hover:text-ink">
-                  Ocultar
-                </button>
+            <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">
+              {filters && <Estadisticas filters={filters} rateAreaLabel={rateAreaLabel} />}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col lg:min-h-0 lg:border-r lg:border-ink">
+              <div className="relative h-[62svh] min-h-[340px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink">
+                <IncidentMap
+                  filters={filters ?? FALLBACK_FILTERS}
+                  showDetentions={Boolean(filters?.detentions)}
+                  selectedId={selectedId}
+                  initialView={SAVED?.map ?? null}
+                  focus={focus}
+                  onSelect={handleMapSelect}
+                  onViewChange={handleViewChange}
+                />
+                {filters && (
+                  <MapLegend
+                    types={filters.types.length ? filters.types : INCIDENT_TYPES}
+                    presentConfidence={presentConfidence}
+                    detentions={filters.detentions}
+                    zoomedOut={zoomedOut}
+                  />
+                )}
+                {restored && (
+                  <div className="ink-in absolute top-3 left-3 z-10 flex items-center gap-3 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
+                    Retomaste tu última consulta.
+                    <button type="button" onClick={resetConsultation} className="underline hover:no-underline">
+                      Empezar de nuevo
+                    </button>
+                    <button type="button" onClick={() => setRestored(false)} aria-label="Ocultar aviso" className="text-ink-3 hover:text-ink">
+                      Ocultar
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          {filters && (
-            <TimeRule
-              year={filters.year}
-              months={filters.months}
-              availableYears={meta?.years ?? []}
-              lastMonth={lastMonth}
-              onYear={(year) => update({ year })}
-              onMonths={(months) => update({ months })}
-            />
-          )}
-        </div>
+              {filters && (
+                <TimeRule
+                  year={filters.year}
+                  months={filters.months}
+                  availableYears={meta?.years ?? []}
+                  lastMonth={lastMonth}
+                  onYear={(year) => update({ year })}
+                  onMonths={(months) => update({ months })}
+                />
+              )}
+            </div>
 
-        <div ref={columnRef} className="min-h-0 bg-paper lg:overflow-y-auto" aria-label="Columna del registro">
-          {tab === 'registro' && (
-            <RegistryColumn
-              status={status === 'error' ? 'error' : listStatus}
-              items={listResult.items}
-              total={listResult.total}
-              countsByType={listResult.counts_by_type}
-              hasMore={listResult.items.length < listResult.total}
-              onLoadMore={loadMore}
-              periodLabel={periodLabel}
-              zoomedOut={zoomedOut}
-              selectedId={selectedId}
-              selected={visibleDetail}
-              lastUpdatedAt={lastUpdatedAt}
-              onSelect={(item) => selectIncident(item.id, [item.lon, item.lat], true)}
-              onCloseDetail={() => setSelectedId(null)}
-              onRetry={() => {
-                if (status === 'error') {
-                  setStatus('loading')
-                  setBootstrapAttempt((n) => n + 1)
-                } else {
-                  setListAttempt((n) => n + 1)
-                }
-              }}
-              onOpenMethodology={() => setTab('metodologia')}
-            />
-          )}
-          {tab === 'metodologia' && <MethodologyPanel />}
-          {tab === 'fuentes' && <SourcesPanel />}
-        </div>
+            <div ref={columnRef} className="min-h-0 bg-paper lg:overflow-y-auto" aria-label="Columna del registro">
+              {tab === 'registro' && (
+                <RegistryColumn
+                  status={status === 'error' ? 'error' : listStatus}
+                  items={listResult.items}
+                  total={listResult.total}
+                  countsByType={listResult.counts_by_type}
+                  typeStats={typeStats}
+                  rateAreaLabel={rateAreaLabel}
+                  hasMore={listResult.items.length < listResult.total}
+                  onLoadMore={loadMore}
+                  periodLabel={periodLabel}
+                  zoomedOut={zoomedOut}
+                  selectedId={selectedId}
+                  selected={visibleDetail}
+                  lastUpdatedAt={lastUpdatedAt}
+                  onSelect={(item) => selectIncident(item.id, [item.lon, item.lat], true)}
+                  onCloseDetail={() => setSelectedId(null)}
+                  onRetry={() => {
+                    if (status === 'error') {
+                      setStatus('loading')
+                      setBootstrapAttempt((n) => n + 1)
+                    } else {
+                      setListAttempt((n) => n + 1)
+                    }
+                  }}
+                  onOpenMethodology={() => setTab('metodologia')}
+                />
+              )}
+              {tab === 'metodologia' && <MethodologyPanel />}
+              {tab === 'fuentes' && <SourcesPanel />}
+            </div>
+          </>
+        )}
       </main>
     </div>
   )

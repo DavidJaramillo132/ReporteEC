@@ -40,8 +40,11 @@ class NormalizedIncident:
     source_record_id: str
     type: IncidentType
     occurred_at: datetime
-    latitude: float
-    longitude: float
+    # None only when location_precision is CANTON: the source row carried no
+    # usable coordinate, and the loader fills `geom` from the canton's own
+    # centroid instead (see `app.modules.ingestion.loader`).
+    latitude: float | None
+    longitude: float | None
     province_code: str
     canton_code: str
     location_precision: LocationPrecision = LocationPrecision.EXACTA

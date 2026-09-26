@@ -140,10 +140,22 @@ def list_incidents(
     )
 
     total = session.scalar(select(func.count()).select_from(map_incidents).where(*conditions)) or 0
+
+    # Ignores `types` on purpose: it must keep reporting every type's count
+    # in the current area/period even while that type's own toggle is off,
+    # so the filter strip's per-type counts do not vanish when pressed.
+    count_conditions = _filter_conditions(
+        year=year,
+        months=_split_ints(months),
+        types=None,
+        province=province,
+        canton=canton,
+        bbox=_parse_bbox(bbox),
+    )
     counts_by_type = dict(
         session.execute(
             select(map_incidents.c.type, func.count())
-            .where(*conditions)
+            .where(*count_conditions)
             .group_by(map_incidents.c.type)
         ).all()
     )

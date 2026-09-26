@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from app.modules.incidents.models import IncidentType
+from app.modules.incidents.models import IncidentType, LocationPrecision
 from app.modules.ingestion.adapters.mdi_homicidios import normalize_row
 from app.modules.ingestion.records import RowRejected, assign_record_ids
 
@@ -78,18 +78,46 @@ def test_unknown_tipo_muerte_is_rejected():
 
 
 @pytest.mark.parametrize("sentinel", ["SIN DATO", "SIN_DATO", "NO_APLICA", ""])
-def test_sentinel_coordinate_is_rejected(sentinel):
+def test_sentinel_coordinate_with_no_canton_is_rejected(sentinel):
+    # No coordinate AND no canton code: nothing left to locate the row by.
     with pytest.raises(RowRejected) as exc_info:
-        normalize_row(make_row(coordenada_y=sentinel))
+        normalize_row(make_row(coordenada_y=sentinel, codigo_canton=""))
 
     assert exc_info.value.reason == "missing_coordinates"
 
 
-def test_null_island_is_rejected():
+def test_null_island_with_no_canton_is_rejected():
     with pytest.raises(RowRejected) as exc_info:
-        normalize_row(make_row(coordenada_y="0", coordenada_x="0"))
+        normalize_row(make_row(coordenada_y="0", coordenada_x="0", codigo_canton=""))
 
     assert exc_info.value.reason == "null_island"
+
+
+@pytest.mark.parametrize("sentinel", ["SIN DATO", "SIN_DATO", "NO_APLICA", ""])
+def test_sentinel_coordinate_with_a_canton_falls_back_to_canton_precision(sentinel):
+    # A 2019-era row missing its coordinate but still carrying a canton code
+    # is kept, not rejected: the loader fills geom from that canton's own
+    # centroid (see app.modules.ingestion.loader).
+    result = normalize_row(make_row(coordenada_y=sentinel))
+
+    assert result.location_precision == LocationPrecision.CANTON
+    assert result.latitude is None
+    assert result.longitude is None
+    assert result.canton_code == "0701"
+
+
+def test_null_island_with_a_canton_falls_back_to_canton_precision():
+    result = normalize_row(make_row(coordenada_y="0", coordenada_x="0"))
+
+    assert result.location_precision == LocationPrecision.CANTON
+    assert result.latitude is None
+    assert result.longitude is None
+
+
+def test_exact_coordinates_are_still_exacta_precision():
+    result = normalize_row(make_row())
+
+    assert result.location_precision == LocationPrecision.EXACTA
 
 
 def test_coordinates_outside_ecuador_are_rejected():

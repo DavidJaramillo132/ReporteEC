@@ -76,7 +76,9 @@ class Incident(TimestampMixin, Base):
     status: Mapped[IncidentStatus] = mapped_column(
         text_enum(IncidentStatus, "incident_status"), default=IncidentStatus.ACTIVO
     )
-    merged_into_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("incidents.id"))
+    merged_into_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("incidents.id"), index=True
+    )
 
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     geom: Mapped[str] = mapped_column(Point)

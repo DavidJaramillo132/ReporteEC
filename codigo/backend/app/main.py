@@ -5,6 +5,7 @@ from app.core.config import cors_origins
 from app.modules.admin_units.router import router as admin_units_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.meta.router import router as meta_router
+from app.modules.stats.router import router as stats_router
 
 app = FastAPI(title="ReporteEC API")
 
@@ -18,6 +19,7 @@ app.add_middleware(
 app.include_router(meta_router, prefix="/api")
 app.include_router(incidents_router, prefix="/api")
 app.include_router(admin_units_router, prefix="/api")
+app.include_router(stats_router, prefix="/api")
 
 
 @app.get("/health")

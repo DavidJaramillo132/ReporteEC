@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { formatLongDate } from '../lib/registry'
 
-export type ColumnTab = 'registro' | 'metodologia' | 'fuentes'
+export type ColumnTab = 'registro' | 'estadisticas' | 'metodologia' | 'fuentes'
 
 const TABS: { id: ColumnTab; label: string; short?: string }[] = [
   { id: 'registro', label: 'Registro' },
+  { id: 'estadisticas', label: 'Estadísticas' },
   { id: 'metodologia', label: 'Metodología' },
   { id: 'fuentes', label: 'Fuentes y licencia', short: 'Fuentes' },
 ]

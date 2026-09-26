@@ -9,7 +9,7 @@ pattern the others (missing persons, detentions) copy.
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.modules.incidents.models import IncidentType
+from app.modules.incidents.models import IncidentType, LocationPrecision
 from app.modules.ingestion.records import NormalizedIncident, RowRejected, hash_row
 
 # Ecuador has never observed daylight saving time, so a fixed UTC-5 offset
@@ -74,12 +74,27 @@ def _parse_incident_type(raw: str | None) -> IncidentType:
     return incident_type
 
 
+class _CoordinatesMissing(Exception):
+    """Raised only for a row with no usable lat/lon at all (blank or 0,0).
+
+    Distinct from every other `RowRejected` reason: `normalize_row` catches
+    this one and, when the row still carries a canton code, keeps it as a
+    canton-precision record instead of rejecting it outright. `reason`
+    preserves the original ("missing_coordinates" or "null_island") for the
+    row that turns out to have no canton either and is rejected after all.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 def _parse_coordinates(raw_lat: str | None, raw_lon: str | None) -> tuple[float, float]:
     lat, lon = _to_float(raw_lat), _to_float(raw_lon)
     if lat is None or lon is None:
-        raise RowRejected("missing_coordinates")
+        raise _CoordinatesMissing("missing_coordinates")
     if lat == 0 and lon == 0:
-        raise RowRejected("null_island")
+        raise _CoordinatesMissing("null_island")
     if _inside_ecuador(lon, lat):
         return lat, lon
     if _inside_ecuador(lat, lon):
@@ -121,12 +136,31 @@ def normalize_row(row: dict[str, str]) -> NormalizedIncident:
     Never reads personal columns (age, sex, ethnicity, nationality, ...)
     into the result -- only their presence in `row` affects the content
     hash used for `source_record_id`.
+
+    A row with no usable coordinate (blank, or the literal 0,0 "null
+    island") is not rejected outright: as long as it carries a canton code,
+    it is kept with `location_precision=CANTON` and `latitude`/`longitude`
+    left as None. This adapter has no database access, so it cannot confirm
+    that code actually exists in `cantons` -- the loader does that and
+    fills `geom` from the canton's centroid, rejecting the row only then if
+    the code turns out unknown.
     """
     incident_type = _parse_incident_type(row.get("tipo_muerte"))
     occurred_at = _parse_occurred_at(row.get("fecha_infraccion"), row.get("hora_infraccion"))
     if occurred_at.year < MIN_YEAR:
         raise RowRejected("before_min_year")
-    latitude, longitude = _parse_coordinates(row.get("coordenada_y"), row.get("coordenada_x"))
+    # Files may drop leading zeros ("7", "701"); DPA codes need them back.
+    province_code = _clean(row.get("codigo_provincia")).zfill(2)
+    canton_code = _clean(row.get("codigo_canton")).zfill(4)
+
+    try:
+        latitude, longitude = _parse_coordinates(row.get("coordenada_y"), row.get("coordenada_x"))
+        location_precision = LocationPrecision.EXACTA
+    except _CoordinatesMissing as exc:
+        if not canton_code.strip("0"):
+            raise RowRejected(exc.reason) from None
+        latitude = longitude = None
+        location_precision = LocationPrecision.CANTON
 
     return NormalizedIncident(
         source_record_id=hash_row(row),
@@ -134,7 +168,7 @@ def normalize_row(row: dict[str, str]) -> NormalizedIncident:
         occurred_at=occurred_at,
         latitude=latitude,
         longitude=longitude,
-        # Files may drop leading zeros ("7", "701"); DPA codes need them back.
-        province_code=_clean(row.get("codigo_provincia")).zfill(2),
-        canton_code=_clean(row.get("codigo_canton")).zfill(4),
+        province_code=province_code,
+        canton_code=canton_code,
+        location_precision=location_precision,
     )

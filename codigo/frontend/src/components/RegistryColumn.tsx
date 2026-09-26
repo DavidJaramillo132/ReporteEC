@@ -1,5 +1,5 @@
 import { ConfidenceChip, Mark } from './Mark'
-import type { IncidentDetail, IncidentListItem } from '../lib/api'
+import type { IncidentDetail, IncidentListItem, StatsRow } from '../lib/api'
 import {
   CONFIDENCE,
   INCIDENT_TYPES,
@@ -10,12 +10,17 @@ import {
   formatShortDate,
   placeName,
 } from '../lib/registry'
+import { formatRate } from '../lib/stats'
 
 interface RegistryColumnProps {
   status: 'loading' | 'error' | 'ready'
   items: IncidentListItem[]
   total: number
   countsByType: Record<string, number>
+  /** dimension=type rows from /api/stats, for the "Tasa ×100.000" column. */
+  typeStats: StatsRow[]
+  /** Names the population scope the rates above use: "Ecuador", "la provincia" or "el cantón". */
+  rateAreaLabel: string
   hasMore: boolean
   onLoadMore: () => void
   periodLabel: string
@@ -30,7 +35,8 @@ interface RegistryColumnProps {
 }
 
 export function RegistryColumn(props: RegistryColumnProps) {
-  const { status, items, total, countsByType, selectedId, selected } = props
+  const { status, items, total, countsByType, typeStats, selectedId, selected } = props
+  const rateByType = Object.fromEntries(typeStats.map((row) => [row.key, row]))
 
   // A full skeleton/error state only replaces the column before anything has
   // ever loaded; a later refetch (pan, filter change) keeps showing the last
@@ -67,6 +73,7 @@ export function RegistryColumn(props: RegistryColumnProps) {
               </th>
               <th scope="col" className="label py-1.5 pl-3 text-right font-semibold text-ink-3">
                 Tasa ×100.000
+                <span className="block normal-case"> {props.rateAreaLabel}</span>
               </th>
             </tr>
           </thead>
@@ -80,14 +87,19 @@ export function RegistryColumn(props: RegistryColumnProps) {
                   </span>
                 </th>
                 <td className="py-1.5 text-right tabular-nums">{formatCount(countsByType[t] ?? 0)}</td>
-                <td className="py-1.5 pl-3 text-right text-ink-3">pendiente</td>
+                <td className="py-1.5 pl-3 text-right tabular-nums">
+                  {formatRate(rateByType[t]?.rate_per_100k ?? null)}
+                  {rateByType[t]?.low_population_warning && (
+                    <span title="Población menor a 10.000 habitantes: la tasa es poco estable">
+                      {' '}
+                      ⚠
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="mt-2 text-[12.5px] text-ink-3">
-          La tasa por 100.000 habitantes se publicará cuando se incorpore la población por cantón del INEC.
-        </p>
       </section>
 
       <section aria-labelledby="entries-title" className="min-h-0 flex-1">

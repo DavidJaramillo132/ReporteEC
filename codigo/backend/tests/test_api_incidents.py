@@ -76,6 +76,41 @@ def test_filters_by_type_and_months(client: TestClient, db_session: Session):
     assert response.json()["total"] == 1
 
 
+def test_counts_by_type_ignores_the_types_filter_but_respects_others(
+    client: TestClient, db_session: Session
+):
+    # The filter strip's per-type counts must not vanish once its own toggle
+    # is switched off, so counts_by_type keeps every type's count for the
+    # current year/month/place regardless of which types are selected.
+    source = make_source(db_session)
+    make_incident(
+        db_session,
+        source,
+        occurred_at=datetime(2025, 3, 1, 8, 0, tzinfo=GUAYAQUIL),
+        type="femicidio",
+    )
+    make_incident(
+        db_session,
+        source,
+        occurred_at=datetime(2025, 3, 1, 8, 0, tzinfo=GUAYAQUIL),
+        type="homicidio",
+    )
+    # Outside the month filter below: must not affect counts_by_type either.
+    make_incident(
+        db_session,
+        source,
+        occurred_at=datetime(2025, 7, 1, 8, 0, tzinfo=GUAYAQUIL),
+        type="homicidio",
+    )
+    db_session.commit()
+
+    response = client.get("/api/incidents", params={"types": "femicidio", "months": "1,2,3"})
+
+    body = response.json()
+    assert body["total"] == 1
+    assert body["counts_by_type"] == {"femicidio": 1, "homicidio": 1}
+
+
 def test_filters_by_province_and_canton(client: TestClient, db_session: Session):
     source = make_source(db_session)
     make_incident(db_session, source, province_code="09", canton_code="0901")

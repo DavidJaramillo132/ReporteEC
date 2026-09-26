@@ -25,3 +25,7 @@ def text_enum(enum_cls: type[StrEnum], name: str) -> Enum:
 
 # WGS84 points, the reference system of every official dataset and of Martin.
 Point = Geometry(geometry_type="POINT", srid=4326, spatial_index=True)
+
+# Canton boundaries, loaded from the DPA geojson (ST_Multi'd on the way in so
+# a canton whose source shape is a single Polygon still fits this column).
+MultiPolygon = Geometry(geometry_type="MULTIPOLYGON", srid=4326, spatial_index=True)

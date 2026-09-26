@@ -92,7 +92,9 @@ def test_modified_file_with_one_extra_row_inserts_only_that_row(
 
 
 def test_rejected_rows_are_counted_as_errors_not_inserted(db_session: Session, tmp_path: Path):
-    rows = [*VALID_ROWS, _row(coordenada_y="SIN DATO")]
+    # No canton code either: a coordinate-less row with a canton code is no
+    # longer an adapter-level rejection (see test_loader_canton_precision.py).
+    rows = [*VALID_ROWS, _row(coordenada_y="SIN DATO", codigo_canton="")]
     path = write_xlsx(tmp_path / "homicidios.xlsx", HEADER, rows)
 
     run = load_file(db_session, SOURCE_SLUG, path, normalize_row)
