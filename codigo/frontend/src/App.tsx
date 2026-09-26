@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Estadisticas } from './components/Estadisticas'
 import { FilterStrip } from './components/FilterStrip'
+import { IntroDialog } from './components/IntroDialog'
 import { MethodologyPanel, SourcesPanel } from './components/InfoPanels'
 import {
   type FocusRequest,
@@ -23,6 +24,7 @@ import type {
 } from './lib/api'
 import { getAdminUnits, getCantonIndicators, getIncident, getIncidents, getMeta, getStats } from './lib/api'
 import { checkYearAvailability, indicatorForLayer, noDataMessage } from './lib/cantonChoropleth'
+import { hasSeenIntro, markIntroSeen } from './lib/firstVisit'
 import { clearSavedView, loadSavedView, saveView } from './lib/persist'
 import type { Confidence, Filters } from './lib/registry'
 import { INCIDENT_TYPES, MONTHS } from './lib/registry'
@@ -59,6 +61,30 @@ export default function App() {
   const [tab, setTab] = useState<ColumnTab>('registro')
   const [restored, setRestored] = useState(Boolean(SAVED))
   const columnRef = useRef<HTMLDivElement>(null)
+
+  // First-visit intro dialog (see components/IntroDialog.tsx): shown once
+  // automatically, and reopenable on demand from the map legend.
+  const [introOpen, setIntroOpen] = useState(() => !hasSeenIntro())
+  const closeIntro = useCallback(() => {
+    setIntroOpen(false)
+    markIntroSeen()
+  }, [])
+
+  // Best-effort signal for the offline-aware error message below: not a
+  // guarantee any given failed request was served from the service worker's
+  // cache, just a calmer message than a generic error when the browser
+  // itself reports no connection.
+  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
+  useEffect(() => {
+    const goOnline = () => setOffline(false)
+    const goOffline = () => setOffline(true)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
 
   const [listStatus, setListStatus] = useState<'loading' | 'error' | 'ready'>('loading')
   const [listResult, setListResult] = useState<IncidentListResponse>(EMPTY_LIST)
@@ -276,6 +302,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
+      <IntroDialog open={introOpen} onClose={closeIntro} onOpenMethodology={() => setTab('metodologia')} />
       <Masthead cutDate={meta?.period.to ?? null} tab={tab} onTab={setTab} />
 
       {filters && (
@@ -353,6 +380,7 @@ export default function App() {
                     cantonLayer={cantonLayer}
                     cantonBreakpoints={cantonDataFresh?.breakpoints ?? null}
                     cantonYear={cantonYear}
+                    onShowIntro={() => setIntroOpen(true)}
                   />
                 )}
                 {filters && cantonLayer !== 'none' && cantonYearAvailability && !cantonYearAvailability.hasData && (
@@ -412,6 +440,7 @@ export default function App() {
                   selectedId={selectedId}
                   selected={visibleDetail}
                   lastUpdatedAt={lastUpdatedAt}
+                  offline={offline}
                   onSelect={(item) => selectIncident(item.id, [item.lon, item.lat], true)}
                   onCloseDetail={() => setSelectedId(null)}
                   onRetry={() => {
@@ -426,7 +455,7 @@ export default function App() {
                 />
               )}
               {tab === 'metodologia' && <MethodologyPanel />}
-              {tab === 'fuentes' && <SourcesPanel />}
+              {tab === 'fuentes' && <SourcesPanel meta={meta} />}
             </div>
           </>
         )}

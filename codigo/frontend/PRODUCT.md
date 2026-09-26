@@ -46,8 +46,9 @@ V1 capabilities:
 - Filters: year (2019 to today), month, province, canton, type.
 - Statistics: absolute count and rate per 100,000 inhabitants, always shown together.
 - A visible methodological note: the map shows reported cases, not all crime that happens.
+- A dismissible first-visit intro explains what the map shows and does not show; it can be reopened at any time from the map legend.
 - Pages: Home, Map, Statistics, Methodology, License and sources.
-- Installable PWA, view-only.
+- Installable PWA, view-only, with offline-aware caching for the app shell, the API and both map tile sources.
 - **Reporting incidents is V3.** In V1 a visible "Reportar" entry point exists but only explains that it arrives in a future version. It must not pretend to work.
 
 Constraints:

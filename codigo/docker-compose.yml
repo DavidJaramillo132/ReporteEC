@@ -43,7 +43,10 @@ services:
       WATCHFILES_FORCE_POLLING: "true"
       # The browser calls the API from whatever host port the frontend is
       # actually published on; app/core/config.py falls back to 5173 without this.
-      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173}
+      # Port 4173 is Vite's own `vite preview` default, used for local PWA/build
+      # verification (see codigo/frontend's Phase 7 notes) -- harmless to leave
+      # enabled permanently alongside the dev server's own port.
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173},http://localhost:4173,http://127.0.0.1:4173
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

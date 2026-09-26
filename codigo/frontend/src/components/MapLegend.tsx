@@ -13,6 +13,7 @@ interface MapLegendProps {
   cantonLayer: CantonLayer
   cantonBreakpoints: { p25: number; p50: number; p75: number } | null
   cantonYear: number
+  onShowIntro: () => void
 }
 
 const CANTON_LEGEND_STEP: Record<'bajo' | 'moderado' | 'alto' | 'critico', 1 | 2 | 3 | 4> = {
@@ -31,6 +32,7 @@ export function MapLegend({
   cantonLayer,
   cantonBreakpoints,
   cantonYear,
+  onShowIntro,
 }: MapLegendProps) {
   const [open, setOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
   const bodyId = useId()
@@ -118,6 +120,11 @@ export function MapLegend({
             </ul>
           </div>
         )}
+        <p className="border-t border-rule-soft pt-2">
+          <button type="button" onClick={onShowIntro} className="font-medium text-ink underline hover:no-underline">
+            Cómo leer el mapa
+          </button>
+        </p>
       </div>
     </div>
   )

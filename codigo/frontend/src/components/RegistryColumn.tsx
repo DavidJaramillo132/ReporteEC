@@ -28,6 +28,8 @@ interface RegistryColumnProps {
   selectedId: number | null
   selected: IncidentDetail | null
   lastUpdatedAt: string | null
+  /** Best-effort: the browser reports no connection right now (see App.tsx). */
+  offline: boolean
   onSelect: (item: IncidentListItem) => void
   onCloseDetail: () => void
   onRetry: () => void
@@ -42,7 +44,7 @@ export function RegistryColumn(props: RegistryColumnProps) {
   // ever loaded; a later refetch (pan, filter change) keeps showing the last
   // good page instead of flashing the whole column empty.
   if (status === 'loading' && items.length === 0) return <LoadingState />
-  if (status === 'error' && items.length === 0) return <ErrorState onRetry={props.onRetry} />
+  if (status === 'error' && items.length === 0) return <ErrorState onRetry={props.onRetry} offline={props.offline} />
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -280,11 +282,15 @@ function LoadingState() {
   )
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
+function ErrorState({ onRetry, offline }: { onRetry: () => void; offline: boolean }) {
   return (
     <div className="px-4 py-5 lg:px-5" role="alert">
-      <p className="text-[15px] font-semibold">No se pudo cargar el registro.</p>
-      <p className="mt-1 text-[14px] text-ink-2">Revisa tu conexión e inténtalo otra vez.</p>
+      <p className="text-[15px] font-semibold">{offline ? 'Sin conexión' : 'No se pudo cargar el registro.'}</p>
+      <p className="mt-1 text-[14px] text-ink-2">
+        {offline
+          ? 'Se muestran los últimos datos guardados cuando existen. Revisa tu conexión e inténtalo otra vez.'
+          : 'Revisa tu conexión e inténtalo otra vez.'}
+      </p>
       <button
         type="button"
         onClick={onRetry}
