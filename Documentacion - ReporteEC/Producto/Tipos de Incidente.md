@@ -44,8 +44,9 @@ fuente se **traduce** a esta lista al entrar al sistema.
   diferencia es jurídica y el dato original se conserva.
 - **Robo no tiene fuente oficial** con coordenadas: en la v1 no aparece (ver
   [[Fuentes]]).
-- Cada tipo tiene un **ícono** propio; el color del marcador es el nivel de
-  confianza ([[Niveles de Confianza]]).
+- Cada tipo tiene su propio **color y forma** de marca; el nivel de confianza
+  se dibuja como **estilo de trazo** (relleno, discontinuo, rayado o vacío).
+  Decidido el 2026-09-25 ([[Niveles de Confianza]]).
 
 ## Violencia sexual: solo fuentes oficiales
 

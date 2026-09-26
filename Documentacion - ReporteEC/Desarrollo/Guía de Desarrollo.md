@@ -54,7 +54,7 @@ FASE 4: V4 — Red Colaborativa e Inteligencia Artificial
 ### Paso 0.2: Entorno Backend y Esquema Inicial
 * **Ubicación:** `codigo/backend/`
 * **Acción:**
-  - Inicializar proyecto con **uv** (`pyproject.toml` con FastAPI, SQLAlchemy 2.0, GeoAlchemy2, asyncpg, pydantic).
+  - Inicializar proyecto con **uv** (`pyproject.toml` con FastAPI, SQLAlchemy 2.0, GeoAlchemy2, psycopg 3 (síncrono), Alembic, pydantic).
   - Crear configuración central en `app/core/config.py` leyendo variables de `.env`.
   - Crear modelo `incidents` en `app/models/incident.py` con campo geométrico `geom GEOMETRY(Point, 4326)`.
   - Generar migración inicial con Alembic.

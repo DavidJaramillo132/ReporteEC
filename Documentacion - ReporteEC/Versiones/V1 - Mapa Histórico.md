@@ -46,7 +46,7 @@ ese camino funciona, el [[Stack e Infraestructura]] queda probado.
 | Extorsión y vacunas a negocios (FGE / OECO) | **Por cantón**, semáforo de riesgo comercial ([[Extorsión y Vacunas a Negocios]])                     |
 | Siniestros de tránsito (INEC)               | **Por cantón** (no hay coordenadas)                                  |
 | Población por cantón (INEC)                | No se muestra; sirve para calcular tasas                                    |
-| Robos                                        | **Por definir** — no hay fuente oficial                              |
+| Robos                                        | **Fuera de la V1**. Fuente candidata: tablero de robos de la Fiscalía, pendiente de solicitud formal ([[Fuentes]]) |
 
 Todo desde **2019**, el primer año en que todos los datasets tienen datos.
 Tipos de incidente según [[Tipos de Incidente]].
@@ -55,7 +55,7 @@ Tipos de incidente según [[Tipos de Incidente]].
 
 | Página                      | Qué contiene                                                                                                                       |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Inicio**             | Qué es ReporteEC, qué muestra y qué no, cómo leer el mapa (colores = confianza, íconos = tipo) y accesos a las demás páginas |
+| **Inicio**             | El mapa es la portada (decidido 2026-09-26). La primera visita muestra un aviso breve: qué es ReporteEC, qué muestra y qué no, cómo leer el mapa (color y forma = tipo, trazo = confianza) |
 | **Mapa**               | La vista principal: capas, filtros y detalle de cada incidente                                                                      |
 | **Estadísticas**      | Gráficos por tipo, provincia, cantón y mes, con conteo y tasa                                                                     |
 | **Metodología**       | Cómo se construye cada dato (ver abajo)                                                                                            |
@@ -64,8 +64,8 @@ Tipos de incidente según [[Tipos de Incidente]].
 ### Mapa
 
 - **Puntos al acercar, mapa de calor al alejar**
-- **Color del marcador = nivel de confianza** (🟢🔵🟡🟠); **ícono = tipo**
-  ([[Niveles de Confianza]])
+- **Color y forma de la marca = tipo**; **estilo de trazo = nivel de confianza**
+  ([[Niveles de Confianza]], decidido 2026-09-25)
 - **Detalle al tocar un punto:** tipo, fecha, lugar, fuente, nivel de confianza
   y enlace a la fuente original
 - **Filtros:** año (2019 → hoy), mes, provincia, cantón, tipo
