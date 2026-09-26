@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lastPublishedMonth, monthsForYear } from './lib/period'
 import { Estadisticas } from './components/Estadisticas'
 import { FilterStrip } from './components/FilterStrip'
 import { IntroDialog } from './components/IntroDialog'
@@ -149,7 +150,22 @@ export default function App() {
     return () => controller.abort()
   }, [bootstrapAttempt])
 
-  const lastMonth = meta?.period.to ? Number(meta.period.to.slice(5, 7)) : 12
+  // The data cut limits only its own year; earlier years show all 12 months.
+  const lastMonth = lastPublishedMonth(filters?.year ?? FALLBACK_FILTERS.year, meta?.period.to)
+  const changeYear = (year: number) =>
+    setFilters((f) =>
+      f
+        ? {
+            ...f,
+            year,
+            months: monthsForYear(
+              f.months,
+              lastPublishedMonth(f.year, meta?.period.to),
+              lastPublishedMonth(year, meta?.period.to),
+            ),
+          }
+        : f,
+    )
 
   // The registry column's data: fetched from the API for the current
   // filters + map viewport, debounced so panning does not flood the backend.
@@ -347,7 +363,7 @@ export default function App() {
                 months={filters.months}
                 availableYears={meta?.years ?? []}
                 lastMonth={lastMonth}
-                onYear={(year) => update({ year })}
+                onYear={changeYear}
                 onMonths={(months) => update({ months })}
               />
             )}
@@ -391,7 +407,7 @@ export default function App() {
                         {' '}
                         <button
                           type="button"
-                          onClick={() => update({ year: cantonYearAvailability.latestYear! })}
+                          onClick={() => changeYear(cantonYearAvailability.latestYear!)}
                           className="underline hover:no-underline"
                         >
                           Ir a {cantonYearAvailability.latestYear}
@@ -418,7 +434,7 @@ export default function App() {
                   months={filters.months}
                   availableYears={meta?.years ?? []}
                   lastMonth={lastMonth}
-                  onYear={(year) => update({ year })}
+                  onYear={changeYear}
                   onMonths={(months) => update({ months })}
                 />
               )}
@@ -467,7 +483,7 @@ export default function App() {
 function defaultFilters(meta: MetaResponse): Filters {
   const until = meta.period.to
   const year = until ? Number(until.slice(0, 4)) : new Date().getFullYear()
-  const lastMonth = until ? Number(until.slice(5, 7)) : 12
+  const lastMonth = lastPublishedMonth(year, until)
   return {
     year,
     months: Array.from({ length: lastMonth }, (_, i) => i + 1),
