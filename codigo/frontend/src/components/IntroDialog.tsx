@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef } from 'react'
+import { Link } from '../lib/router'
 
 interface IntroDialogProps {
   open: boolean
   onClose: () => void
-  onOpenMethodology: () => void
 }
 
 const FOCUSABLE = 'button, a[href], [tabindex]:not([tabindex="-1"])'
@@ -14,7 +14,7 @@ const FOCUSABLE = 'button, a[href], [tabindex]:not([tabindex="-1"])'
  * Focus-trapped, closes on Esc or an outside click, and returns focus to
  * whatever had it before the dialog opened.
  */
-export function IntroDialog({ open, onClose, onOpenMethodology }: IntroDialogProps) {
+export function IntroDialog({ open, onClose }: IntroDialogProps) {
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const restoreFocusTo = useRef<HTMLElement | null>(null)
@@ -89,16 +89,13 @@ export function IntroDialog({ open, onClose, onOpenMethodology }: IntroDialogPro
           </p>
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft px-4 py-3">
-          <button
-            type="button"
-            onClick={() => {
-              onClose()
-              onOpenMethodology()
-            }}
+          <Link
+            to="/metodologia"
+            onClick={onClose}
             className="text-[14px] font-medium text-ink underline hover:no-underline"
           >
             Ver metodología
-          </button>
+          </Link>
           <button
             type="button"
             onClick={onClose}

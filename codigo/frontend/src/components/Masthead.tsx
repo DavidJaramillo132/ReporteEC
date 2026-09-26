@@ -1,66 +1,90 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import type { RouteName } from '../lib/router'
+import { Link } from '../lib/router'
 import { formatLongDate } from '../lib/registry'
-
-export type ColumnTab = 'registro' | 'estadisticas' | 'metodologia' | 'fuentes'
-
-const TABS: { id: ColumnTab; label: string; short?: string }[] = [
-  { id: 'registro', label: 'Registro' },
-  { id: 'estadisticas', label: 'Estadísticas' },
-  { id: 'metodologia', label: 'Metodología' },
-  { id: 'fuentes', label: 'Fuentes y licencia', short: 'Fuentes' },
-]
 
 interface MastheadProps {
   cutDate: string | null
-  tab: ColumnTab
-  onTab: (tab: ColumnTab) => void
+  route: RouteName
 }
 
-export function Masthead({ cutDate, tab, onTab }: MastheadProps) {
+const NAV: { to: string; label: string; route: RouteName }[] = [
+  { to: '/', label: 'Mapa', route: 'mapa' },
+  { to: '/estadisticas', label: 'Estadísticas', route: 'estadisticas' },
+  { to: '/metodologia', label: 'Metodología', route: 'metodologia' },
+  { to: '/fuentes', label: 'Fuentes', route: 'fuentes' },
+]
+
+/** A single ~56px bar on the sello field: nameplate, section nav, data cut, "Reportar". Below `sm:`, the nav/cut/"Reportar" collapse into a disclosure menu (see the plan). */
+export function Masthead({ cutDate, route }: MastheadProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuId = useId()
+
   return (
-    <header className="double-rule relative z-20 bg-paper">
-      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3 bg-sello px-4 pt-4 pb-3 text-paper lg:px-6">
-        <div className="min-w-0">
-          <h1 className="nameplate text-[44px] sm:text-[56px]">ReporteEC</h1>
-          <p className="mt-1.5 text-[14px] text-paper/85">Registro público de incidentes de seguridad · Ecuador</p>
+    <header className="double-rule relative z-30 bg-sello text-paper">
+      <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
+        <Link to="/" className="nameplate shrink-0 text-[22px] sm:text-[26px]">
+          ReporteEC
+        </Link>
+
+        <nav aria-label="Secciones" className="hidden min-w-0 items-center gap-1 sm:flex">
+          {NAV.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              aria-current={route === item.route ? 'page' : undefined}
+              className={`flex h-8 items-center px-2.5 text-[14px] font-medium transition-colors duration-150 ${
+                route === item.route ? 'bg-paper text-sello' : 'text-paper/85 hover:bg-sello-soft/25 hover:text-paper'
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="ml-auto hidden shrink-0 items-center gap-4 sm:flex">
+          <p className="text-[12.5px] text-paper/85">
+            <span className="label text-paper/65">Corte </span>
+            {cutDate ? formatLongDate(cutDate) : '…'}
+          </p>
+          <ReportNotice />
         </div>
-        <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 text-[13px] text-paper/85 sm:text-right">
-          <dt className="label self-end text-paper/70">Corte de datos</dt>
-          <dd className="font-semibold text-paper">{cutDate ? formatLongDate(cutDate) : '…'}</dd>
-          <dt className="label self-end text-paper/70">Fuente</dt>
-          <dd>Ministerio del Interior</dd>
-        </dl>
+
+        <button
+          type="button"
+          aria-expanded={menuOpen}
+          aria-controls={menuId}
+          onClick={() => setMenuOpen((v) => !v)}
+          className="ml-auto flex h-8 items-center gap-1.5 border border-paper/50 px-2.5 text-[13px] font-medium sm:hidden"
+        >
+          Menú
+        </button>
       </div>
-      <nav
-        aria-label="Secciones"
-        className="flex flex-wrap items-stretch justify-between gap-x-4 border-t border-ink px-4 lg:px-6"
-      >
-        <ul className="-ml-3 flex overflow-x-auto" role="tablist" aria-label="Contenido de la columna">
-          {TABS.map((t) => (
-            <li key={t.id} className="shrink-0">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                onClick={() => onTab(t.id)}
-                className={`h-10 px-3 text-[14px] font-medium transition-colors duration-150 ${
-                  tab === t.id ? 'bg-sello text-paper' : 'text-ink hover:underline'
+
+      {menuOpen && (
+        <div id={menuId} className="space-y-3 border-t border-paper/30 px-4 py-3 sm:hidden">
+          <nav aria-label="Secciones" className="flex flex-col">
+            {NAV.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setMenuOpen(false)}
+                aria-current={route === item.route ? 'page' : undefined}
+                className={`flex h-9 items-center px-1 text-[15px] font-medium ${
+                  route === item.route ? 'font-semibold text-paper underline' : 'text-paper/85'
                 }`}
               >
-                {t.short ? (
-                  <>
-                    <span className="sm:hidden">{t.short}</span>
-                    <span className="hidden sm:inline">{t.label}</span>
-                  </>
-                ) : (
-                  t.label
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <ReportNotice />
-      </nav>
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <p className="text-[12.5px] text-paper/85">
+            <span className="label text-paper/65">Corte de datos </span>
+            {cutDate ? formatLongDate(cutDate) : '…'}
+          </p>
+          <ReportNotice />
+        </div>
+      )}
     </header>
   )
 }
@@ -85,25 +109,25 @@ function ReportNotice() {
   }, [open])
 
   return (
-    <div ref={root} className="relative flex w-full items-center border-t border-rule-soft py-2 sm:w-auto sm:border-t-0 sm:py-0">
+    <div ref={root} className="relative flex w-full items-center sm:w-auto">
       <button
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className={`flex h-8 w-full items-center justify-between gap-2 border border-ink px-3 text-[14px] font-medium transition-colors duration-150 sm:w-auto ${
-          open ? 'bg-sello text-paper' : 'hatch hover:bg-sheet'
+        className={`flex h-8 w-full items-center justify-between gap-2 border px-2.5 text-[13px] font-medium transition-colors duration-150 sm:w-auto ${
+          open ? 'border-paper bg-paper text-sello' : 'border-paper/50 text-paper hover:bg-paper/10'
         }`}
       >
-        Reportar un incidente
-        <span className={`label text-[11px] ${open ? 'text-paper' : 'text-ink-3'}`}>Próximamente</span>
+        Reportar
+        <span className={`label text-[10.5px] ${open ? 'text-sello/70' : 'text-paper/65'}`}>Próximamente</span>
       </button>
       {open && (
         <div
           id={panelId}
           role="region"
           aria-label="Reportes ciudadanos"
-          className="ink-in absolute top-full right-0 z-30 mt-2 w-[min(340px,calc(100vw-2rem))] border border-ink bg-sheet p-4 text-[14px] shadow-[0_6px_18px_-8px_rgba(21,33,44,0.35)]"
+          className="ink-in absolute top-full right-0 z-30 mt-2 w-[min(340px,calc(100vw-2rem))] border border-ink bg-sheet p-4 text-[14px] text-ink shadow-[0_6px_18px_-8px_rgba(21,33,44,0.35)]"
         >
           <p className="font-semibold">Los reportes ciudadanos llegan en una próxima edición.</p>
           <p className="mt-2 text-ink-2">

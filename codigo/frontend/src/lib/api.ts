@@ -63,12 +63,6 @@ export interface IncidentListItem {
   source_slug: string
 }
 
-export interface IncidentListResponse {
-  total: number
-  counts_by_type: Record<string, number>
-  items: IncidentListItem[]
-}
-
 export interface IncidentDetail extends IncidentListItem {
   source: SourceInfo
   source_record_id: string
@@ -98,36 +92,10 @@ export function getAdminUnits(signal?: AbortSignal): Promise<AdminUnitsResponse>
   return fetchJson<AdminUnitsResponse>('/admin-units', undefined, signal)
 }
 
-export interface IncidentQuery {
-  year?: number
-  months?: number[]
-  types?: IncidentType[]
-  province?: string | null
-  canton?: string | null
-  bbox?: [number, number, number, number]
-  limit?: number
-  offset?: number
-}
-
-export function getIncidents(
-  query: IncidentQuery,
-  signal?: AbortSignal,
-): Promise<IncidentListResponse> {
-  return fetchJson<IncidentListResponse>(
-    '/incidents',
-    {
-      year: query.year,
-      months: query.months?.length ? query.months.join(',') : undefined,
-      types: query.types?.length ? query.types.join(',') : undefined,
-      province: query.province,
-      canton: query.canton,
-      bbox: query.bbox?.join(','),
-      limit: query.limit,
-      offset: query.offset,
-    },
-    signal,
-  )
-}
+// GET /api/incidents (list + bbox) has no client function anymore: the
+// registry column that used it was removed in the V1 UI restructuring (see
+// the plan) and the list returns in V3 for citizen reports near the
+// reader's location. The backend endpoint itself is untouched.
 
 export function getIncident(id: number, signal?: AbortSignal): Promise<IncidentDetail> {
   return fetchJson<IncidentDetail>(`/incidents/${id}`, undefined, signal)
@@ -169,6 +137,8 @@ interface StatsQueryBase {
   province?: string | null
   canton?: string | null
   layer?: StatsLayer
+  /** 'map' counts only cases the map draws (unlocated, exact location). */
+  scope?: 'all' | 'map'
 }
 
 export interface StatsQuery extends StatsQueryBase {
@@ -183,6 +153,7 @@ function statsParams(query: StatsQueryBase) {
     province: query.province,
     canton: query.canton,
     layer: query.layer,
+    scope: query.scope,
   }
 }
 

@@ -1,11 +1,15 @@
 import type { MapView } from '../components/IncidentMap'
 import type { Filters } from './registry'
 
-/** The last consultation, restored on return. Browser storage may be unavailable. */
+/**
+ * The last consultation, restored on return. Browser storage may be
+ * unavailable. No longer saves a selected incident id: the case card (see
+ * components/IncidentCard.tsx) is opened only by clicking a mark, and
+ * nothing restores that click across a reload.
+ */
 export interface SavedView {
   filters: Filters
   map: MapView
-  selectedId: number | null
 }
 
 const KEY = 'reporteec:consulta:v1'

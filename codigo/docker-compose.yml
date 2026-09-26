@@ -87,6 +87,7 @@ services:
       # URLs the browser uses, so they point to the ports published on the host.
       VITE_API_URL: http://localhost:${BACKEND_PORT:-8000}
       VITE_TILES_URL: http://localhost:${MARTIN_PORT:-3000}
+      VITE_WATCH_POLLING: "true"
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:

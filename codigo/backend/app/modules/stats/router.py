@@ -36,6 +36,7 @@ def _filters(
     province: str | None,
     canton: str | None,
     layer: Literal["incidents", "detentions"],
+    scope: Literal["all", "map"] = "all",
 ) -> StatsFilters:
     return StatsFilters(
         year=year,
@@ -44,6 +45,7 @@ def _filters(
         province=province,
         canton=canton,
         layer=Layer(layer),
+        map_only=scope == "map",
     )
 
 
@@ -57,8 +59,11 @@ def stats(
     province: str | None = Query(default=None, description="Province DPA code"),
     canton: str | None = Query(default=None, description="Canton DPA code"),
     layer: Literal["incidents", "detentions"] = Query(default="incidents"),
+    scope: Literal["all", "map"] = Query(
+        default="all", description="'map' counts only cases the map draws"
+    ),
 ) -> StatsResponse:
-    filters = _filters(year, months, types, province, canton, layer)
+    filters = _filters(year, months, types, province, canton, layer, scope)
     rows = get_stats(session, Dimension(dimension), filters)
     return StatsResponse(
         dimension=dimension,

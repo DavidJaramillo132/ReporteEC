@@ -46,7 +46,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.admin_units.models import AdminUnit, AdminUnitLevel
 from app.modules.detentions.models import Detention
-from app.modules.incidents.models import Incident, IncidentStatus
+from app.modules.incidents.models import Incident, IncidentStatus, LocationPrecision
 from app.modules.territory.models import Canton, CantonPopulation
 
 LOW_POPULATION_THRESHOLD = 10_000
@@ -75,6 +75,9 @@ class StatsFilters:
     province: str | None = None
     canton: str | None = None
     layer: Layer = Layer.INCIDENTS
+    # Count only what the map draws (the map_incidents view's rules): the map's
+    # type chips must match its points, while statistics count every case.
+    map_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +131,9 @@ def _base_conditions(filters: StatsFilters) -> list:
     conditions: list = []
     if filters.layer == Layer.INCIDENTS:
         conditions.append(Incident.status == IncidentStatus.ACTIVO)
+        if filters.map_only:
+            conditions.append(Incident.located_at.is_(None))
+            conditions.append(Incident.location_precision != LocationPrecision.CANTON)
     if filters.year is not None:
         conditions.append(_local_year(model.occurred_at) == filters.year)
     if filters.months:

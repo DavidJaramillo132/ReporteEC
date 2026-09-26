@@ -34,12 +34,6 @@ export interface ViewBounds {
   zoom: number
 }
 
-export interface FocusRequest {
-  id: number
-  coordinates: [number, number]
-  nonce: number
-}
-
 interface IncidentMapProps {
   filters: Filters
   showDetentions: boolean
@@ -50,9 +44,14 @@ interface IncidentMapProps {
   /** The year `cantonRows` was fetched for -- shown in the click popup. */
   cantonYear: number
   selectedId: number | null
+  /** The selected incident's own coordinates, from the click event that selected it -- used only to keep IncidentCard anchored to its point as the map moves. */
+  selectedCoordinates: [number, number] | null
   initialView: MapView | null
-  focus: FocusRequest | null
-  onSelect: (id: number) => void
+  onSelect: (id: number, coordinates: [number, number]) => void
+  /** Esc, the card's own close button, or clicking the map away from a mark. */
+  onDeselect: () => void
+  /** The selected incident's screen position within the map container, or null once it (or the selection) leaves the frame -- recomputed on every pan/zoom so a floating IncidentCard can track it. */
+  onSelectedPoint: (point: { x: number; y: number } | null) => void
   onViewChange: (bounds: ViewBounds, view: MapView) => void
 }
 
@@ -69,9 +68,11 @@ export function IncidentMap({
   cantonRows,
   cantonYear,
   selectedId,
+  selectedCoordinates,
   initialView,
-  focus,
   onSelect,
+  onDeselect,
+  onSelectedPoint,
   onViewChange,
 }: IncidentMapProps) {
   const container = useRef<HTMLDivElement>(null)
@@ -81,9 +82,47 @@ export function IncidentMap({
   const geolocateRef = useRef<GeolocateControl | null>(null)
   const [location, setLocation] = useState<'off' | 'locating' | 'following' | 'shown' | 'denied' | 'unavailable'>('off')
   // Latest props for handlers bound once at map creation.
-  const latest = useRef({ filters, onSelect, onViewChange, selectedId, cantonLayer, cantonRows, cantonYear })
+  const latest = useRef({
+    filters,
+    onSelect,
+    onDeselect,
+    onSelectedPoint,
+    onViewChange,
+    selectedId,
+    selectedCoordinates,
+    cantonLayer,
+    cantonRows,
+    cantonYear,
+  })
   useEffect(() => {
-    latest.current = { filters, onSelect, onViewChange, selectedId, cantonLayer, cantonRows, cantonYear }
+    latest.current = {
+      filters,
+      onSelect,
+      onDeselect,
+      onSelectedPoint,
+      onViewChange,
+      selectedId,
+      selectedCoordinates,
+      cantonLayer,
+      cantonRows,
+      cantonYear,
+    }
+  })
+
+  // Projects `selectedCoordinates` to on-screen pixels within the map
+  // container, reported via `onSelectedPoint`; kept as a ref so both the
+  // map's own 'move'/'resize' listeners (bound once) and the effect below
+  // (keyed on the coordinates themselves) call the same up-to-date logic.
+  const updateSelectedPoint = useRef(() => {
+    const map = mapRef.current
+    if (!map) return
+    const coords = latest.current.selectedCoordinates
+    if (!coords) {
+      latest.current.onSelectedPoint(null)
+      return
+    }
+    const point = map.project(coords)
+    latest.current.onSelectedPoint({ x: point.x, y: point.y })
   })
 
   useEffect(() => {
@@ -297,15 +336,30 @@ export function IncidentMap({
         },
       })
 
-      map.on('click', 'incidents-marks', (event) => {
-        const id = event.features?.[0]?.id
-        if (typeof id === 'number') latest.current.onSelect(id)
+      // One generic handler, not a per-layer one: a mark click opens/moves
+      // the selection, and every OTHER click on the map plate -- empty
+      // water, a canton fill, a province line -- closes it (see the plan:
+      // "se cierra con ×, con Esc o tocando el mapa").
+      map.on('click', (event) => {
+        const [feature] = map.queryRenderedFeatures(event.point, { layers: ['incidents-marks'] })
+        const id = feature?.id
+        const geometry = feature?.geometry
+        if (typeof id === 'number' && geometry?.type === 'Point') {
+          const [lon, lat] = geometry.coordinates as [number, number]
+          latest.current.onSelect(id, [lon, lat])
+        } else {
+          latest.current.onDeselect()
+        }
       })
       map.on('mouseenter', 'incidents-marks', () => (map.getCanvas().style.cursor = 'pointer'))
       map.on('mouseleave', 'incidents-marks', () => (map.getCanvas().style.cursor = ''))
 
+      map.on('move', () => updateSelectedPoint.current())
+      map.on('resize', () => updateSelectedPoint.current())
+
       readyRef.current = true
       emitView()
+      updateSelectedPoint.current()
     })
     map.on('moveend', emitView)
     map.on('error', (event) => {
@@ -336,6 +390,15 @@ export function IncidentMap({
     const map = mapRef.current
     if (!map || !readyRef.current) return
     map.setFilter('selected-ring', ['==', ['id'], selectedId ?? NO_SELECTION])
+  }, [selectedId])
+
+  // "vuelve [el foco] al mapa" (plan): once a selection that WAS open closes
+  // -- Esc, the card's × button, or an empty-map click -- focus returns to
+  // the map itself, never on the very first render (nothing was selected yet).
+  const hadSelection = useRef(selectedId !== null)
+  useEffect(() => {
+    if (hadSelection.current && selectedId === null) mapRef.current?.getCanvas().focus()
+    hadSelection.current = selectedId !== null
   }, [selectedId])
 
   useEffect(() => {
@@ -385,17 +448,11 @@ export function IncidentMap({
     }
   }, [cantonRows, cantonLayer])
 
+  // A new selection (or its clearing) reprojects immediately, without
+  // waiting for the next map move.
   useEffect(() => {
-    const map = mapRef.current
-    if (!map || !focus) return
-    map.flyTo({
-      center: focus.coordinates,
-      zoom: Math.max(map.getZoom(), 12.5),
-      duration: 1100,
-      curve: 1.3,
-      essential: true,
-    })
-  }, [focus])
+    updateSelectedPoint.current()
+  }, [selectedCoordinates])
 
   // MapLibre's stylesheet forces position: relative on the map element, so the
   // absolute fill lives on a wrapper and the map element only fills it.

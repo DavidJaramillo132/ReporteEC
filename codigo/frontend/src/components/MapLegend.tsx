@@ -3,6 +3,7 @@ import { ConfidenceChip, Mark } from './Mark'
 import { CANTON_INDICATOR_LABEL } from '../lib/cantonChoropleth'
 import type { Confidence, CantonLayer, IncidentType } from '../lib/registry'
 import { CONFIDENCE_ORDER, TYPE_LABEL } from '../lib/registry'
+import { Link } from '../lib/router'
 import { formatRate } from '../lib/stats'
 
 interface MapLegendProps {
@@ -124,6 +125,12 @@ export function MapLegend({
           <button type="button" onClick={onShowIntro} className="font-medium text-ink underline hover:no-underline">
             Cómo leer el mapa
           </button>
+        </p>
+        <p className="text-ink-3">
+          Muestra casos registrados, no todo el delito.{' '}
+          <Link to="/metodologia" className="font-medium text-ink underline hover:no-underline">
+            Metodología
+          </Link>
         </p>
       </div>
     </div>

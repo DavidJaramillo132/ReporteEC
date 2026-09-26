@@ -96,6 +96,21 @@ export interface Filters {
   cantonLayer: CantonLayer
 }
 
+/**
+ * Lets the map page mount (and show data) immediately, before the bootstrap
+ * fetch (meta + admin units) resolves and a real Filters exists -- see
+ * App.tsx and pages/Mapa.tsx.
+ */
+export const FALLBACK_FILTERS: Filters = {
+  year: new Date().getFullYear(),
+  months: Array.from({ length: 12 }, (_, i) => i + 1),
+  types: [...INCIDENT_TYPES],
+  province: null,
+  canton: null,
+  detentions: false,
+  cantonLayer: 'none',
+}
+
 /** The database id, shown as the entry number of the registry. */
 export function entryNumber(id: number) {
   return String(id).padStart(5, '0')

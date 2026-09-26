@@ -1,484 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { lastPublishedMonth, monthsForYear } from './lib/period'
-import { Estadisticas } from './components/Estadisticas'
-import { FilterStrip } from './components/FilterStrip'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { MapView } from './components/IncidentMap'
 import { IntroDialog } from './components/IntroDialog'
-import { MethodologyPanel, SourcesPanel } from './components/InfoPanels'
-import {
-  type FocusRequest,
-  IncidentMap,
-  MARKS_ZOOM,
-  type MapView,
-  type ViewBounds,
-} from './components/IncidentMap'
-import { MapLegend } from './components/MapLegend'
-import { type ColumnTab, Masthead } from './components/Masthead'
-import { RegistryColumn } from './components/RegistryColumn'
-import { TimeRule } from './components/TimeRule'
-import type {
-  AdminUnitsResponse,
-  CantonIndicatorsResponse,
-  IncidentDetail,
-  IncidentListResponse,
-  MetaResponse,
-  StatsRow,
-} from './lib/api'
-import { getAdminUnits, getCantonIndicators, getIncident, getIncidents, getMeta, getStats } from './lib/api'
-import { checkYearAvailability, indicatorForLayer, noDataMessage } from './lib/cantonChoropleth'
+import { Masthead } from './components/Masthead'
+import type { AdminUnitsResponse, MetaResponse } from './lib/api'
+import { getAdminUnits, getMeta } from './lib/api'
 import { hasSeenIntro, markIntroSeen } from './lib/firstVisit'
+import { lastPublishedMonth, monthsForYear } from './lib/period'
 import { clearSavedView, loadSavedView, saveView } from './lib/persist'
-import type { Confidence, Filters } from './lib/registry'
-import { INCIDENT_TYPES, MONTHS } from './lib/registry'
+import type { Filters } from './lib/registry'
+import { FALLBACK_FILTERS, INCIDENT_TYPES } from './lib/registry'
+import { matchRoute, replaceQuery, useRoute } from './lib/router'
+import { filtersToSearch, hasUrlFilters, parseFiltersFromSearch } from './lib/urlState'
+import { Estadisticas } from './pages/Estadisticas'
+import { Fuentes } from './pages/Fuentes'
+import { Mapa } from './pages/Mapa'
+import { Metodologia } from './pages/Metodologia'
+import { NoEncontrada } from './pages/NoEncontrada'
 
 const SAVED = loadSavedView()
-const PAGE_SIZE = 40
-const LIST_DEBOUNCE_MS = 250
-const EMPTY_LIST: IncidentListResponse = { total: 0, counts_by_type: {}, items: [] }
-
-// Lets the map mount (and show data) immediately, before the bootstrap fetch
-// (meta + admin units) resolves and a real Filters exists.
-const FALLBACK_FILTERS: Filters = {
-  year: new Date().getFullYear(),
-  months: Array.from({ length: 12 }, (_, i) => i + 1),
-  types: [...INCIDENT_TYPES],
-  province: null,
-  canton: null,
-  detentions: false,
-  cantonLayer: 'none',
-}
-
-export default function App() {
-  const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
-  const [bootstrapAttempt, setBootstrapAttempt] = useState(0)
-  const [meta, setMeta] = useState<MetaResponse | null>(null)
-  const [adminUnits, setAdminUnits] = useState<AdminUnitsResponse | null>(null)
-
-  const [filters, setFilters] = useState<Filters | null>(SAVED?.filters ?? null)
-  const [selectedId, setSelectedId] = useState<number | null>(SAVED?.selectedId ?? null)
-  const [selectedDetail, setSelectedDetail] = useState<IncidentDetail | null>(null)
-  const [bounds, setBounds] = useState<ViewBounds | null>(null)
-  const [mapView, setMapView] = useState<MapView | null>(SAVED?.map ?? null)
-  const [focus, setFocus] = useState<FocusRequest | null>(null)
-  const [tab, setTab] = useState<ColumnTab>('registro')
-  const [restored, setRestored] = useState(Boolean(SAVED))
-  const columnRef = useRef<HTMLDivElement>(null)
-
-  // First-visit intro dialog (see components/IntroDialog.tsx): shown once
-  // automatically, and reopenable on demand from the map legend.
-  const [introOpen, setIntroOpen] = useState(() => !hasSeenIntro())
-  const closeIntro = useCallback(() => {
-    setIntroOpen(false)
-    markIntroSeen()
-  }, [])
-
-  // Best-effort signal for the offline-aware error message below: not a
-  // guarantee any given failed request was served from the service worker's
-  // cache, just a calmer message than a generic error when the browser
-  // itself reports no connection.
-  const [offline, setOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
-  useEffect(() => {
-    const goOnline = () => setOffline(false)
-    const goOffline = () => setOffline(true)
-    window.addEventListener('online', goOnline)
-    window.addEventListener('offline', goOffline)
-    return () => {
-      window.removeEventListener('online', goOnline)
-      window.removeEventListener('offline', goOffline)
-    }
-  }, [])
-
-  const [listStatus, setListStatus] = useState<'loading' | 'error' | 'ready'>('loading')
-  const [listResult, setListResult] = useState<IncidentListResponse>(EMPTY_LIST)
-  const [listAttempt, setListAttempt] = useState(0)
-  const requestIdRef = useRef(0)
-
-  // The registry's "Tasa ×100.000" column: one nationwide/province/canton
-  // rate per type, from the SAME year/months/place filters as everything
-  // else -- never the map's bbox, which is not a meaningful population scope.
-  const [typeStats, setTypeStats] = useState<StatsRow[]>([])
-  useEffect(() => {
-    if (!filters) return
-    const controller = new AbortController()
-    getStats(
-      {
-        dimension: 'type',
-        year: filters.year,
-        months: filters.months,
-        province: filters.province,
-        canton: filters.canton,
-      },
-      controller.signal,
-    )
-      .then((result) => setTypeStats(result.rows))
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.error(error)
-      })
-    return () => controller.abort()
-  }, [filters])
-
-  // The canton choropleth's rows (extortion / traffic crashes): independent
-  // of type/province/canton/months, so it only refetches on its own control
-  // or the year -- unlike typeStats above, which tracks every filter.
-  const [cantonData, setCantonData] = useState<CantonIndicatorsResponse | null>(null)
-  useEffect(() => {
-    if (!filters || filters.cantonLayer === 'none') return
-    const controller = new AbortController()
-    getCantonIndicators(indicatorForLayer(filters.cantonLayer), filters.year, controller.signal)
-      .then((result) => setCantonData(result))
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.error(error)
-      })
-    return () => controller.abort()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.cantonLayer, filters?.year])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    Promise.all([getMeta(controller.signal), getAdminUnits(controller.signal)])
-      .then(([meta, adminUnits]) => {
-        setMeta(meta)
-        setAdminUnits(adminUnits)
-        setFilters((current) => current ?? defaultFilters(meta))
-        setStatus('ready')
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          console.error(error)
-          setStatus('error')
-        }
-      })
-    return () => controller.abort()
-  }, [bootstrapAttempt])
-
-  // The data cut limits only its own year; earlier years show all 12 months.
-  const lastMonth = lastPublishedMonth(filters?.year ?? FALLBACK_FILTERS.year, meta?.period.to)
-  const changeYear = (year: number) =>
-    setFilters((f) =>
-      f
-        ? {
-            ...f,
-            year,
-            months: monthsForYear(
-              f.months,
-              lastPublishedMonth(f.year, meta?.period.to),
-              lastPublishedMonth(year, meta?.period.to),
-            ),
-          }
-        : f,
-    )
-
-  // The registry column's data: fetched from the API for the current
-  // filters + map viewport, debounced so panning does not flood the backend.
-  useEffect(() => {
-    if (!filters || !bounds) return
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => {
-      requestIdRef.current += 1
-      const requestId = requestIdRef.current
-      setListStatus('loading')
-      getIncidents(
-        {
-          year: filters.year,
-          months: filters.months,
-          types: filters.types,
-          province: filters.province,
-          canton: filters.canton,
-          bbox: [bounds.west, bounds.south, bounds.east, bounds.north],
-          limit: PAGE_SIZE,
-          offset: 0,
-        },
-        controller.signal,
-      )
-        .then((result) => {
-          if (requestIdRef.current !== requestId) return
-          setListResult(result)
-          setListStatus('ready')
-        })
-        .catch((error: unknown) => {
-          if (!controller.signal.aborted) {
-            console.error(error)
-            setListStatus('error')
-          }
-        })
-    }, LIST_DEBOUNCE_MS)
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [filters, bounds, listAttempt])
-
-  const loadMore = useCallback(() => {
-    if (!filters || !bounds) return
-    const requestId = requestIdRef.current
-    getIncidents({
-      year: filters.year,
-      months: filters.months,
-      types: filters.types,
-      province: filters.province,
-      canton: filters.canton,
-      bbox: [bounds.west, bounds.south, bounds.east, bounds.north],
-      limit: PAGE_SIZE,
-      offset: listResult.items.length,
-    })
-      .then((page) => {
-        // Filters or the viewport moved on while this was in flight: its
-        // rows no longer belong to what listResult currently holds.
-        if (requestIdRef.current !== requestId) return
-        setListResult((current) => ({
-          total: page.total,
-          counts_by_type: page.counts_by_type,
-          items: [...current.items, ...page.items],
-        }))
-      })
-      .catch((error: unknown) => console.error(error))
-  }, [filters, bounds, listResult.items.length])
-
-  // The full detail (source, record id) for whichever entry is selected,
-  // from either a map click or a registry row. Left in place (not reset)
-  // when selectedId clears; `visibleDetail` below masks it instead.
-  useEffect(() => {
-    if (selectedId === null) return
-    const controller = new AbortController()
-    getIncident(selectedId, controller.signal)
-      .then((detail) => setSelectedDetail(detail))
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.error(error)
-      })
-    return () => controller.abort()
-  }, [selectedId])
-
-  // Guards against showing the previous selection's detail while the new
-  // one is still in flight, and hides it once the panel is closed.
-  const visibleDetail = selectedId !== null && selectedDetail?.id === selectedId ? selectedDetail : null
-
-  const provinceOptions = adminUnits?.provinces ?? []
-  const selectedProvince = filters?.province ?? null
-  const cantonOptions = useMemo(
-    () =>
-      selectedProvince
-        ? (adminUnits?.cantons ?? []).filter((c) => c.province_code === selectedProvince)
-        : [],
-    [adminUnits, selectedProvince],
-  )
-
-  const presentConfidence = useMemo(
-    () => [...new Set(listResult.items.map((i) => i.confidence))] as Confidence[],
-    [listResult.items],
-  )
-
-  const lastUpdatedAt = useMemo(() => {
-    if (!meta || !visibleDetail) return null
-    return meta.last_runs.find((run) => run.slug === visibleDetail.source_slug)?.finished_at ?? null
-  }, [meta, visibleDetail])
-
-  const cantonLayer = filters?.cantonLayer ?? 'none'
-  // `cantonData` is only "fresh" once it matches the currently active layer
-  // and year: otherwise (e.g. right after switching from extorsion to
-  // siniestros, before the new fetch resolves) it is the previous
-  // indicator's rows and must not be shown under the new color ramp.
-  const cantonDataFresh =
-    cantonData && cantonLayer !== 'none' && cantonData.indicator === indicatorForLayer(cantonLayer) && cantonData.year === filters?.year
-      ? cantonData
-      : null
-  const cantonRows = cantonDataFresh?.rows ?? []
-  const cantonYear = filters?.year ?? FALLBACK_FILTERS.year
-  const cantonYearAvailability = useMemo(
-    () => (cantonDataFresh ? checkYearAvailability(cantonDataFresh.available_years, cantonDataFresh.year) : null),
-    [cantonDataFresh],
-  )
-
-  useEffect(() => {
-    if (filters && mapView) saveView({ filters, map: mapView, selectedId })
-  }, [filters, mapView, selectedId])
-
-  const update = (patch: Partial<Filters>) => setFilters((f) => (f ? { ...f, ...patch } : f))
-
-  const selectIncident = useCallback((id: number, coordinates: [number, number] | null, fly: boolean) => {
-    setSelectedId(id)
-    setTab('registro')
-    if (fly && coordinates) setFocus({ id, coordinates, nonce: Date.now() })
-    columnRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [])
-
-  const handleMapSelect = useCallback((id: number) => selectIncident(id, null, false), [selectIncident])
-
-  const handleViewChange = useCallback((b: ViewBounds, v: MapView) => {
-    setBounds(b)
-    setMapView(v)
-  }, [])
-
-  const resetConsultation = () => {
-    clearSavedView()
-    window.location.reload()
-  }
-
-  const periodLabel = filters ? describePeriod(filters.year, filters.months, lastMonth) : ''
-  const zoomedOut = (bounds?.zoom ?? 0) < MARKS_ZOOM
-  const rateAreaLabel = filters?.canton ? 'el cantón' : filters?.province ? 'la provincia' : 'Ecuador'
-
-  return (
-    <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
-      <IntroDialog open={introOpen} onClose={closeIntro} onOpenMethodology={() => setTab('metodologia')} />
-      <Masthead cutDate={meta?.period.to ?? null} tab={tab} onTab={setTab} />
-
-      {filters && (
-        <FilterStrip
-          provinces={provinceOptions}
-          cantons={cantonOptions}
-          province={filters.province}
-          canton={filters.canton}
-          types={filters.types}
-          typeCounts={listResult.counts_by_type}
-          detentions={filters.detentions}
-          cantonLayer={cantonLayer}
-          onProvince={(province) => update({ province, canton: null })}
-          onCanton={(canton) => update({ canton })}
-          onToggleType={(type) =>
-            update({
-              types: filters.types.includes(type)
-                ? filters.types.filter((t) => t !== type)
-                : [...filters.types, type],
-            })
-          }
-          onDetentions={(detentions) => update({ detentions })}
-          onCantonLayer={(cantonLayer) => update({ cantonLayer })}
-        />
-      )}
-
-      <main
-        className={
-          tab === 'estadisticas'
-            ? 'flex flex-1 flex-col lg:min-h-0'
-            : 'flex flex-1 flex-col lg:min-h-0 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] lg:grid-rows-[minmax(0,1fr)]'
-        }
-      >
-        {tab === 'estadisticas' ? (
-          <>
-            {/* The map itself is hidden while Estadísticas is active (a
-                full-width page has no room for it), but the same time rule
-                that drives the map stays visible: it drives this page too. */}
-            {filters && (
-              <TimeRule
-                year={filters.year}
-                months={filters.months}
-                availableYears={meta?.years ?? []}
-                lastMonth={lastMonth}
-                onYear={changeYear}
-                onMonths={(months) => update({ months })}
-              />
-            )}
-            <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">
-              {filters && <Estadisticas filters={filters} rateAreaLabel={rateAreaLabel} />}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-col lg:min-h-0 lg:border-r lg:border-ink">
-              <div className="relative h-[62svh] min-h-[340px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink">
-                <IncidentMap
-                  filters={filters ?? FALLBACK_FILTERS}
-                  showDetentions={Boolean(filters?.detentions)}
-                  cantonLayer={cantonLayer}
-                  cantonRows={cantonRows}
-                  cantonYear={cantonYear}
-                  selectedId={selectedId}
-                  initialView={SAVED?.map ?? null}
-                  focus={focus}
-                  onSelect={handleMapSelect}
-                  onViewChange={handleViewChange}
-                />
-                {filters && (
-                  <MapLegend
-                    types={filters.types.length ? filters.types : INCIDENT_TYPES}
-                    presentConfidence={presentConfidence}
-                    detentions={filters.detentions}
-                    zoomedOut={zoomedOut}
-                    cantonLayer={cantonLayer}
-                    cantonBreakpoints={cantonDataFresh?.breakpoints ?? null}
-                    cantonYear={cantonYear}
-                    onShowIntro={() => setIntroOpen(true)}
-                  />
-                )}
-                {filters && cantonLayer !== 'none' && cantonYearAvailability && !cantonYearAvailability.hasData && (
-                  <div className="ink-in absolute top-3 left-1/2 z-10 w-max max-w-[calc(100%-6rem)] -translate-x-1/2 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
-                    {noDataMessage(cantonLayer, cantonYear)}
-                    {cantonYearAvailability.latestYear !== null && (
-                      <>
-                        {' '}
-                        <button
-                          type="button"
-                          onClick={() => changeYear(cantonYearAvailability.latestYear!)}
-                          className="underline hover:no-underline"
-                        >
-                          Ir a {cantonYearAvailability.latestYear}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-                {restored && (
-                  <div className="ink-in absolute top-3 left-3 z-10 flex items-center gap-3 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
-                    Retomaste tu última consulta.
-                    <button type="button" onClick={resetConsultation} className="underline hover:no-underline">
-                      Empezar de nuevo
-                    </button>
-                    <button type="button" onClick={() => setRestored(false)} aria-label="Ocultar aviso" className="text-ink-3 hover:text-ink">
-                      Ocultar
-                    </button>
-                  </div>
-                )}
-              </div>
-              {filters && (
-                <TimeRule
-                  year={filters.year}
-                  months={filters.months}
-                  availableYears={meta?.years ?? []}
-                  lastMonth={lastMonth}
-                  onYear={changeYear}
-                  onMonths={(months) => update({ months })}
-                />
-              )}
-            </div>
-
-            <div ref={columnRef} className="min-h-0 bg-paper lg:overflow-y-auto" aria-label="Columna del registro">
-              {tab === 'registro' && (
-                <RegistryColumn
-                  status={status === 'error' ? 'error' : listStatus}
-                  items={listResult.items}
-                  total={listResult.total}
-                  countsByType={listResult.counts_by_type}
-                  typeStats={typeStats}
-                  rateAreaLabel={rateAreaLabel}
-                  hasMore={listResult.items.length < listResult.total}
-                  onLoadMore={loadMore}
-                  periodLabel={periodLabel}
-                  zoomedOut={zoomedOut}
-                  selectedId={selectedId}
-                  selected={visibleDetail}
-                  lastUpdatedAt={lastUpdatedAt}
-                  offline={offline}
-                  onSelect={(item) => selectIncident(item.id, [item.lon, item.lat], true)}
-                  onCloseDetail={() => setSelectedId(null)}
-                  onRetry={() => {
-                    if (status === 'error') {
-                      setStatus('loading')
-                      setBootstrapAttempt((n) => n + 1)
-                    } else {
-                      setListAttempt((n) => n + 1)
-                    }
-                  }}
-                  onOpenMethodology={() => setTab('metodologia')}
-                />
-              )}
-              {tab === 'metodologia' && <MethodologyPanel />}
-              {tab === 'fuentes' && <SourcesPanel meta={meta} />}
-            </div>
-          </>
-        )}
-      </main>
-    </div>
-  )
-}
 
 function defaultFilters(meta: MetaResponse): Filters {
   const until = meta.period.to
@@ -495,12 +34,150 @@ function defaultFilters(meta: MetaResponse): Filters {
   }
 }
 
-function describePeriod(year: number, months: number[], lastMonth: number) {
-  const full = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-  const sorted = [...months].sort((a, b) => a - b)
-  const contiguous = sorted.every((m, i) => i === 0 || m === sorted[i - 1] + 1)
-  if (sorted.length === lastMonth && contiguous && sorted[0] === 1) return `enero–${full[lastMonth - 1]} ${year}`
-  if (sorted.length === 1) return `${full[sorted[0] - 1]} ${year}`
-  if (contiguous) return `${full[sorted[0] - 1]}–${full[sorted.at(-1)! - 1]} ${year}`
-  return `${sorted.map((m) => MONTHS[m - 1].toLowerCase()).join(', ')} ${year}`
+/** The URL wins over a saved consultation (see the plan); either way, the
+ * map mounts immediately with whatever this returns (or FALLBACK_FILTERS in
+ * pages/Mapa.tsx, if this is null) -- never waiting on the bootstrap fetch. */
+function initialFilters(): Filters | null {
+  const search = window.location.search
+  if (hasUrlFilters(search)) {
+    return parseFiltersFromSearch(search, FALLBACK_FILTERS, lastPublishedMonth(FALLBACK_FILTERS.year, null))
+  }
+  return SAVED?.filters ?? null
+}
+
+/**
+ * The app shell: bootstrap (meta + admin units), the route switch (see
+ * lib/router.ts), the filter state shared between `/` and `/estadisticas`
+ * (so switching between them keeps the same filters), and IntroDialog.
+ * Everything else lives in pages/*.tsx.
+ */
+export default function App() {
+  const pathname = useRoute()
+  const route = matchRoute(pathname)
+
+  const [bootstrapStatus, setBootstrapStatus] = useState<'loading' | 'error' | 'ready'>('loading')
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0)
+  const [meta, setMeta] = useState<MetaResponse | null>(null)
+  const [adminUnits, setAdminUnits] = useState<AdminUnitsResponse | null>(null)
+
+  const [filters, setFilters] = useState<Filters | null>(initialFilters)
+  const [mapView, setMapView] = useState<MapView | null>(SAVED?.map ?? null)
+  const [restored] = useState(() => Boolean(SAVED) && !hasUrlFilters(window.location.search))
+  const [restoredDismissed, setRestoredDismissed] = useState(false)
+
+  // First-visit intro dialog (see components/IntroDialog.tsx): shown once
+  // automatically, and reopenable on demand from the map legend.
+  const [introOpen, setIntroOpen] = useState(() => !hasSeenIntro())
+  const closeIntro = useCallback(() => {
+    setIntroOpen(false)
+    markIntroSeen()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([getMeta(controller.signal), getAdminUnits(controller.signal)])
+      .then(([meta, adminUnits]) => {
+        setMeta(meta)
+        setAdminUnits(adminUnits)
+        setFilters((current) => {
+          if (!current) return defaultFilters(meta)
+          // Re-clamp months now that the real data cut is known: the
+          // optimistic guess used above (from the URL or a saved
+          // consultation) assumed a full year for lack of anything better.
+          const realLastMonth = lastPublishedMonth(current.year, meta.period.to)
+          return { ...current, months: monthsForYear(current.months, 12, realLastMonth) }
+        })
+        setBootstrapStatus('ready')
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          console.error(error)
+          setBootstrapStatus('error')
+        }
+      })
+    return () => controller.abort()
+  }, [bootstrapAttempt])
+
+  const lastMonth = lastPublishedMonth(filters?.year ?? FALLBACK_FILTERS.year, meta?.period.to)
+  const urlDefaults = useMemo(() => (meta ? defaultFilters(meta) : FALLBACK_FILTERS), [meta])
+
+  // Keeps the query string in sync with the filters, only on the two pages
+  // that read them back (see the plan); replaceState so tweaking a filter
+  // never grows browser history (see lib/router.ts).
+  useEffect(() => {
+    if (!filters) return
+    if (route !== 'mapa' && route !== 'estadisticas') return
+    replaceQuery(filtersToSearch(filters, urlDefaults, lastMonth))
+  }, [filters, route, urlDefaults, lastMonth])
+
+  useEffect(() => {
+    if (filters && mapView) saveView({ filters, map: mapView })
+  }, [filters, mapView])
+
+  const changeYear = useCallback(
+    (year: number) =>
+      setFilters((f) =>
+        f
+          ? {
+              ...f,
+              year,
+              months: monthsForYear(f.months, lastPublishedMonth(f.year, meta?.period.to), lastPublishedMonth(year, meta?.period.to)),
+            }
+          : f,
+      ),
+    [meta],
+  )
+  const update = useCallback((patch: Partial<Filters>) => setFilters((f) => (f ? { ...f, ...patch } : f)), [])
+
+  const resetConsultation = () => {
+    clearSavedView()
+    window.location.reload()
+  }
+
+  return (
+    <div className="flex min-h-full flex-col lg:h-full lg:overflow-hidden">
+      <IntroDialog open={introOpen} onClose={closeIntro} />
+      <Masthead cutDate={meta?.period.to ?? null} route={route} />
+
+      {route === 'mapa' && (
+        <Mapa
+          filters={filters}
+          onUpdate={update}
+          onChangeYear={changeYear}
+          meta={meta}
+          adminUnits={adminUnits}
+          lastMonth={lastMonth}
+          bootstrapStatus={bootstrapStatus}
+          onRetryBootstrap={() => {
+            setBootstrapStatus('loading')
+            setBootstrapAttempt((n) => n + 1)
+          }}
+          mapView={mapView}
+          onMapViewChange={setMapView}
+          restored={restored && !restoredDismissed}
+          onDismissRestored={() => setRestoredDismissed(true)}
+          onResetConsultation={resetConsultation}
+          onShowIntro={() => setIntroOpen(true)}
+        />
+      )}
+      {route === 'estadisticas' && filters && (
+        <Estadisticas filters={filters} onUpdate={update} onChangeYear={changeYear} meta={meta} adminUnits={adminUnits} lastMonth={lastMonth} />
+      )}
+      {route === 'metodologia' && (
+        <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">
+          <Metodologia />
+        </div>
+      )}
+      {route === 'fuentes' && (
+        <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">
+          <Fuentes meta={meta} />
+        </div>
+      )}
+      {route === 'no-encontrada' && (
+        <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">
+          <NoEncontrada />
+        </div>
+      )}
+    </div>
+  )
 }

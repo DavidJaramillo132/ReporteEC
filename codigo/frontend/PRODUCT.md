@@ -43,11 +43,12 @@ V1 capabilities:
 - The reader can show their own position on the map ("Mi ubicación", browser geolocation). It stays in the browser and is never sent or stored.
 - Detentions are **police activity, not insecurity**: a separate heatmap-only layer, explicitly toggled and labeled, never merged with incidents.
 - Missing persons who were later located are removed from the map (they still count in statistics).
-- Filters: year (2019 to today), month, province, canton, type.
+- Filters: year (2019 to today), month, province, canton, type. Shared between the map and statistics pages, and saved in the URL's query string so a view can be shared or bookmarked (`lib/urlState.ts`); the URL wins over a locally saved consultation.
+- No registry/list column: the map itself is the only view of individual cases. Clicking a mark opens a floating case card (a bottom sheet on mobile) with its type, date, place, case number and full provenance; it replaces the earlier registry column, which is deferred to V3's citizen-report list.
 - Statistics: absolute count and rate per 100,000 inhabitants, always shown together.
 - A visible methodological note: the map shows reported cases, not all crime that happens.
 - A dismissible first-visit intro explains what the map shows and does not show; it can be reopened at any time from the map legend.
-- Pages: Home, Map, Statistics, Methodology, License and sources.
+- Pages, each with its own URL (`lib/router.ts`, a small History-API router, no routing library): Map (`/`), Statistics (`/estadisticas`), Methodology (`/metodologia`), License and sources (`/fuentes`).
 - Installable PWA, view-only, with offline-aware caching for the app shell, the API and both map tile sources.
 - **Reporting incidents is V3.** In V1 a visible "Reportar" entry point exists but only explains that it arrives in a future version. It must not pretend to work.
 

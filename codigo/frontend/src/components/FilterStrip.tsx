@@ -10,13 +10,20 @@ interface FilterStripProps {
   canton: string | null
   types: IncidentType[]
   typeCounts: Record<string, number>
-  detentions: boolean
-  cantonLayer: CantonLayer
   onProvince: (value: string | null) => void
   onCanton: (value: string | null) => void
   onToggleType: (type: IncidentType) => void
-  onDetentions: (value: boolean) => void
-  onCantonLayer: (value: CantonLayer) => void
+  /**
+   * The map-only controls below: omitted entirely on the Estadísticas page,
+   * which has no layer to switch and nothing for "actividad policial" to
+   * toggle on a map (see pages/Estadisticas.tsx and the plan).
+   */
+  mapControls?: {
+    detentions: boolean
+    cantonLayer: CantonLayer
+    onDetentions: (value: boolean) => void
+    onCantonLayer: (value: CantonLayer) => void
+  }
 }
 
 const CANTON_LAYER_OPTIONS: { value: CantonLayer; label: string }[] = [
@@ -26,7 +33,7 @@ const CANTON_LAYER_OPTIONS: { value: CantonLayer; label: string }[] = [
 ]
 
 export function FilterStrip(props: FilterStripProps) {
-  const { provinces, cantons, province, canton, types, typeCounts, detentions, cantonLayer } = props
+  const { provinces, cantons, province, canton, types, typeCounts, mapControls } = props
   return (
     <div className="relative flex items-center gap-x-5 gap-y-2 overflow-x-auto border-b border-ink bg-paper px-4 py-2.5 lg:flex-wrap lg:overflow-visible lg:px-6">
       <div className="flex shrink-0 items-center gap-2">
@@ -73,37 +80,41 @@ export function FilterStrip(props: FilterStripProps) {
         })}
       </fieldset>
 
-      <fieldset className="flex shrink-0 items-center gap-1.5 lg:flex-wrap">
-        <legend className="sr-only">Capas por cantón</legend>
-        {CANTON_LAYER_OPTIONS.map((opt) => {
-          const active = cantonLayer === opt.value
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => props.onCantonLayer(opt.value)}
-              className={`flex h-8 items-center border border-ink px-2.5 text-[13px] transition-colors duration-150 ${
-                active ? 'bg-sello text-paper' : 'bg-transparent text-ink-2 hover:bg-sheet'
-              }`}
-            >
-              {opt.label}
-            </button>
-          )
-        })}
-      </fieldset>
+      {mapControls && (
+        <>
+          <fieldset className="flex shrink-0 items-center gap-1.5 lg:flex-wrap">
+            <legend className="sr-only">Capas por cantón</legend>
+            {CANTON_LAYER_OPTIONS.map((opt) => {
+              const active = mapControls.cantonLayer === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => mapControls.onCantonLayer(opt.value)}
+                  className={`flex h-8 items-center border border-ink px-2.5 text-[13px] transition-colors duration-150 ${
+                    active ? 'bg-sello text-paper' : 'bg-transparent text-ink-2 hover:bg-sheet'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </fieldset>
 
-      <button
-        type="button"
-        aria-pressed={detentions}
-        onClick={() => props.onDetentions(!detentions)}
-        className={`flex h-8 shrink-0 items-center gap-2 border border-dashed lg:ml-auto border-ink px-2.5 text-[13px] transition-colors duration-150 ${
-          detentions ? 'border-solid bg-sello text-paper' : 'text-ink-2 hover:bg-sheet'
-        }`}
-      >
-        <span aria-hidden="true" className="hatch inline-block size-3 border border-current" />
-        Actividad policial: detenciones
-      </button>
+          <button
+            type="button"
+            aria-pressed={mapControls.detentions}
+            onClick={() => mapControls.onDetentions(!mapControls.detentions)}
+            className={`flex h-8 shrink-0 items-center gap-2 border border-dashed lg:ml-auto border-ink px-2.5 text-[13px] transition-colors duration-150 ${
+              mapControls.detentions ? 'border-solid bg-sello text-paper' : 'text-ink-2 hover:bg-sheet'
+            }`}
+          >
+            <span aria-hidden="true" className="hatch inline-block size-3 border border-current" />
+            Actividad policial: detenciones
+          </button>
+        </>
+      )}
     </div>
   )
 }

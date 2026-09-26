@@ -6,6 +6,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    // File events do not always cross the Docker bind mount; the dev
+    // container sets VITE_WATCH_POLLING so hot reload still sees edits.
+    watch: { usePolling: process.env.VITE_WATCH_POLLING === 'true' },
+  },
   plugins: [
     react(),
     tailwindcss(),
