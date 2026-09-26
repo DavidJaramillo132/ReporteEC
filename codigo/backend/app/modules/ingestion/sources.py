@@ -46,8 +46,31 @@ MDI_DETENIDOS = SourceSeed(
     license="Datos abiertos del Gobierno del Ecuador (datosabiertos.gob.ec)",
 )
 
+OECO_NOTICIAS_DELITO = SourceSeed(
+    slug="oeco-noticias-delito",
+    name="Estadística de Noticias de Delito relacionados a Crimen Organizado",
+    publisher="Observatorio Ecuatoriano de Crimen Organizado (OECO) / PADF, datos originales FGE",
+    url="https://visualizador-oeco.up.railway.app/descargas",
+    license="consultar condiciones del OECO",
+)
+
+INEC_ESTRA = SourceSeed(
+    slug="inec-estra",
+    name="Estadísticas de Transporte (ESTRA) - Siniestros de tránsito",
+    publisher="Instituto Nacional de Estadística y Censos (INEC)",
+    url="https://www.ecuadorencifras.gob.ec/siniestros-transito-trimestral/",
+    license="datos públicos INEC",
+)
+
 SEEDS: dict[str, SourceSeed] = {
-    seed.slug: seed for seed in (MDI_HOMICIDIOS, MDI_DESAPARECIDAS, MDI_DETENIDOS)
+    seed.slug: seed
+    for seed in (
+        MDI_HOMICIDIOS,
+        MDI_DESAPARECIDAS,
+        MDI_DETENIDOS,
+        OECO_NOTICIAS_DELITO,
+        INEC_ESTRA,
+    )
 }
 
 

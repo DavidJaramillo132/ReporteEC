@@ -1,13 +1,22 @@
 """CLI entry point: `python -m app.modules.ingestion <command> [--file PATH ...]`.
 
 Commands: homicidios, desaparecidas, detenidos, all (runs the three in
-order), cantons, population. Without --file, homicidios/desaparecidas/
-detenidos fetch the current CKAN resources for the dataset, download any
-missing ones into /data/raw/mdi/ and load each; cantons/population always
-take an explicit --file (they have no CKAN package of their own). --force
-reprocesses a file even if it was already loaded -- safe, since
-ON CONFLICT DO NOTHING still skips every row already inserted (see
-`app.modules.ingestion.loader.load_file`).
+order), cantons, population, extorsion, siniestros. Without --file,
+homicidios/desaparecidas/detenidos fetch the current CKAN resources for the
+dataset, download any missing ones into /data/raw/mdi/ and load each;
+cantons/population/extorsion/siniestros always take an explicit --file (none
+of them have a CKAN package of their own). --force reprocesses a file even if
+it was already loaded -- safe for homicidios/desaparecidas/detenidos/cantons/
+population since ON CONFLICT DO NOTHING/DO UPDATE still lands on the exact
+same rows (see `app.modules.ingestion.loader.load_file`), and safe for
+extorsion/siniestros since each file's aggregate fully replaces (never adds
+to) the one from its own last run (see
+`app.modules.ingestion.canton_indicators.load_indicator_file`).
+
+`siniestros` takes one `--file` per source year chosen per the INEC ESTRA
+ingestion plan (an annual file when one exists, else the year's quarterlies;
+see `app.modules.ingestion.adapters.inec_siniestros`'s docstring) -- pass it
+multiple times, or invoke the command once per file.
 """
 
 import argparse
@@ -18,11 +27,13 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.database.session import get_engine
+from app.modules.ingestion.adapters import inec_siniestros, oeco_extorsion
 from app.modules.ingestion.adapters.mdi_desaparecidas import (
     normalize_row as normalize_desaparecidas,
 )
 from app.modules.ingestion.adapters.mdi_detenidos import normalize_row as normalize_detenidos
 from app.modules.ingestion.adapters.mdi_homicidios import normalize_row as normalize_homicidios
+from app.modules.ingestion.canton_indicators import load_indicator_file
 from app.modules.ingestion.ckan import (
     DESAPARECIDAS_PACKAGE_ID,
     DETENIDOS_PACKAGE_ID,
@@ -41,6 +52,8 @@ DEFAULT_RAW_DIR = Path("/data/raw/mdi")
 HOMICIDIOS_SOURCE_SLUG = "mdi-homicidios"
 DESAPARECIDAS_SOURCE_SLUG = "mdi-desaparecidas"
 DETENIDOS_SOURCE_SLUG = "mdi-detenidos"
+OECO_SOURCE_SLUG = "oeco-noticias-delito"
+INEC_SOURCE_SLUG = "inec-estra"
 
 
 def _download(package_id: str, dest_dir: Path) -> list[Path]:
@@ -143,6 +156,37 @@ def _run_population(files: list[Path]) -> None:
             _print_coverage(session)
 
 
+def _print_indicator_summary(path: Path, run) -> None:
+    detail = json.loads(run.error_detail) if run.error_detail else {}
+    unmatched = detail.get("unmatched", [])
+    skipped = detail.get("skipped", {})
+    print(
+        f"{path.name}: processed={run.processed} rows_written={run.inserted} "
+        f"unmatched={len(unmatched)} skipped={sum(skipped.values())} "
+        f"skipped_detail={json.dumps(skipped, ensure_ascii=False)}"
+    )
+    for line in unmatched:
+        print(f"  unmatched: {line}")
+
+
+def _run_extorsion(files: list[Path], *, force: bool = False) -> None:
+    with Session(get_engine()) as session:
+        for path in files:
+            run = load_indicator_file(
+                session, OECO_SOURCE_SLUG, path, oeco_extorsion.parse, force=force
+            )
+            _print_indicator_summary(path, run)
+
+
+def _run_siniestros(files: list[Path], *, force: bool = False) -> None:
+    with Session(get_engine()) as session:
+        for path in files:
+            run = load_indicator_file(
+                session, INEC_SOURCE_SLUG, path, inec_siniestros.parse, force=force
+            )
+            _print_indicator_summary(path, run)
+
+
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     parser = argparse.ArgumentParser(prog="python -m app.modules.ingestion")
@@ -197,6 +241,23 @@ def main(argv: list[str] | None = None) -> None:
     )
     _add_file_option(population, required=True)
 
+    extorsion = subparsers.add_parser(
+        "extorsion",
+        help="Load OECO extortion (and secuestro extorsivo) counts into canton_indicators",
+    )
+    _add_file_option(extorsion, required=True)
+    _add_force_option(extorsion)
+
+    siniestros = subparsers.add_parser(
+        "siniestros",
+        help=(
+            "Load INEC ESTRA traffic-crash counts into canton_indicators "
+            "(one --file per source year, repeatable)"
+        ),
+    )
+    _add_file_option(siniestros, required=True)
+    _add_force_option(siniestros)
+
     args = parser.parse_args(argv)
 
     if args.command == "homicidios":
@@ -213,6 +274,10 @@ def main(argv: list[str] | None = None) -> None:
         _run_cantons(args.files)
     elif args.command == "population":
         _run_population(args.files)
+    elif args.command == "extorsion":
+        _run_extorsion(args.files, force=args.force)
+    elif args.command == "siniestros":
+        _run_siniestros(args.files, force=args.force)
 
 
 if __name__ == "__main__":

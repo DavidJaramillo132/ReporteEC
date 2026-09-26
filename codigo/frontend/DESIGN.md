@@ -119,6 +119,8 @@ Grouped as one role rather than tiered, because the four are co-equal, not a hie
 ### Named Rules
 **The Two-Hue Rule.** Exactly two hue systems exist and they never mix. `sello` is the interface's one accent: it marks the masthead field and every active, selected, pressed, hovered, or focused control, everywhere in the product. The four incident-type inks mark what kind of case a record is, wherever it's drawn. This **retires the old Four Inks Rule**, which spent hue on confidence instead of type — a rule the data itself broke, since V1 is entirely `oficial` and confidence-as-hue painted every mark the same color (decided 2026-09-25, see `PRODUCT.md`). Confidence is drawn only as mark style now, never a hue.
 
+**Scoped exception: canton choropleths (decided 2026-09-26).** The canton layers are data fields, not marks or interface state. Siniestros uses a lightness ramp of `sello` and adds no hue. The extortion semáforo uses one warm-red family in four lightness steps, and fill opacity rises with the class as a cue that does not depend on color. Both appear only while their canton layer is switched on, and each has its own legend. Nothing else may reuse the extortion ramp.
+
 ## Typography
 
 **Display/Label Font:** Archivo Variable (self-hosted via `@fontsource-variable/archivo`, the width-axis build), falling back to "Archivo", system-ui, sans-serif.

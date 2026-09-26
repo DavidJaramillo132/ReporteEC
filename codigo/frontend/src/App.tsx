@@ -15,12 +15,14 @@ import { RegistryColumn } from './components/RegistryColumn'
 import { TimeRule } from './components/TimeRule'
 import type {
   AdminUnitsResponse,
+  CantonIndicatorsResponse,
   IncidentDetail,
   IncidentListResponse,
   MetaResponse,
   StatsRow,
 } from './lib/api'
-import { getAdminUnits, getIncident, getIncidents, getMeta, getStats } from './lib/api'
+import { getAdminUnits, getCantonIndicators, getIncident, getIncidents, getMeta, getStats } from './lib/api'
+import { checkYearAvailability, indicatorForLayer, noDataMessage } from './lib/cantonChoropleth'
 import { clearSavedView, loadSavedView, saveView } from './lib/persist'
 import type { Confidence, Filters } from './lib/registry'
 import { INCIDENT_TYPES, MONTHS } from './lib/registry'
@@ -39,6 +41,7 @@ const FALLBACK_FILTERS: Filters = {
   province: null,
   canton: null,
   detentions: false,
+  cantonLayer: 'none',
 }
 
 export default function App() {
@@ -85,6 +88,22 @@ export default function App() {
       })
     return () => controller.abort()
   }, [filters])
+
+  // The canton choropleth's rows (extortion / traffic crashes): independent
+  // of type/province/canton/months, so it only refetches on its own control
+  // or the year -- unlike typeStats above, which tracks every filter.
+  const [cantonData, setCantonData] = useState<CantonIndicatorsResponse | null>(null)
+  useEffect(() => {
+    if (!filters || filters.cantonLayer === 'none') return
+    const controller = new AbortController()
+    getCantonIndicators(indicatorForLayer(filters.cantonLayer), filters.year, controller.signal)
+      .then((result) => setCantonData(result))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) console.error(error)
+      })
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters?.cantonLayer, filters?.year])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -210,6 +229,22 @@ export default function App() {
     return meta.last_runs.find((run) => run.slug === visibleDetail.source_slug)?.finished_at ?? null
   }, [meta, visibleDetail])
 
+  const cantonLayer = filters?.cantonLayer ?? 'none'
+  // `cantonData` is only "fresh" once it matches the currently active layer
+  // and year: otherwise (e.g. right after switching from extorsion to
+  // siniestros, before the new fetch resolves) it is the previous
+  // indicator's rows and must not be shown under the new color ramp.
+  const cantonDataFresh =
+    cantonData && cantonLayer !== 'none' && cantonData.indicator === indicatorForLayer(cantonLayer) && cantonData.year === filters?.year
+      ? cantonData
+      : null
+  const cantonRows = cantonDataFresh?.rows ?? []
+  const cantonYear = filters?.year ?? FALLBACK_FILTERS.year
+  const cantonYearAvailability = useMemo(
+    () => (cantonDataFresh ? checkYearAvailability(cantonDataFresh.available_years, cantonDataFresh.year) : null),
+    [cantonDataFresh],
+  )
+
   useEffect(() => {
     if (filters && mapView) saveView({ filters, map: mapView, selectedId })
   }, [filters, mapView, selectedId])
@@ -252,6 +287,7 @@ export default function App() {
           types={filters.types}
           typeCounts={listResult.counts_by_type}
           detentions={filters.detentions}
+          cantonLayer={cantonLayer}
           onProvince={(province) => update({ province, canton: null })}
           onCanton={(canton) => update({ canton })}
           onToggleType={(type) =>
@@ -262,6 +298,7 @@ export default function App() {
             })
           }
           onDetentions={(detentions) => update({ detentions })}
+          onCantonLayer={(cantonLayer) => update({ cantonLayer })}
         />
       )}
 
@@ -298,6 +335,9 @@ export default function App() {
                 <IncidentMap
                   filters={filters ?? FALLBACK_FILTERS}
                   showDetentions={Boolean(filters?.detentions)}
+                  cantonLayer={cantonLayer}
+                  cantonRows={cantonRows}
+                  cantonYear={cantonYear}
                   selectedId={selectedId}
                   initialView={SAVED?.map ?? null}
                   focus={focus}
@@ -310,7 +350,27 @@ export default function App() {
                     presentConfidence={presentConfidence}
                     detentions={filters.detentions}
                     zoomedOut={zoomedOut}
+                    cantonLayer={cantonLayer}
+                    cantonBreakpoints={cantonDataFresh?.breakpoints ?? null}
+                    cantonYear={cantonYear}
                   />
+                )}
+                {filters && cantonLayer !== 'none' && cantonYearAvailability && !cantonYearAvailability.hasData && (
+                  <div className="ink-in absolute top-3 left-1/2 z-10 w-max max-w-[calc(100%-6rem)] -translate-x-1/2 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
+                    {noDataMessage(cantonLayer, cantonYear)}
+                    {cantonYearAvailability.latestYear !== null && (
+                      <>
+                        {' '}
+                        <button
+                          type="button"
+                          onClick={() => update({ year: cantonYearAvailability.latestYear! })}
+                          className="underline hover:no-underline"
+                        >
+                          Ir a {cantonYearAvailability.latestYear}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
                 {restored && (
                   <div className="ink-in absolute top-3 left-3 z-10 flex items-center gap-3 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
@@ -386,6 +446,7 @@ function defaultFilters(meta: MetaResponse): Filters {
     province: null,
     canton: null,
     detentions: false,
+    cantonLayer: 'none',
   }
 }
 

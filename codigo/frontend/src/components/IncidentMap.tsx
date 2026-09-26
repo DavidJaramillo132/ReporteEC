@@ -4,13 +4,21 @@ import {
   type LngLatBoundsLike,
   Map as MapLibreMap,
   NavigationControl,
+  Popup,
   ScaleControl,
 } from 'maplibre-gl'
 import { useEffect, useRef, useState } from 'react'
+import type { CantonIndicatorRow } from '../lib/api'
 import { TILES_URL } from '../lib/api'
 import { ECUADOR_BOUNDS, gazetteBasemap } from '../lib/basemap'
+import {
+  buildCantonPopupHtml,
+  buildFeatureStateEntries,
+  buildFillColorExpression,
+  buildFillOpacityExpression,
+} from '../lib/cantonChoropleth'
 import { buildMarkImages } from '../lib/marks'
-import type { Filters } from '../lib/registry'
+import type { CantonLayer, Filters } from '../lib/registry'
 import { buildTileFilter } from '../lib/tileFilter'
 
 export interface MapView {
@@ -35,6 +43,12 @@ export interface FocusRequest {
 interface IncidentMapProps {
   filters: Filters
   showDetentions: boolean
+  /** The active canton choropleth (extortion / traffic crashes), independent of showDetentions. */
+  cantonLayer: CantonLayer
+  /** All 221 cantons' current rows for `cantonLayer`; empty while loading or when it is 'none'. */
+  cantonRows: CantonIndicatorRow[]
+  /** The year `cantonRows` was fetched for -- shown in the click popup. */
+  cantonYear: number
   selectedId: number | null
   initialView: MapView | null
   focus: FocusRequest | null
@@ -51,6 +65,9 @@ const NO_SELECTION = -1
 export function IncidentMap({
   filters,
   showDetentions,
+  cantonLayer,
+  cantonRows,
+  cantonYear,
   selectedId,
   initialView,
   focus,
@@ -64,9 +81,9 @@ export function IncidentMap({
   const geolocateRef = useRef<GeolocateControl | null>(null)
   const [location, setLocation] = useState<'off' | 'locating' | 'following' | 'shown' | 'denied' | 'unavailable'>('off')
   // Latest props for handlers bound once at map creation.
-  const latest = useRef({ filters, onSelect, onViewChange, selectedId })
+  const latest = useRef({ filters, onSelect, onViewChange, selectedId, cantonLayer, cantonRows, cantonYear })
   useEffect(() => {
-    latest.current = { filters, onSelect, onViewChange, selectedId }
+    latest.current = { filters, onSelect, onViewChange, selectedId, cantonLayer, cantonRows, cantonYear }
   })
 
   useEffect(() => {
@@ -126,6 +143,56 @@ export function IncidentMap({
       for (const { id, data } of buildMarkImages(window.devicePixelRatio || 1)) {
         map.addImage(id, data, { pixelRatio: window.devicePixelRatio || 1 })
       }
+
+      // Canton choropleth (extortion / traffic crashes): added first so it
+      // always renders beneath the incident/detentions layers below, never
+      // needing a beforeId. promoteId lets setFeatureState/removeFeatureState
+      // key on the tile's string `code` property instead of a numeric id.
+      map.addSource('cantons', {
+        type: 'vector',
+        tiles: [`${TILES_URL}/map_cantons/{z}/{x}/{y}`],
+        minzoom: 0,
+        maxzoom: 14,
+        promoteId: 'code',
+      })
+      map.addLayer({
+        id: 'cantons-fill',
+        type: 'fill',
+        source: 'cantons',
+        'source-layer': 'map_cantons',
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': buildFillColorExpression(latest.current.cantonLayer === 'siniestros' ? 'siniestros' : 'extorsion'),
+          'fill-opacity': buildFillOpacityExpression(),
+        },
+      })
+      map.addLayer({
+        id: 'cantons-outline',
+        type: 'line',
+        source: 'cantons',
+        'source-layer': 'map_cantons',
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': 'rgba(21,33,44,0.35)',
+          'line-width': 0.6,
+        },
+      })
+
+      map.on('click', 'cantons-fill', (event) => {
+        const { cantonLayer: activeLayer, cantonRows: rows, cantonYear: year } = latest.current
+        if (activeLayer === 'none') return
+        const code = event.features?.[0]?.properties?.code as string | undefined
+        const row = code ? rows.find((r) => r.code === code) : undefined
+        if (!row) return
+        new Popup({ closeButton: true, maxWidth: '260px' })
+          .setLngLat(event.lngLat)
+          .setHTML(buildCantonPopupHtml(activeLayer, row, year))
+          .addTo(map)
+      })
+      map.on('mouseenter', 'cantons-fill', () => {
+        if (latest.current.cantonLayer !== 'none') map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', 'cantons-fill', () => (map.getCanvas().style.cursor = ''))
 
       // Detentions: empty until the Phase 4 loader runs, but the source and
       // layer exist from the start -- MapLibre only requests tiles for a
@@ -283,6 +350,40 @@ export function IncidentMap({
     if (readyRef.current) apply()
     else map.once('style.load', apply)
   }, [showDetentions])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const apply = () => {
+      const active = cantonLayer !== 'none'
+      map.setLayoutProperty('cantons-fill', 'visibility', active ? 'visible' : 'none')
+      map.setLayoutProperty('cantons-outline', 'visibility', active ? 'visible' : 'none')
+      // Clear any feature-state left from a previous indicator (or from
+      // before the current fetch resolves) so a switch between extorsion
+      // and siniestros never briefly shows the other indicator's colors.
+      map.removeFeatureState({ source: 'cantons', sourceLayer: 'map_cantons' })
+      if (active) map.setPaintProperty('cantons-fill', 'fill-color', buildFillColorExpression(cantonLayer))
+      // Independent of showDetentions: the canton layer only DIMS the
+      // incident heatmap (never hides it), so marks/heat keep working on top.
+      map.setPaintProperty(
+        'incidents-heat',
+        'heatmap-opacity',
+        active
+          ? ['interpolate', ['linear'], ['zoom'], MARKS_ZOOM, 0.35, MARKS_ZOOM + 1.5, 0]
+          : ['interpolate', ['linear'], ['zoom'], MARKS_ZOOM, 1, MARKS_ZOOM + 1.5, 0],
+      )
+    }
+    if (readyRef.current) apply()
+    else map.once('style.load', apply)
+  }, [cantonLayer])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current || cantonLayer === 'none') return
+    for (const entry of buildFeatureStateEntries(cantonRows)) {
+      map.setFeatureState({ source: 'cantons', sourceLayer: 'map_cantons', id: entry.code }, entry.state)
+    }
+  }, [cantonRows, cantonLayer])
 
   useEffect(() => {
     const map = mapRef.current

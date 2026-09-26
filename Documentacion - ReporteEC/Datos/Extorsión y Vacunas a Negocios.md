@@ -53,14 +53,35 @@ Donde:
 
 ### Semáforo de Riesgo en el Mapa
 
-En la V1, el usuario puede activar la capa **«Riesgo para Negocios»**, que tiñe los cantones según su categoría:
+> [!info] Alcance real de la V1 (2026-09-26)
+> El IRC completo (denuncias + detenciones, ponderado por locales
+> comerciales del DIEE-INEC) **queda pospuesto para V2**: el directorio de
+> establecimientos todavía no está incorporado al proyecto. La V1 implementa
+> una versión más simple: la **tasa de denuncias de extorsión por 100.000
+> habitantes**, usando la población cantonal ya cargada
+> (`canton_population`), agrupada en **cuartiles calculados sobre el propio
+> año** (no umbrales fijos) entre los cantones con al menos una denuncia. Es
+> decir, "bajo/moderado/alto/crítico" son relativos a cómo se distribuyen las
+> tasas ese año, no una escala absoluta de gravedad. Los cantones sin
+> denuncias ese año se marcan aparte ("sin denuncias"), no como "bajo".
 
-| Nivel | Semáforo | Descripción para el Comerciante / Inversionista |
-|---|---|---|
-| **Bajo** | 🟢 Verde | Incidencia mínima de denuncias; sin presencia hegemónica de bandas extorsivas. |
-| **Moderado** | 🟡 Amarillo | Denuncias esporádicas, principalmente extorsión digital/telefónica desde cárceles. |
-| **Alto** | 🟠 Naranja | Presencia activa de extorsión presencial («vacunas» semanales/mensuales) en zonas comerciales. |
-| **Crítico** | 🔴 Rojo | Extorsión sistemática y violenta con ataques a locales (artefactos explosivos, disparos a fachadas). |
+En la V1, el usuario puede activar la capa **«Extorsión»** en el mapa, que
+tiñe los cantones según el cuartil de su tasa de denuncias del año
+seleccionado:
+
+| Nivel | Descripción para el Comerciante / Inversionista |
+|---|---|
+| **Bajo** | Tasa de denuncias en el 25% más bajo de los cantones con al menos una denuncia ese año. |
+| **Moderado** | Entre el percentil 25 y 50. |
+| **Alto** | Entre el percentil 50 y 75. |
+| **Crítico** | Tasa en el 25% más alto. |
+
+La escala de colores se atenúa para respetar la paleta "Registro Oficial" del
+producto (ver DESIGN.md, regla de dos matices) y se refuerza con un cambio de
+saturación/patrón, no solo de tono, para mantenerse legible para daltonismo.
+La versión con semáforo tradicional verde/amarillo/naranja/rojo y umbrales
+absolutos de la tabla original queda como diseño de referencia para cuando
+el IRC completo (V2) esté listo.
 
 ---
 

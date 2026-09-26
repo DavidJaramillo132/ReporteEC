@@ -76,6 +76,14 @@ export const DETENTIONS_SOURCE = {
 export const FIRST_YEAR = 2019
 export const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
+/**
+ * The canton-level choropleth layer, mutually exclusive and independent of
+ * `detentions` (see components/IncidentMap.tsx). Values match the backend's
+ * `indicator` query param spelling exactly ('extorsion' | 'siniestros');
+ * there is no separate frontend value for `siniestros_fallecidos`.
+ */
+export type CantonLayer = 'none' | 'extorsion' | 'siniestros'
+
 export interface Filters {
   year: number
   months: number[]
@@ -85,6 +93,7 @@ export interface Filters {
   /** DPA canton code (e.g. "0901"), not the name. */
   canton: string | null
   detentions: boolean
+  cantonLayer: CantonLayer
 }
 
 /** The database id, shown as the entry number of the registry. */

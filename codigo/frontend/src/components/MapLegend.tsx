@@ -1,17 +1,37 @@
 import { useId, useState } from 'react'
 import { ConfidenceChip, Mark } from './Mark'
-import type { Confidence, IncidentType } from '../lib/registry'
+import { CANTON_INDICATOR_LABEL } from '../lib/cantonChoropleth'
+import type { Confidence, CantonLayer, IncidentType } from '../lib/registry'
 import { CONFIDENCE_ORDER, TYPE_LABEL } from '../lib/registry'
+import { formatRate } from '../lib/stats'
 
 interface MapLegendProps {
   types: IncidentType[]
   presentConfidence: Confidence[]
   detentions: boolean
   zoomedOut: boolean
+  cantonLayer: CantonLayer
+  cantonBreakpoints: { p25: number; p50: number; p75: number } | null
+  cantonYear: number
+}
+
+const CANTON_LEGEND_STEP: Record<'bajo' | 'moderado' | 'alto' | 'critico', 1 | 2 | 3 | 4> = {
+  bajo: 1,
+  moderado: 2,
+  alto: 3,
+  critico: 4,
 }
 
 /** Printed key in the lower margin of the plate. */
-export function MapLegend({ types, presentConfidence, detentions, zoomedOut }: MapLegendProps) {
+export function MapLegend({
+  types,
+  presentConfidence,
+  detentions,
+  zoomedOut,
+  cantonLayer,
+  cantonBreakpoints,
+  cantonYear,
+}: MapLegendProps) {
   const [open, setOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
   const bodyId = useId()
   return (
@@ -69,7 +89,46 @@ export function MapLegend({ types, presentConfidence, detentions, zoomedOut }: M
             </span>
           </p>
         )}
+        {cantonLayer !== 'none' && cantonBreakpoints && (
+          <div className="space-y-1 border-t border-rule-soft pt-2 text-ink-2">
+            <p className="text-ink-3">
+              Tasa de {CANTON_INDICATOR_LABEL[cantonLayer]} por 100.000 hab., cuartiles de {cantonYear}
+            </p>
+            <ul className="space-y-0.5">
+              <li className="flex items-center gap-2">
+                <CantonSwatch layer={cantonLayer} step={CANTON_LEGEND_STEP.bajo} />
+                Bajo (hasta {formatRate(cantonBreakpoints.p25)})
+              </li>
+              <li className="flex items-center gap-2">
+                <CantonSwatch layer={cantonLayer} step={CANTON_LEGEND_STEP.moderado} />
+                Moderado ({formatRate(cantonBreakpoints.p25)}–{formatRate(cantonBreakpoints.p50)})
+              </li>
+              <li className="flex items-center gap-2">
+                <CantonSwatch layer={cantonLayer} step={CANTON_LEGEND_STEP.alto} />
+                Alto ({formatRate(cantonBreakpoints.p50)}–{formatRate(cantonBreakpoints.p75)})
+              </li>
+              <li className="flex items-center gap-2">
+                <CantonSwatch layer={cantonLayer} step={CANTON_LEGEND_STEP.critico} />
+                Crítico (más de {formatRate(cantonBreakpoints.p75)})
+              </li>
+              <li className="flex items-center gap-2">
+                <span aria-hidden="true" className="inline-block size-3 shrink-0 border border-ink/20 bg-[var(--color-canton-sin-datos)]" />
+                Sin datos de población
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
+  )
+}
+
+function CantonSwatch({ layer, step }: { layer: Exclude<CantonLayer, 'none'>; step: 1 | 2 | 3 | 4 }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block size-3 shrink-0 border border-ink/20"
+      style={{ background: `var(--color-canton-${layer}-${step})` }}
+    />
   )
 }

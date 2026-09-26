@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Mark } from './Mark'
 import type { StatsRow, TimeseriesPoint } from '../lib/api'
-import { getStats, getStatsTimeseries } from '../lib/api'
+import { getCantonIndicators, getCantonIndicatorsSummary, getStats, getStatsTimeseries } from '../lib/api'
+import { indicatorRowsToStatsRows, yearTotalsToStatsRows } from '../lib/cantonChoropleth'
 import { MONTHS, TYPE_LABEL, type Filters, formatCount, placeName } from '../lib/registry'
 import {
   type SortDirection,
@@ -28,6 +29,10 @@ interface StatsBundle {
   timeseries: TimeseriesPoint[]
   detentionsByYear: StatsRow[]
   detentionsByProvince: StatsRow[]
+  extorsionByYear: StatsRow[]
+  extorsionRanking: StatsRow[]
+  siniestrosByYear: StatsRow[]
+  siniestrosRanking: StatsRow[]
 }
 
 /**
@@ -83,18 +88,44 @@ export function Estadisticas({ filters, rateAreaLabel }: EstadisticasProps) {
         { dimension: 'province', layer: 'detentions', year: filters.year, months: filters.months },
         controller.signal,
       ),
+      // Extortion (OECO/FGE) and traffic crashes (INEC): reported/denounced
+      // cases, never folded into the incident totals above -- own year
+      // totals and their own nationwide top-15-by-rate ranking, always for
+      // the currently selected year regardless of the map's province/canton
+      // filter (a ranking compares places against each other).
+      getCantonIndicatorsSummary('extorsion', controller.signal),
+      getCantonIndicators('extorsion', filters.year, controller.signal),
+      getCantonIndicatorsSummary('siniestros', controller.signal),
+      getCantonIndicators('siniestros', filters.year, controller.signal),
     ])
-      .then(([byType, byPlace, cantonRanking, timeseries, detentionsByYear, detentionsByProvince]) => {
-        setData({
-          byType: byType.rows,
-          byPlace: byPlace.rows,
-          cantonRanking: cantonRanking.rows,
-          timeseries: timeseries.points,
-          detentionsByYear: detentionsByYear.rows,
-          detentionsByProvince: detentionsByProvince.rows,
-        })
-        setStatus('ready')
-      })
+      .then(
+        ([
+          byType,
+          byPlace,
+          cantonRanking,
+          timeseries,
+          detentionsByYear,
+          detentionsByProvince,
+          extorsionByYear,
+          extorsionRanking,
+          siniestrosByYear,
+          siniestrosRanking,
+        ]) => {
+          setData({
+            byType: byType.rows,
+            byPlace: byPlace.rows,
+            cantonRanking: cantonRanking.rows,
+            timeseries: timeseries.points,
+            detentionsByYear: detentionsByYear.rows,
+            detentionsByProvince: detentionsByProvince.rows,
+            extorsionByYear: yearTotalsToStatsRows(extorsionByYear.years),
+            extorsionRanking: indicatorRowsToStatsRows(extorsionRanking.rows),
+            siniestrosByYear: yearTotalsToStatsRows(siniestrosByYear.years),
+            siniestrosRanking: indicatorRowsToStatsRows(siniestrosRanking.rows),
+          })
+          setStatus('ready')
+        },
+      )
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
           console.error(error)
@@ -191,6 +222,51 @@ export function Estadisticas({ filters, rateAreaLabel }: EstadisticasProps) {
                 keyHeader="Provincia"
                 rows={data.detentionsByProvince}
                 defaultSort="count"
+              />
+            </Section>
+
+            <Section title="Extorsión (denuncias, OECO/FGE)">
+              <p className="text-[13.5px] text-ink-2">
+                Denuncias de extorsión registradas por la Fiscalía y el Observatorio Ecuatoriano de Crimen
+                Organizado, no una medición total del delito: donde se denuncia menos, la cifra parece más baja
+                de lo que es.
+              </p>
+              <h4 className="label mt-3 text-ink-3">Por año</h4>
+              <RateTable
+                caption="Denuncias de extorsión y tasa por año (tasa = casos por 100.000 habitantes)"
+                keyHeader="Año"
+                rows={data.extorsionByYear}
+                defaultSort="label"
+                defaultDirection="asc"
+              />
+              <h4 className="label mt-4 text-ink-3">Cantones con mayor tasa (top 15, {filters.year})</h4>
+              <RateTable
+                caption="Los 15 cantones con mayor tasa de extorsión por 100.000 habitantes (tasa = casos por 100.000 habitantes)"
+                keyHeader="Cantón"
+                rows={rankByRate(data.extorsionRanking, 15)}
+                defaultSort="rate_per_100k"
+              />
+            </Section>
+
+            <Section title="Siniestros de tránsito (INEC)">
+              <p className="text-[13.5px] text-ink-2">
+                Siniestros de tránsito reportados por el INEC (ESTRA), no una medición total de la
+                accidentalidad vial.
+              </p>
+              <h4 className="label mt-3 text-ink-3">Por año</h4>
+              <RateTable
+                caption="Siniestros de tránsito y tasa por año (tasa = casos por 100.000 habitantes)"
+                keyHeader="Año"
+                rows={data.siniestrosByYear}
+                defaultSort="label"
+                defaultDirection="asc"
+              />
+              <h4 className="label mt-4 text-ink-3">Cantones con mayor tasa (top 15, {filters.year})</h4>
+              <RateTable
+                caption="Los 15 cantones con mayor tasa de siniestros de tránsito por 100.000 habitantes (tasa = casos por 100.000 habitantes)"
+                keyHeader="Cantón"
+                rows={rankByRate(data.siniestrosRanking, 15)}
+                defaultSort="rate_per_100k"
               />
             </Section>
           </div>

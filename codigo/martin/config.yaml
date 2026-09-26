@@ -1,7 +1,9 @@
-# Martin tile server config: publishes ONLY the two read-only map views
-# (map_incidents, map_detentions) -- never the raw tables, and never anything
-# auto-discovered. See migrations/versions/*_admin_units_and_map_views.py for
-# the views themselves and app/database/views.py for the API's matching Core
+# Martin tile server config: publishes ONLY the read-only map views
+# (map_incidents, map_detentions, map_cantons) -- never the raw tables, and
+# never anything auto-discovered. See
+# migrations/versions/*_admin_units_and_map_views.py and
+# migrations/versions/*_canton_indicators_and_map_cantons_view.py for the
+# views themselves and app/database/views.py for the API's matching Core
 # table definitions.
 listen_addresses: '0.0.0.0:3000'
 
@@ -41,3 +43,14 @@ postgres:
         province_code: text
         canton_code: text
         detention_type: text
+
+    # First polygon layer: no id_column -- a canton has no natural integer
+    # id ('code' is a 4-char string) -- the frontend keys feature-state off
+    # the 'code' tile property instead (MapLibre's `promoteId: 'code'`).
+    map_cantons:
+      schema: public
+      table: map_cantons
+      srid: 4326
+      geometry_column: geom
+      geometry_type: MULTIPOLYGON
+      properties: { code: text, name: text, province_code: text }

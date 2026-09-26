@@ -200,3 +200,63 @@ export function getStatsTimeseries(
 ): Promise<TimeseriesResponse> {
   return fetchJson<TimeseriesResponse>('/stats/timeseries', statsParams(query), signal)
 }
+
+// ---- canton indicators (extortion / traffic crashes) -----------------------
+
+export type CantonIndicator = 'extorsion' | 'siniestros' | 'siniestros_fallecidos'
+
+export type CantonIndicatorClass =
+  | 'bajo'
+  | 'moderado'
+  | 'alto'
+  | 'critico'
+  | 'sin_denuncias'
+  | 'sin_registros'
+  | null
+
+export interface CantonIndicatorRow {
+  code: string
+  name: string
+  province_code: string
+  value: number
+  /** null only when value > 0 but no population figure exists for that year. */
+  population: number | null
+  rate_per_100k: number | null
+  class: CantonIndicatorClass
+}
+
+export interface CantonIndicatorsResponse {
+  indicator: CantonIndicator
+  year: number
+  available_years: number[]
+  /** null for a year outside available_years (nothing meaningful to divide into quartiles). */
+  breakpoints: { p25: number; p50: number; p75: number } | null
+  rows: CantonIndicatorRow[]
+}
+
+export function getCantonIndicators(
+  indicator: CantonIndicator,
+  year: number,
+  signal?: AbortSignal,
+): Promise<CantonIndicatorsResponse> {
+  return fetchJson<CantonIndicatorsResponse>('/cantons/indicators', { indicator, year }, signal)
+}
+
+export interface CantonIndicatorYearTotal {
+  year: number
+  value: number
+  population: number | null
+  rate_per_100k: number | null
+}
+
+export interface CantonIndicatorsSummaryResponse {
+  indicator: CantonIndicator
+  years: CantonIndicatorYearTotal[]
+}
+
+export function getCantonIndicatorsSummary(
+  indicator: CantonIndicator,
+  signal?: AbortSignal,
+): Promise<CantonIndicatorsSummaryResponse> {
+  return fetchJson<CantonIndicatorsSummaryResponse>('/cantons/indicators/summary', { indicator }, signal)
+}

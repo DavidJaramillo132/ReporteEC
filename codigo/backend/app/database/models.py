@@ -6,12 +6,13 @@ from app.modules.detentions.models import Detention
 from app.modules.incidents.models import Incident
 from app.modules.ingestion.models import PipelineRun
 from app.modules.sources.models import Source
-from app.modules.territory.models import Canton, CantonPopulation
+from app.modules.territory.models import Canton, CantonIndicator, CantonPopulation
 
 __all__ = [
     "AdminUnit",
     "Base",
     "Canton",
+    "CantonIndicator",
     "CantonPopulation",
     "Detention",
     "Incident",

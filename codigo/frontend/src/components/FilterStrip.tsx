@@ -1,6 +1,6 @@
 import { Mark } from './Mark'
 import type { AdminUnitOut } from '../lib/api'
-import type { IncidentType } from '../lib/registry'
+import type { CantonLayer, IncidentType } from '../lib/registry'
 import { INCIDENT_TYPES, TYPE_LABEL, formatCount, placeName } from '../lib/registry'
 
 interface FilterStripProps {
@@ -11,14 +11,22 @@ interface FilterStripProps {
   types: IncidentType[]
   typeCounts: Record<string, number>
   detentions: boolean
+  cantonLayer: CantonLayer
   onProvince: (value: string | null) => void
   onCanton: (value: string | null) => void
   onToggleType: (type: IncidentType) => void
   onDetentions: (value: boolean) => void
+  onCantonLayer: (value: CantonLayer) => void
 }
 
+const CANTON_LAYER_OPTIONS: { value: CantonLayer; label: string }[] = [
+  { value: 'none', label: 'Ninguna' },
+  { value: 'extorsion', label: 'Extorsión' },
+  { value: 'siniestros', label: 'Siniestros de tránsito' },
+]
+
 export function FilterStrip(props: FilterStripProps) {
-  const { provinces, cantons, province, canton, types, typeCounts, detentions } = props
+  const { provinces, cantons, province, canton, types, typeCounts, detentions, cantonLayer } = props
   return (
     <div className="relative flex items-center gap-x-5 gap-y-2 overflow-x-auto border-b border-ink bg-paper px-4 py-2.5 lg:flex-wrap lg:overflow-visible lg:px-6">
       <div className="flex shrink-0 items-center gap-2">
@@ -60,6 +68,26 @@ export function FilterStrip(props: FilterStripProps) {
               <span className={`tabular-nums ${active ? 'text-paper/75' : 'text-ink-3'}`}>
                 {formatCount(typeCounts[type] ?? 0)}
               </span>
+            </button>
+          )
+        })}
+      </fieldset>
+
+      <fieldset className="flex shrink-0 items-center gap-1.5 lg:flex-wrap">
+        <legend className="sr-only">Capas por cantón</legend>
+        {CANTON_LAYER_OPTIONS.map((opt) => {
+          const active = cantonLayer === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => props.onCantonLayer(opt.value)}
+              className={`flex h-8 items-center border border-ink px-2.5 text-[13px] transition-colors duration-150 ${
+                active ? 'bg-sello text-paper' : 'bg-transparent text-ink-2 hover:bg-sheet'
+              }`}
+            >
+              {opt.label}
             </button>
           )
         })}

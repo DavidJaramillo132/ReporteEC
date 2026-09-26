@@ -32,6 +32,34 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/*
+ * Canton indicator layer (extortion / traffic-crash choropleth) -- a scoped
+ * exception to the Two-Hue Rule above, see DESIGN.md and the Phase 6 report
+ * for the tradeoff. Extortion gets its own warm-red hue family (never mixed
+ * into `sello`, anchored near `--color-homicidio`, stepped by
+ * lightness/saturation only -- not a green-to-red semáforo). Traffic crashes
+ * reuse `--color-sello` itself as a sequential ramp. Values mirror
+ * lib/cantonChoropleth.ts's EXTORSION_COLOR/SINIESTROS_COLOR (kept in sync by
+ * hand, same as TYPE_COLOR does for the incident hues above).
+ *
+ * `static`, unlike the @theme block above: these are only ever referenced
+ * dynamically, via a JS template string (`var(--color-canton-${layer}-${step})`
+ * in MapLegend.tsx), never as a literal Tailwind utility class name -- so
+ * Tailwind's default "only emit CSS variables it sees used" analysis can't
+ * find them and drops them from the build without this.
+ */
+@theme static {
+  --color-canton-extorsion-1: #e3cba3;
+  --color-canton-extorsion-2: #c98a5c;
+  --color-canton-extorsion-3: #a04a34;
+  --color-canton-extorsion-4: #6e1f14;
+  --color-canton-siniestros-1: #c3d3e0;
+  --color-canton-siniestros-2: #7fa1bf;
+  --color-canton-siniestros-3: #3e6f98;
+  --color-canton-siniestros-4: #1d4a73;
+  --color-canton-sin-datos: #9aa3ab;
+}
+
 @layer base {
   html,
   body,

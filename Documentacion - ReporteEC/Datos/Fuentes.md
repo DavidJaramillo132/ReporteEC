@@ -76,6 +76,18 @@ Delito relacionados a Crimen Organizado*. Guardado en
   DPA para obtener el código. Revisar licencia y condiciones de uso del OECO
   antes de publicar.
 
+> [!success] Cargado en producción (2026-09-26)
+> El adaptador de ingesta (`extorsion --file`) cruza los 223 pares
+> provincia/cantón del CSV contra `admin_units` normalizando acentos,
+> mayúsculas y espacios, más un diccionario de 11 alias por cantón (p. ej.
+> "Echandía"→"Echeandía", "Calceta"→"Bolívar" en Manabí, "Pueblo Viejo"→
+> "Puebloviejo") y un alias de provincia ("Santo Domingo De Los Tsáchilas"→
+> "Sto Dgo de los Tsáchilas"). Resultado: **0 filas sin emparejar** y los
+> totales anuales de Extorsión cargados en `canton_indicators` coinciden
+> exactamente con los siete valores verificados de esta tabla. También se
+> cargó `Secuestro Extorsivo` como indicador aparte (mismo costo marginal),
+> aunque todavía no está expuesto en la API pública.
+
 También existe el tablero de la FGE
 [Analítica de noticias del delito](https://www.fiscalia.gob.ec/analitica-noticias-del-delito/)
 (todos los delitos del COIP, 2015 – agosto 2026, por cantón y franja horaria),
@@ -153,6 +165,41 @@ falta una tabla de correspondencia DPA), una fila por siniestro, variables de
 fallecidos, lesionados, clase, causa, tipo de vehículo y hasta 23
 participantes. Frecuencia **trimestral**; el primer trimestre de 2026 se
 publicó el 11 de mayo (~6 semanas de rezago).
+
+### Disponibilidad verificada y carga (2026-09-26)
+
+Cada período trimestral/anual publica dos ZIP: `..._TABULADOS_CSV.zip`
+(tablas cruzadas ya agregadas, no sirven) y `..._DATOS_ABIERTOS.zip` (el CSV
+por siniestro que sí se usa). El **esquema cambia dos veces**:
+
+| Período | Formato | Provincia/cantón | Archivo cargado |
+|---|---|---|---|
+| 2014–2020 | texto (`ANIO;MES;...;PROVINCIA;CANTÓN;...`) | nombre | agrupado dentro del ZIP anual 2021 (`..._BDD_2014_2020.csv`); solo se cargan 2019–2020 |
+| 2021 | texto, con `ANIO` | nombre | ZIP anual 2021 |
+| 2022 | texto, sin `ANIO` (año se toma del archivo) | nombre | ZIP anual 2022 |
+| 2023 | numérico, con comillas | código DPA directo | ZIP anual 2023 (no las 4 trimestrales, para no duplicar) |
+| 2024 | numérico | código DPA directo | ZIP anual 2024 (ídem) |
+| 2025 | numérico (Q4 solo existe en XLSX, pero el anual ya lo incluye en CSV) | código DPA directo | ZIP anual 2025 (ídem) |
+| 2026 T1–T2 | numérico | código DPA directo | ZIP trimestral T1 y T2 (el anual todavía no existe, año en curso) |
+| 2026 T3 | — | — | **no publicado aún** al 2026-09-26 |
+
+URLs base: `https://www.ecuadorencifras.gob.ec/documentos/web-inec/Estadisticas_Economicas/Transporte/Estadistica de Transporte/ESTRA/<año>/<año>_ESTRA_DATOS_ABIERTOS.zip`
+(anuales) y `.../<año>/<trimestre>_trimestre/<...>_DATOS_ABIERTOS.zip`
+(trimestrales); nomenclatura inconsistente entre años (espacio vs. guion
+bajo antes de "ABIERTOS", mayúsculas variables). 19 archivos descargados en
+`codigo/data/raw/inec/` (89 MB).
+
+**Cuando el año no trae código numérico** (2014–2022), el cruce usa el mismo
+mecanismo de normalización + alias que OECO, reutilizando el alias de
+provincia "Santo Domingo..." y sumando 5 alias de cantón propios de INEC
+("Bolívar (Carchi)"→"Bolívar", "Olmedo (Loja)"→"Olmedo", "Orellana"→
+"Francisco de Orellana", etc.). De ~222.000 filas 2019–2022, quedaron **120
+sin emparejar y reportadas** (nunca descartadas en silencio): la mayoría son
+nombres de parroquia que no son cantón oficial ("El Piedrero", "Matilde
+Esther", "Juval"); en 2023–2025 aparecieron además unos pocos códigos DPA
+numéricos (`9004`, `9005`, `9008`, `1413`) que no existen en `admin_units` —
+posiblemente zonas no delimitadas del propio INEC, pendiente de investigar
+si vuelve a aparecer un volumen mayor.
 
 ### Búsqueda de coordenadas para choques (2026-09-22)
 

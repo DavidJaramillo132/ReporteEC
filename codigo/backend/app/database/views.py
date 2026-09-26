@@ -1,7 +1,8 @@
 """Core `Table` objects for the read-only map views, on their own MetaData.
 
-`map_incidents` and `map_detentions` exist only as `CREATE VIEW` statements
-(see the `admin_units_and_map_views` migration) -- never as tables Alembic
+`map_incidents`, `map_detentions` and `map_cantons` exist only as `CREATE
+VIEW` statements (see the `admin_units_and_map_views` and
+`canton_indicators_and_map_cantons` migrations) -- never as tables Alembic
 manages. Declaring them here, instead of on `Base.metadata`, keeps Alembic
 autogenerate from ever proposing to create or drop them as tables while still
 letting the API build typed, parameterized queries against them with
@@ -37,4 +38,19 @@ map_detentions = Table(
     Column("province_code", String(2)),
     Column("canton_code", String(4)),
     Column("detention_type", String(32)),
+)
+
+# The first polygon layer: canton boundaries, simplified for tile-friendly
+# size (see the migration for the exact ST_SimplifyPreserveTopology
+# tolerance). No `id` column -- a canton has no natural integer id, `code` is
+# a 4-char string -- so Martin's config carries no `id_column` and the
+# frontend keys feature-state off the `code` property itself
+# (MapLibre's `promoteId: 'code'`).
+map_cantons = Table(
+    "map_cantons",
+    metadata,
+    Column("code", String(4)),
+    Column("name", String(128)),
+    Column("province_code", String(2)),
+    Column("geom", Geometry(geometry_type="MULTIPOLYGON", srid=4326)),
 )
