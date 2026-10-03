@@ -1,7 +1,9 @@
 """CLI entry point: `python -m app.modules.ingestion <command> [--file PATH ...]`.
 
 Commands: homicidios, desaparecidas, detenidos, all (runs the three in
-order), cantons, population, extorsion, siniestros. Without --file,
+order), download (CKAN files only, no database), cantons, population,
+extorsion, siniestros. --offline loads the MDI files already on disk
+instead of fetching CKAN, which blocks the production VPS. Without --file,
 homicidios/desaparecidas/detenidos fetch the current CKAN resources for the
 dataset, download any missing ones into /data/raw/mdi/ and load each;
 cantons/population/extorsion/siniestros always take an explicit --file (none
@@ -56,9 +58,51 @@ OECO_SOURCE_SLUG = "oeco-noticias-delito"
 INEC_SOURCE_SLUG = "inec-estra"
 
 
+# Per-record file names each MDI source publishes on CKAN, e.g.
+# mdi_homicidiosintencionales_pm_2026_enero_agosto.xlsx.
+LOCAL_FILE_PATTERNS = {
+    HOMICIDIOS_SOURCE_SLUG: "mdi_homicidiosintencionales_pm_*.xlsx",
+    DESAPARECIDAS_SOURCE_SLUG: "mdi_personasdesaparecidas_pm_*.xlsx",
+    DETENIDOS_SOURCE_SLUG: "mdi_detenidosaprehendidos_pm_*.xlsx",
+}
+
+CKAN_PACKAGES = {
+    HOMICIDIOS_SOURCE_SLUG: HOMICIDIOS_PACKAGE_ID,
+    DESAPARECIDAS_SOURCE_SLUG: DESAPARECIDAS_PACKAGE_ID,
+    DETENIDOS_SOURCE_SLUG: DETENIDOS_PACKAGE_ID,
+}
+
+
 def _download(package_id: str, dest_dir: Path) -> list[Path]:
     resources = select_per_record_resources(package_resources(package_id))
     return [download(resource, dest_dir) for resource in resources]
+
+
+def local_files(source_slug: str, raw_dir: Path | None = None) -> list[Path]:
+    """Files of one MDI source already on disk, oldest period first.
+
+    Used with --offline: datosabiertos.gob.ec blocks the production VPS, so
+    files are downloaded on another machine, pushed with rsync and loaded
+    from disk. Files loaded before are skipped by their hash.
+    """
+    return sorted((raw_dir or DEFAULT_RAW_DIR).glob(LOCAL_FILE_PATTERNS[source_slug]))
+
+
+def download_all(dest_dir: Path) -> list[Path]:
+    """Download every MDI per-record file from CKAN, without touching the database."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    for package_id in CKAN_PACKAGES.values():
+        paths.extend(_download(package_id, dest_dir))
+    return paths
+
+
+def _files(source_slug: str, files: list[Path] | None, offline: bool) -> list[Path]:
+    if files:
+        return files
+    if offline:
+        return local_files(source_slug)
+    return _download(CKAN_PACKAGES[source_slug], DEFAULT_RAW_DIR)
 
 
 def _print_summary(path: Path, run) -> None:
@@ -98,7 +142,7 @@ def _run(
             _print_summary(path, run)
 
 
-def run_homicidios(files: list[Path] | None, *, force: bool = False) -> None:
+def run_homicidios(files: list[Path] | None, *, force: bool = False, offline: bool = False) -> None:
     """Load intentional-homicide records (from CKAN unless `files` is given).
 
     Public (no leading underscore) so it can be imported and run on its own
@@ -107,30 +151,32 @@ def run_homicidios(files: list[Path] | None, *, force: bool = False) -> None:
     """
     _run(
         HOMICIDIOS_SOURCE_SLUG,
-        files or _download(HOMICIDIOS_PACKAGE_ID, DEFAULT_RAW_DIR),
+        _files(HOMICIDIOS_SOURCE_SLUG, files, offline),
         normalize_homicidios,
         force=force,
     )
 
 
-def run_desaparecidas(files: list[Path] | None, *, force: bool = False) -> None:
+def run_desaparecidas(
+    files: list[Path] | None, *, force: bool = False, offline: bool = False
+) -> None:
     """Load missing-person records (from CKAN unless `files` is given). See run_homicidios."""
     _run(
         DESAPARECIDAS_SOURCE_SLUG,
-        files or _download(DESAPARECIDAS_PACKAGE_ID, DEFAULT_RAW_DIR),
+        _files(DESAPARECIDAS_SOURCE_SLUG, files, offline),
         normalize_desaparecidas,
         force=force,
     )
 
 
-def run_detenidos(files: list[Path] | None, *, force: bool = False) -> None:
+def run_detenidos(files: list[Path] | None, *, force: bool = False, offline: bool = False) -> None:
     """Load detention/apprehension records (from CKAN unless `files` is given).
 
     See run_homicidios.
     """
     _run(
         DETENIDOS_SOURCE_SLUG,
-        files or _download(DETENIDOS_PACKAGE_ID, DEFAULT_RAW_DIR),
+        _files(DETENIDOS_SOURCE_SLUG, files, offline),
         normalize_detenidos,
         DETENTION_TARGET,
         force=force,
@@ -238,9 +284,26 @@ def main(argv: list[str] | None = None) -> None:
     _add_file_option(detenidos)
     _add_force_option(detenidos)
 
-    subparsers.add_parser(
+    def _add_offline_option(subparser: argparse.ArgumentParser) -> None:
+        subparser.add_argument(
+            "--offline",
+            action="store_true",
+            help="Load the files already in /data/raw/mdi instead of fetching CKAN",
+        )
+
+    for subparser in (homicidios, desaparecidas, detenidos):
+        _add_offline_option(subparser)
+
+    all_sources = subparsers.add_parser(
         "all", help="Load homicidios, desaparecidas and detenidos, in that order (from CKAN)"
     )
+    _add_offline_option(all_sources)
+
+    download_cmd = subparsers.add_parser(
+        "download",
+        help="Only download the MDI per-record files from CKAN (no database needed)",
+    )
+    download_cmd.add_argument("--dest", type=Path, default=DEFAULT_RAW_DIR)
 
     cantons = subparsers.add_parser(
         "cantons", help="Load canton boundaries (matched to admin_units by name; see territory.py)"
@@ -272,15 +335,18 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.command == "homicidios":
-        run_homicidios(args.files, force=args.force)
+        run_homicidios(args.files, force=args.force, offline=args.offline)
     elif args.command == "desaparecidas":
-        run_desaparecidas(args.files, force=args.force)
+        run_desaparecidas(args.files, force=args.force, offline=args.offline)
     elif args.command == "detenidos":
-        run_detenidos(args.files, force=args.force)
+        run_detenidos(args.files, force=args.force, offline=args.offline)
     elif args.command == "all":
-        run_homicidios(None)
-        run_desaparecidas(None)
-        run_detenidos(None)
+        run_homicidios(None, offline=args.offline)
+        run_desaparecidas(None, offline=args.offline)
+        run_detenidos(None, offline=args.offline)
+    elif args.command == "download":
+        for path in download_all(args.dest):
+            print(path)
     elif args.command == "cantons":
         _run_cantons(args.files)
     elif args.command == "population":
