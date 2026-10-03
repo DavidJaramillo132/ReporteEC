@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.time import GUAYAQUIL
 from app.database.session import get_session
 from app.database.views import map_incidents
+from app.ingestion.models import PipelineRun, RunStatus
 from app.modules.incidents.models import Incident
-from app.modules.ingestion.models import PipelineRun, RunStatus
 from app.modules.meta.schemas import MetaResponse, Period, SourceLastRun
 from app.modules.sources.models import Source
 from app.modules.sources.schemas import SourceInfo

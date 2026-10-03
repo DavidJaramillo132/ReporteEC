@@ -7,9 +7,9 @@ and stopping cleanly on SIGTERM/SIGINT -- so `docker compose stop` (or a
 Kubernetes-style shutdown) never has to kill a run mid-flight.
 
 Each of the three sources below already fetches the current CKAN resources,
-downloads only what is missing (see `app.modules.ingestion.ckan.download`'s
+downloads only what is missing (see `app.ingestion.sources.ckan.download`'s
 same-name-and-size check), and skips a file it already loaded successfully
-(see `app.modules.ingestion.loader.load_file`'s file-hash check) -- so a
+(see `app.ingestion.loaders.incidents.load_file`'s file-hash check) -- so a
 run where nothing changed upstream is cheap, not a no-op that still
 re-downloads everything.
 
@@ -18,12 +18,12 @@ this loop:
 
 - OECO has no CKAN package of its own -- each new export must be downloaded
   by hand and registered with
-  `python -m app.modules.ingestion extorsion --file <path>`
-  (see `app.modules.ingestion.adapters.oeco_extorsion`).
+  `python -m app.ingestion extorsion --file <path>`
+  (see `app.ingestion.adapters.oeco_extorsion`).
 - INEC ESTRA publishes annually (or quarterly before the annual file is
   out), not daily -- load a new file by hand with
-  `python -m app.modules.ingestion siniestros --file <path>`
-  (see `app.modules.ingestion.adapters.inec_siniestros`).
+  `python -m app.ingestion siniestros --file <path>`
+  (see `app.ingestion.adapters.inec_siniestros`).
 """
 
 import argparse
@@ -35,7 +35,7 @@ from pathlib import Path
 from threading import Event
 from types import FrameType
 
-from app.modules.ingestion.__main__ import run_desaparecidas, run_detenidos, run_homicidios
+from app.ingestion.jobs import run_desaparecidas, run_detenidos, run_homicidios
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ SourceRunner = Callable[[list[Path] | None], None]
 
 # Order is homicidios/desaparecidas/detenidos, matching the CLI's own "all"
 # command. Each runner opens (and closes) its own DB session -- see
-# app.modules.ingestion.__main__.run_homicidios and friends -- so one
+# app.ingestion.jobs.run_homicidios and friends -- so one
 # source's failure can never leave another source's session in a bad state.
 SOURCES: list[tuple[str, SourceRunner]] = [
     ("homicidios", run_homicidios),

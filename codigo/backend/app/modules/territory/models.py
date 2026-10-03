@@ -1,12 +1,19 @@
-"""Canton boundaries, cantonal population projections, and canton-level indicators.
+"""Territory: province/canton names, canton boundaries, population and indicators.
+
+`AdminUnit` holds province and canton names, looked up by DPA (INEC/CONALI)
+code. Incidents and detentions only ever store `province_code`/`canton_code`;
+this is the one place their human-readable names live, populated by the
+ingestion loader (see `app.ingestion.loaders.admin_units`). The frontend
+reads the catalog from `GET /api/admin-units`.
+
 
 `Canton` carries the geometry used to derive a centroid for coordinate-less
-homicides (see `app.modules.ingestion.adapters.mdi_homicidios`) and the
+homicides (see `app.ingestion.adapters.mdi_homicidios`) and the
 `map_cantons` view (see `app.database.views`). `CantonPopulation` is the INEC
 population projection used by the statistics API to turn a raw count into a
 rate per 100.000 inhabitants (see `app.modules.stats`). `CantonIndicator` is
 the canton/year/month aggregate behind `GET /api/cantons/indicators` (see
-`app.modules.canton_indicators`) -- extortion complaints (OECO) and traffic
+`app.modules.territory`) -- extortion complaints (OECO) and traffic
 crashes (INEC ESTRA) as of writing.
 
 None of these tables declare a foreign key to `admin_units`: like
@@ -30,6 +37,23 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
 from app.database.types import MultiPolygon, Point, text_enum
+
+
+class AdminUnitLevel(StrEnum):
+    PROVINCE = "province"
+    CANTON = "canton"
+
+
+class AdminUnit(Base):
+    __tablename__ = "admin_units"
+
+    # The DPA code itself: 2 digits for a province, 4 for a canton. Both
+    # levels share this one column since their lengths never collide.
+    code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    level: Mapped[AdminUnitLevel] = mapped_column(text_enum(AdminUnitLevel, "admin_unit_level"))
+    name: Mapped[str] = mapped_column(String(128))
+    # The parent province's code, set for cantons; NULL for provinces.
+    province_code: Mapped[str | None] = mapped_column(String(2), ForeignKey("admin_units.code"))
 
 
 class Canton(Base):
@@ -58,8 +82,8 @@ class Indicator(StrEnum):
     """Canton-level indicators aggregated into `canton_indicators`.
 
     `SECUESTRO_EXTORSIVO` is loaded from the same OECO source as `EXTORSION`
-    (see `app.modules.ingestion.adapters.oeco_extorsion`) but is not one of
-    the indicators the public API (`app.modules.canton_indicators.router`)
+    (see `app.ingestion.adapters.oeco_extorsion`) but is not one of
+    the indicators the public API (`app.modules.territory.indicators_router`)
     currently exposes -- it is here so a future endpoint can serve it without
     a schema change.
     """
@@ -76,7 +100,7 @@ class CantonIndicator(Base):
     Every ingestion run recomputes and overwrites the *entire* aggregate for
     the file it loaded (`ON CONFLICT ... DO UPDATE SET value = excluded.value`
     -- replace, not add), so re-running the same file with `--force` is safe:
-    see `app.modules.ingestion.canton_indicators.load_indicator_file`. This is
+    see `app.ingestion.loaders.indicators.load_indicator_file`. This is
     unlike `incidents`/`detentions`, which insert one row per source record.
 
     `month` stays nullable for a future source that reports only yearly

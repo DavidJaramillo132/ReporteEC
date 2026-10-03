@@ -82,19 +82,26 @@ El backend se organiza en dominios desacoplados:
 
 ```
 app/
-├── api/                   # Rutas y controladores HTTP organizados por versión
-│   ├── v1/                # Incidentes, estadísticas, límites cantonales, rutas
-│   └── v2/                # Usuarios, autenticación, reportes ciudadanos, suscripciones
-├── modules/               # Lógica de dominio puro
+├── main.py                # Aplicación FastAPI: monta los routers bajo /api
+├── core/                  # Configuración y utilidades comunes
+├── database/              # Conexión, sesión, tipos, vistas (`map_incidents`) y registro de modelos para Alembic
+├── modules/               # Un dominio de negocio por carpeta (modelos, esquemas, servicio, router)
 │   ├── incidents/         # Consultas de incidentes, reglas de confianza y vigencia
-│   ├── ingestion/         # Adaptadores de extracción (CKAN, INEC, FGE, Policía)
-│   ├── routes/            # Algoritmo de evaluación de riesgo en rutas por franja horaria
-│   ├── extorsion/         # Métricas de riesgo comercial y denuncias por cantón
-│   ├── spatial/           # Operaciones geométricas, buffers viales y geocodificación
-│   └── notifications/     # Web Push y notificaciones zonales
-├── models/                # Modelos SQLAlchemy / GeoAlchemy2
-├── schemas/               # Esquemas de validación y serialización Pydantic
-├── database/              # Conexión, pooling y migraciones con Alembic
+│   ├── detentions/        # Detenidos y aprehendidos
+│   ├── sources/           # Fuentes oficiales y su licencia
+│   ├── territory/         # Provincias, cantones, población e indicadores cantonales (extorsión, siniestros)
+│   ├── stats/             # Conteos y tasas por 100.000 habitantes
+│   ├── meta/              # Estado de la carga de datos
+│   └── …                  # v2: routes (riesgo por franja horaria), spatial, notifications
+├── ingestion/             # Pipeline de datos: no es un dominio de negocio
+│   ├── __main__.py        # CLI delgada (`python -m app.ingestion`)
+│   ├── jobs.py            # Tareas que invocan la CLI y el worker
+│   ├── sources/           # Cliente CKAN y registro de fuentes
+│   ├── readers/           # Lectores de archivos (xlsx)
+│   ├── adapters/          # Un adaptador por fuente (MDI, OECO, INEC)
+│   ├── loaders/           # Carga a la base: incidentes, territorio, indicadores, unidades admin.
+│   ├── records.py         # Registro normalizado común
+│   └── models.py          # `PipelineRun`: historial de corridas
 └── workers/               # Procesos de fondo para sincronizaciones programadas
 ```
 

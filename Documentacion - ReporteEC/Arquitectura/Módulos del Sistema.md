@@ -22,25 +22,30 @@ sin rehacer lo anterior. Tecnologías concretas en [[Stack e Infraestructura]].
 codigo/
 ├── backend/                 Monolito modular (Python + FastAPI)
 │   ├── app/
-│   │   ├── main.py          arranque de la API
-│   │   ├── api/             rutas HTTP (incidentes, estadísticas, fuentes, monitoreo…)
+│   │   ├── main.py          arranque de la API (monta los routers bajo /api)
+│   │   ├── core/            configuración y utilidades comunes
+│   │   ├── database/        conexión, sesión, tipos y vistas (`map_incidents`…)
 │   │   ├── modules/         lógica de negocio, un módulo por dominio
-│   │   │   ├── incidents/
-│   │   │   ├── routes/          inteligencia de riesgo en trayectos según horario
-│   │   │   ├── extorsion/       indicadores de riesgo comercial y vacunas a negocios
-│   │   │   ├── sources/
-│   │   │   ├── ingestion/   adaptadores de fuente (un adaptador por fuente)
-│   │   │   ├── spatial/         buffers viales, polígonos DPA y geocodificación
-│   │   │   ├── storage/     imágenes: Azure Blob hoy, S3 mañana (v2)
-│   │   │   └── notifications/   alertas zonales Web Push (v2)
-│   │   ├── workers/         procesos que corren aparte de la API
-│   │   │   ├── historical_worker.py   ingesta de datos oficiales (v1)
-│   │   │   ├── news_worker.py         noticias de la Policía (v2)
-│   │   │   └── processing_worker.py   IA + geocodificación (futuro)
-│   │   ├── database/        conexión y sesión
-│   │   ├── models/          tablas
-│   │   ├── schemas/         formatos de entrada y salida de la API
-│   │   └── core/            configuración y utilidades comunes
+│   │   │   ├── incidents/   modelos, esquemas, servicio (consultas) y router
+│   │   │   ├── detentions/  modelos de detenidos y aprehendidos
+│   │   │   ├── sources/     fuentes oficiales y su licencia
+│   │   │   ├── territory/   provincias, cantones, población e indicadores cantonales
+│   │   │   ├── stats/       conteos y tasas por 100.000 hab.
+│   │   │   ├── meta/        estado de la carga de datos
+│   │   │   └── …            v2: routes, notifications, storage (aún no existen)
+│   │   ├── ingestion/       pipeline de datos (no es un dominio de negocio)
+│   │   │   ├── __main__.py  CLI: `python -m app.ingestion <comando>`
+│   │   │   ├── jobs.py      tareas que usan la CLI y el worker
+│   │   │   ├── sources/     cliente CKAN y registro de fuentes
+│   │   │   ├── readers/     lectura de xlsx
+│   │   │   ├── adapters/    un adaptador por fuente (mdi_*, oeco_extorsion, inec_siniestros)
+│   │   │   ├── loaders/     carga a la base: incidentes, territorio, indicadores, unidades admin.
+│   │   │   ├── records.py   registro normalizado común
+│   │   │   └── models.py    `PipelineRun` (historial de corridas)
+│   │   └── workers/         procesos que corren aparte de la API
+│   │       ├── historical_worker.py   ingesta de datos oficiales (v1)
+│   │       ├── news_worker.py         noticias de la Policía (v2)
+│   │       └── processing_worker.py   IA + geocodificación (futuro)
 │   ├── migrations/          PostGIS: tablas y funciones para teselas
 │   └── tests/
 ├── frontend/                PWA con el mapa (React + TypeScript + Vite + MapLibre)
@@ -63,7 +68,7 @@ codigo/
 
 ## Responsabilidad de cada módulo
 
-### backend — ingesta (`modules/ingestion/` + `workers/`)
+### backend — ingesta (`app/ingestion/` + `app/workers/`)
 
 Un **adaptador por fuente**, todos con la misma interfaz:
 
@@ -112,7 +117,7 @@ sería lentísimo. Martin (v1) publica **solo** `map_incidents` y
 desactivado (`auto_publish: false`): nunca expone `incidents`, `detentions`
 ni ninguna otra tabla directamente.
 
-### backend — almacenamiento (`app/modules/storage/`, V2)
+### backend — almacenamiento (`app/modules/storage/`, V2, aún no creado)
 
 Las imágenes de los reportes ciudadanos se guardan en un bucket. El código usa
 una **interfaz propia** (subir, obtener URL, borrar) con una implementación

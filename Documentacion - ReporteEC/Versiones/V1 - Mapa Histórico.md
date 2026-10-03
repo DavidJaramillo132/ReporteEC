@@ -116,7 +116,7 @@ información. Debe explicar:
   V2: `fuente`, `nivel_confianza`, `estado`, `fusionado_con`,
   `location_precision`, identificador de origen. `vigencia` se calcula a partir
   de la fecha
-- **Un adaptador por fuente** en `backend/app/modules/ingestion/`
+- **Un adaptador por fuente** en `backend/app/ingestion/`
 - **Worker histórico** que revisa CKAN a diario y carga solo archivos nuevos
 - **Tabla `pipeline_runs`**: cada ejecución queda registrada con registros
   procesados, duplicados y errores

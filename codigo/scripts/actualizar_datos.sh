@@ -35,7 +35,7 @@ RAW="$REPO/codigo/data/raw/mdi"
 SSH=(ssh -i "$REPORTEEC_SSH_KEY")
 
 echo "1/3 Descargando archivos del Ministerio del Interior desde CKAN…"
-uv --directory "$REPO/codigo/backend" run python -m app.modules.ingestion download --dest "$RAW"
+uv --directory "$REPO/codigo/backend" run python -m app.ingestion download --dest "$RAW"
 
 echo "2/3 Enviando archivos al servidor…"
 rsync -az --chmod=Fugo=rw -e "${SSH[*]}" "$RAW/" "$REPORTEEC_SSH_HOST:$REMOTE_DIR/codigo/data/raw/mdi/"
@@ -43,6 +43,6 @@ rsync -az --chmod=Fugo=rw -e "${SSH[*]}" "$RAW/" "$REPORTEEC_SSH_HOST:$REMOTE_DI
 echo "3/3 Cargando en la base de producción (los ya cargados se saltan)…"
 "${SSH[@]}" "$REPORTEEC_SSH_HOST" "cd $REMOTE_DIR/codigo/despliegue && \
 	docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env \
-	run --rm worker python -m app.modules.ingestion all --offline 2>&1 | grep -v -e '^ Container' -e httpx"
+	run --rm worker python -m app.ingestion all --offline 2>&1 | grep -v -e '^ Container' -e httpx"
 
 echo "Listo."

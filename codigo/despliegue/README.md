@@ -127,7 +127,7 @@ esperar el primer ciclo:
 
 ```bash
 docker compose -f compose.prod.yml --env-file .env run --rm backend \
-  python -m app.modules.ingestion all
+  python -m app.ingestion all
 ```
 
 **Cantones, población, extorsión (OECO), siniestros (INEC ESTRA)**: no
@@ -145,13 +145,13 @@ Y cárgalos ya en el VPS (mismos comandos que en desarrollo, solo con
 
 ```bash
 docker compose -f compose.prod.yml --env-file .env run --rm backend \
-  python -m app.modules.ingestion cantons --file /data/raw/<archivo-cantones>.xlsx
+  python -m app.ingestion cantons --file /data/raw/<archivo-cantones>.xlsx
 docker compose -f compose.prod.yml --env-file .env run --rm backend \
-  python -m app.modules.ingestion population --file /data/raw/<archivo-poblacion>.xlsx
+  python -m app.ingestion population --file /data/raw/<archivo-poblacion>.xlsx
 docker compose -f compose.prod.yml --env-file .env run --rm backend \
-  python -m app.modules.ingestion extorsion --file /data/raw/<archivo-oeco>.xlsx
+  python -m app.ingestion extorsion --file /data/raw/<archivo-oeco>.xlsx
 docker compose -f compose.prod.yml --env-file .env run --rm backend \
-  python -m app.modules.ingestion siniestros --file /data/raw/<archivo-inec>.xlsx
+  python -m app.ingestion siniestros --file /data/raw/<archivo-inec>.xlsx
 ```
 
 ## 8. Verificación
@@ -299,13 +299,13 @@ límites de memoria (el VPS no tiene swap).
    - Por último, `homicidios --force`, que agrega los casos sin coordenadas
      ubicándolos en el centroide de su cantón.
    ```bash
-   rec run --rm worker python -m app.modules.ingestion all
-   rec run --rm worker python -m app.modules.ingestion cantons --file /data/raw/dpa/cantones_ecuador_simplificado.geojson
-   rec run --rm worker python -m app.modules.ingestion population --file /data/raw/poblacion/Total_cantonal_2010-2035.xlsx
-   rec run --rm worker python -m app.modules.ingestion homicidios --force
-   rec run --rm worker python -m app.modules.ingestion extorsion --file /data/raw/oeco/noticias_delito_2019_2025.csv
+   rec run --rm worker python -m app.ingestion all
+   rec run --rm worker python -m app.ingestion cantons --file /data/raw/dpa/cantones_ecuador_simplificado.geojson
+   rec run --rm worker python -m app.ingestion population --file /data/raw/poblacion/Total_cantonal_2010-2035.xlsx
+   rec run --rm worker python -m app.ingestion homicidios --force
+   rec run --rm worker python -m app.ingestion extorsion --file /data/raw/oeco/noticias_delito_2019_2025.csv
    # Un archivo por año: anual cuando existe (el de 2021 trae también 2014–2020), si no, trimestrales.
-   rec run --rm worker python -m app.modules.ingestion siniestros \
+   rec run --rm worker python -m app.ingestion siniestros \
      $(for f in 2021_anual 2022_anual 2023_anual 2024_anual 2025_anual 2026_t1 2026_t2; do printf -- '--file /data/raw/inec/inec_estra_%s_datos_abiertos.zip ' "$f"; done)
    ```
 5. **Caddy de Playhub:** respalda el archivo y agrega el bloque al final con

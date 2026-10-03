@@ -60,7 +60,7 @@ FASE 4: V4 — Red Colaborativa e Inteligencia Artificial
   - Generar migración inicial con Alembic.
 
 ### Paso 0.3: Ingesta del Primer Dataset (Homicidios 2026)
-* **Ubicación:** `codigo/backend/app/modules/ingestion/`
+* **Ubicación:** `codigo/backend/app/ingestion/`
 * **Acción:**
   - Crear adaptador `mdi_homicidios.py` que tome el archivo XLSX de homicidios 2026.
   - Normalizar coordenadas (`coordenada_y` = latitud, `coordenada_x` = longitud, reemplazando coma decimal por punto).

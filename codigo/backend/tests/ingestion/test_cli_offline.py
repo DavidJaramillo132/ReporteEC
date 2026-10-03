@@ -4,7 +4,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-from app.modules.ingestion import __main__ as cli
+from app.ingestion import __main__ as cli
+from app.ingestion import jobs
 
 
 def _touch(directory: Path, *names: str) -> None:
@@ -21,7 +22,7 @@ def test_local_files_picks_one_source_oldest_period_first(tmp_path: Path):
         "mdi_personasdesaparecidas_pm_2017_2025.xlsx",
     )
 
-    files = cli.local_files(cli.HOMICIDIOS_SOURCE_SLUG, tmp_path)
+    files = jobs.local_files(jobs.HOMICIDIOS_SOURCE_SLUG, tmp_path)
 
     assert [path.name for path in files] == [
         "mdi_homicidiosintencionales_pm_2014_2025.xlsx",
@@ -31,14 +32,14 @@ def test_local_files_picks_one_source_oldest_period_first(tmp_path: Path):
 
 def test_offline_never_calls_ckan(tmp_path: Path, monkeypatch):
     _touch(tmp_path, "mdi_detenidosaprehendidos_pm_2026_enero_agosto.xlsx")
-    monkeypatch.setattr(cli, "DEFAULT_RAW_DIR", tmp_path)
+    monkeypatch.setattr(jobs, "DEFAULT_RAW_DIR", tmp_path)
 
     def fail(*_args, **_kwargs):
         raise AssertionError("CKAN must not be called with --offline")
 
-    monkeypatch.setattr(cli, "_download", fail)
+    monkeypatch.setattr(jobs, "_download", fail)
 
-    files = cli._files(cli.DETENIDOS_SOURCE_SLUG, None, offline=True)
+    files = jobs._files(jobs.DETENIDOS_SOURCE_SLUG, None, offline=True)
 
     assert [path.name for path in files] == ["mdi_detenidosaprehendidos_pm_2026_enero_agosto.xlsx"]
 
@@ -52,11 +53,11 @@ def test_download_command_fetches_every_package_into_dest(tmp_path: Path, monkey
         path.write_bytes(b"")
         return [path]
 
-    monkeypatch.setattr(cli, "_download", fake_download)
+    monkeypatch.setattr(jobs, "_download", fake_download)
 
     cli.main(["download", "--dest", str(tmp_path / "mdi")])
 
-    assert requested == list(cli.CKAN_PACKAGES.values())
+    assert requested == list(jobs.CKAN_PACKAGES.values())
     assert capsys.readouterr().out.count(".xlsx") == 3
 
 
@@ -64,6 +65,6 @@ def test_summary_says_skipped_for_an_earlier_run(capsys):
     now = datetime.now(UTC)
     earlier_run = SimpleNamespace(id=7, started_at=now - timedelta(days=1))
 
-    cli._print_summary(Path("homicidios.xlsx"), earlier_run, now)
+    jobs._print_summary(Path("homicidios.xlsx"), earlier_run, now)
 
     assert capsys.readouterr().out.strip() == "homicidios.xlsx: already loaded (run 7), skipped"

@@ -109,7 +109,7 @@ pero **sin descarga**; sirve solo como referencia para contrastar.
   (224 cantones) para Ecuador (`shapeGroup: "ECU"`).
 - **Sin código DPA:** cada cantón se identifica solo por `shapeName` (nombre),
   no por código. La carga (`cantons --file`, ver
-  `app/modules/ingestion/territory.py`) resuelve el código DPA cruzando el
+  `app/ingestion/loaders/territory.py`) resuelve el código DPA cruzando el
   nombre contra `admin_units` (poblada por los propios archivos oficiales del
   Ministerio del Interior), y para los nombres duplicados a nivel nacional —
   "Bolívar" (Carchi y Manabí) y "Olmedo" (Loja y Manabí) — desambigua por
@@ -136,7 +136,7 @@ pero **sin descarga**; sirve solo como referencia para contrastar.
   Un libro por provincia (24 hojas + "Índice"), con una fila por cantón y una
   columna por año (2010 a 2035, "Estimación" hasta 2022 y "Proyección" desde
   2023).
-- **Carga:** `population --file <xlsx>` (`app/modules/ingestion/territory.py`),
+- **Carga:** `population --file <xlsx>` (`app/ingestion/loaders/territory.py`),
   cruzando cada nombre de cantón/provincia contra `admin_units` -- igual
   criterio que la carga de cantones. Único ajuste necesario: la hoja de
   Pichincha nombra a la capital "Distrito Metropolitano de Quito"

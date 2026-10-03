@@ -44,10 +44,9 @@ from enum import StrEnum
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
-from app.modules.admin_units.models import AdminUnit, AdminUnitLevel
 from app.modules.detentions.models import Detention
 from app.modules.incidents.models import Incident, IncidentStatus, LocationPrecision
-from app.modules.territory.models import Canton, CantonPopulation
+from app.modules.territory.models import AdminUnit, AdminUnitLevel, Canton, CantonPopulation
 
 LOW_POPULATION_THRESHOLD = 10_000
 

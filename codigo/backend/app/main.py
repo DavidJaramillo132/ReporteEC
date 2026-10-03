@@ -2,11 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import cors_origins
-from app.modules.admin_units.router import router as admin_units_router
-from app.modules.canton_indicators.router import router as canton_indicators_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.meta.router import router as meta_router
 from app.modules.stats.router import router as stats_router
+from app.modules.territory.admin_units_router import router as admin_units_router
+from app.modules.territory.indicators_router import router as canton_indicators_router
 
 app = FastAPI(title="ReporteEC API")
 

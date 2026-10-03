@@ -73,7 +73,7 @@ homicidios con `--force` para la Fase 5:
   2020-2026 traen coordenada propia, sin excepción.
 - Estos 810 casos **se cargan igual**, con `location_precision='canton'` y la
   geometría del centroide del propio cantón (`ST_PointOnSurface`, no
-  `ST_Centroid`; ver [[Fuentes]] y `app/modules/ingestion/loader.py`). Se
+  `ST_Centroid`; ver [[Fuentes]] y `app/ingestion/loaders/incidents.py`). Se
   **cuentan en las estadísticas** (`GET /api/stats`) pero **no se dibujan en
   el mapa** (`map_incidents` excluye `location_precision='canton'`): la
   fuente no publicó dónde exactamente ocurrió el caso, y su cantón corrige
@@ -87,7 +87,7 @@ homicidios con `--force` para la Fase 5:
 
 ## Personas desaparecidas: la señal de "localizada" no es una sola columna
 
-`app/modules/ingestion/adapters/mdi_desaparecidas.py` ya documentaba esto en
+`app/ingestion/adapters/mdi_desaparecidas.py` ya documentaba esto en
 código; se deja constancia aquí porque ahora afecta directamente a las
 estadísticas. Una persona deja de considerarse desaparecida por **cualquiera**
 de dos señales independientes, no solo una:
@@ -110,8 +110,8 @@ desapareció, aunque ya no siga desaparecida hoy.
 ## Detenciones: 1.613 filas sin provincia ni cantón (código `0000`/`00`)
 
 Hallazgo de la validación de cobertura territorial de la Fase 5
-(`python -m app.modules.ingestion population`/`cantons`, sección
-`validate_coverage` en `app/modules/ingestion/territory.py`): **1.613 filas
+(`python -m app.ingestion population`/`cantons`, sección
+`validate_coverage` en `app/ingestion/loaders/territory.py`): **1.613 filas
 de Detenidos y Aprehendidas** traen `province_code='00'`/`canton_code='0000'`
 (campo vacío en la fuente, rellenado con ceros). No ocurre en ningún caso de
 homicidios ni desaparecidas. Se cargan igual (una detención sin ubicación
