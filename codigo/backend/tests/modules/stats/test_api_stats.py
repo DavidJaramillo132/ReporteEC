@@ -5,6 +5,7 @@ See `app.modules.stats.service` for the exact rate formula under test here.
 
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -264,6 +265,18 @@ def test_legacy_year_still_selects_a_single_year(client: TestClient, db_session:
 def test_malformed_years_is_a_422(client: TestClient):
     response = client.get("/api/stats", params={"dimension": "type", "years": "2024,abc"})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "params", [{"years": "2147483648"}, {"years": "2024,1"}, {"year": 2147483648}, {"year": 99999}]
+)
+def test_out_of_range_years_is_a_422(client: TestClient, params: dict):
+    response = client.get("/api/stats", params={"dimension": "type", **params})
+    assert response.status_code == 422
+
+
+def test_out_of_range_year_on_the_incidents_list_is_a_422(client: TestClient):
+    assert client.get("/api/incidents", params={"year": 2147483648}).status_code == 422
 
 
 def test_years_use_local_time_at_the_new_year_boundary(client: TestClient, db_session: Session):

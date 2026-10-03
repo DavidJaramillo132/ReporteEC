@@ -7,6 +7,7 @@ Query parsing and HTTP errors live here; the SQL is in
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.years import check_year
 from app.database.session import get_session
 from app.modules.incidents import service
 from app.modules.incidents.schemas import IncidentDetail, IncidentListResponse
@@ -52,7 +53,7 @@ def list_incidents(
 ) -> IncidentListResponse:
     return service.list_incidents(
         session,
-        year=year,
+        year=check_year(year) if year is not None else None,
         months=_split_ints(months),
         types=_split_strs(types),
         province=province,
