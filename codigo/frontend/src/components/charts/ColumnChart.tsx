@@ -45,7 +45,7 @@ const CHAR_WIDTH = 6.8
 
 /**
  * Vertical columns over an ordered axis (typically years). Columns are at most
- * 24px wide, square at the baseline and rounded on top, with the value on the
+ * 24px wide and square at every corner (DESIGN.md), with the value on the
  * cap when it fits, otherwise only on the tallest column (the rest live in the
  * tooltip and the table). Hairline gridlines and clean ticks carry the scale.
  */

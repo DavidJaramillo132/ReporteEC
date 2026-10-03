@@ -148,25 +148,22 @@ export function nearestIndex(x: number, positions: number[]): number {
 // ---- mark geometry ----------------------------------------------------------
 
 /**
- * A horizontal bar growing right from `x`: square at the baseline (left),
- * rounded at the data end (right). The radius never exceeds half the bar.
+ * A horizontal bar growing right from `x`. Every corner is square (DESIGN.md's
+ * Square Corner Rule): its length reads from a hard edge at both ends.
  */
-export function barPath(x: number, y: number, width: number, height: number, radius = 4): string {
+export function barPath(x: number, y: number, width: number, height: number): string {
   const w = Math.max(0, width)
-  const r = Math.min(radius, w, height / 2)
-  return `M ${x} ${y} H ${x + w - r} Q ${x + w} ${y} ${x + w} ${y + r} V ${y + height - r} Q ${x + w} ${y + height} ${x + w - r} ${y + height} H ${x} Z`
+  return `M ${x} ${y} H ${x + w} V ${y + height} H ${x} Z`
 }
 
 /**
- * A vertical column growing up from `baseline`: square at the baseline,
- * rounded at the top. A zero-height column draws nothing.
+ * A vertical column growing up from `baseline`, square at every corner. A
+ * zero-height column draws nothing.
  */
-export function columnPath(x: number, baseline: number, width: number, height: number, radius = 4): string {
+export function columnPath(x: number, baseline: number, width: number, height: number): string {
   const h = Math.max(0, height)
   if (h === 0) return ''
-  const r = Math.min(radius, width / 2, h)
-  const top = baseline - h
-  return `M ${x} ${baseline} V ${top + r} Q ${x} ${top} ${x + r} ${top} H ${x + width - r} Q ${x + width} ${top} ${x + width} ${top + r} V ${baseline} Z`
+  return `M ${x} ${baseline} V ${baseline - h} H ${x + width} V ${baseline} Z`
 }
 
 // ---- tooltip ----------------------------------------------------------------

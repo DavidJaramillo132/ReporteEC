@@ -39,18 +39,20 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
     document.title = 'Estadísticas · ReporteEC'
   }, [])
 
-  const { data, loading, failed } = useStatsData(filters)
+  // `shown` is the selection the numbers on screen belong to: every caption below uses it, never `filters`.
+  const { data, shown, stale, loading, failed } = useStatsData(filters)
   const periodTo = meta?.period.to
 
   const provinceName = useMemo(() => {
-    const name = adminUnits?.provinces.find((p) => p.code === filters.province)?.name
+    const name = adminUnits?.provinces.find((p) => p.code === shown.province)?.name
     return name ? placeName(name) : null
-  }, [adminUnits, filters.province])
+  }, [adminUnits, shown.province])
   const cantonName = useMemo(() => {
-    const name = adminUnits?.cantons.find((c) => c.code === filters.canton)?.name
+    const name = adminUnits?.cantons.find((c) => c.code === shown.canton)?.name
     return name ? placeName(name) : null
-  }, [adminUnits, filters.canton])
+  }, [adminUnits, shown.canton])
   const areaName = cantonName ?? provinceName ?? 'Ecuador'
+  const shownPeriod = formatPeriodLabel(shown.years, shown.months)
 
   const typeCounts = useMemo(() => Object.fromEntries((data?.byType ?? []).map((row) => [row.key, row.count])), [data])
 
@@ -83,7 +85,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
           <header>
             <h1 className="nameplate text-[30px]">Estadísticas</h1>
             <p className="mt-1.5 max-w-[70ch] text-[14px] text-ink-2">
-              Casos y tasas por 100.000 habitantes para {areaName} en {formatPeriodLabel(filters.years, filters.months)}, con los
+              Casos y tasas por 100.000 habitantes para {areaName} en {shownPeriod}, con los
               mismos filtros de años, meses, tipo y lugar que el mapa. Cada gráfico tiene su tabla en «Ver tabla».
             </p>
           </header>
@@ -95,17 +97,19 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
           )}
           {failed && (
             <p className="mt-4 text-[14px] text-ink-2" role="alert">
-              No se pudieron cargar las estadísticas. Vuelve a intentarlo más tarde.
+              {data
+                ? `No se pudieron cargar las estadísticas de esta selección. Debajo siguen, atenuadas, las de la anterior: ${areaName}, ${shownPeriod}.`
+                : 'No se pudieron cargar las estadísticas. Vuelve a intentarlo más tarde.'}
             </p>
           )}
 
           {data && (
-            // While new filters load, the previous numbers stay (dimmed) instead of jumping to a skeleton.
-            <div aria-busy={loading} className={loading ? 'opacity-60' : ''}>
+            // Numbers of another selection (loading the new one, or it failed) stay dimmed instead of jumping to a skeleton.
+            <div aria-busy={loading} className={stale ? 'opacity-60' : ''}>
               <Summary
-                years={filters.years}
-                months={filters.months}
-                types={filters.types}
+                years={shown.years}
+                months={shown.months}
+                types={shown.types}
                 areaName={areaName}
                 byType={data.byType}
                 byYear={data.byYear}
@@ -131,9 +135,9 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
 
                 <div className="min-w-0">
                   <IncidentsSection
-                    years={filters.years}
-                    months={filters.months}
-                    types={filters.types}
+                    years={shown.years}
+                    months={shown.months}
+                    types={shown.types}
                     byType={data.byType}
                     timeseries={data.timeseries}
                     byYear={data.byYear}
@@ -142,7 +146,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
                   />
                   <TerritorySection
                     provinceName={provinceName}
-                    cantonSelected={filters.canton !== null}
+                    cantonSelected={shown.canton !== null}
                     byPlace={data.byPlace}
                     cantonRanking={data.cantonRanking}
                   />
@@ -154,7 +158,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
                     anchor="semaforo-extorsion"
                     unit="denuncias"
                     trendNote="Publicación anual: cada columna es un año completo."
-                    years={filters.years}
+                    years={shown.years}
                     data={data.extorsion}
                   />
                   <CantonIndicatorSection
@@ -165,12 +169,12 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
                     anchor="por-canton"
                     unit="siniestros"
                     trendNote="El año en curso, cuando aparece, es un adelanto parcial del INEC."
-                    years={filters.years}
+                    years={shown.years}
                     data={data.siniestros}
                   />
                   <PoliceSection
-                    years={filters.years}
-                    months={filters.months}
+                    years={shown.years}
+                    months={shown.months}
                     periodTo={periodTo}
                     detentionsByYear={data.detentionsByYear}
                     detentionsByProvince={data.detentionsByProvince}

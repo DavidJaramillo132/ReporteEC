@@ -144,21 +144,17 @@ describe('nearestIndex', () => {
 })
 
 describe('barPath / columnPath', () => {
-  it('draws a bar square at the baseline and rounded at the end', () => {
-    const d = barPath(0, 10, 100, 14)
-    expect(d.startsWith('M 0 10')).toBe(true)
-    expect(d).toContain('Q 100 10 100 14')
-    expect(d.endsWith('H 0 Z')).toBe(true)
+  it('draws a bar as a plain rectangle, square at both ends', () => {
+    expect(barPath(0, 10, 100, 14)).toBe('M 0 10 H 100 V 24 H 0 Z')
+    expect(barPath(0, 0, 2, 14)).not.toContain('Q')
   })
 
-  it('shrinks the radius for a tiny bar instead of overshooting', () => {
-    expect(barPath(0, 0, 2, 14)).toContain('Q 2 0 2 2')
+  it('never draws a negative width', () => {
+    expect(barPath(5, 0, -3, 14)).toBe('M 5 0 H 5 V 14 H 5 Z')
   })
 
-  it('draws a column from the baseline up, rounded at the top', () => {
-    const d = columnPath(10, 100, 20, 50)
-    expect(d.startsWith('M 10 100')).toBe(true)
-    expect(d).toContain('Q 10 50 14 50')
+  it('draws a column from the baseline up, square on top', () => {
+    expect(columnPath(10, 100, 20, 50)).toBe('M 10 100 V 50 H 30 V 100 Z')
   })
 
   it('draws nothing for a zero value', () => {

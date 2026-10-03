@@ -4,7 +4,7 @@ import { yearColor } from '../../lib/charts'
 import { formatPeriodLabel, previousYearFor } from '../../lib/period'
 import { FIRST_YEAR, type IncidentType, formatCount } from '../../lib/registry'
 import { formatRate } from '../../lib/stats'
-import { incompleteYearNote, rateFor, rateText, yearTotalsFromRows } from '../../lib/statsCharts'
+import { LOW_POPULATION_TEXT, incompleteYearNote, rateFor, rateText, yearTotalsFor } from '../../lib/statsCharts'
 
 interface SummaryProps {
   years: number[]
@@ -33,8 +33,7 @@ export function Summary({ years, months, types, areaName, byType, byYear, previo
   const previousYear = previousYearFor(years, FIRST_YEAR)
   const change = previousPeriodCount ? ((total - previousPeriodCount) / previousPeriodCount) * 100 : null
 
-  const totals = yearTotalsFromRows(byYear)
-  const perYear = years.map((year) => totals.find((t) => t.year === year) ?? { year, count: 0, rate: 0 })
+  const perYear = yearTotalsFor(byYear, years)
 
   return (
     <section aria-labelledby="resumen-title" className="mt-4 border-y border-ink py-4">
@@ -85,9 +84,9 @@ function Figure({ label, value, warning, note }: { label: string; value: string;
       <dd className="mt-1 text-[32px] leading-none font-semibold text-ink sm:text-[40px]">
         {value}
         {warning && (
-          <span title="Población menor a 10.000 habitantes: la tasa es poco estable" className="ml-1 align-top text-[16px]">
+          <span title={LOW_POPULATION_TEXT} className="ml-1 align-top text-[16px]">
             <span aria-hidden="true">⚠</span>
-            <span className="sr-only">Población menor a 10.000 habitantes: la tasa es poco estable.</span>
+            <span className="sr-only">{LOW_POPULATION_TEXT}.</span>
           </span>
         )}
       </dd>

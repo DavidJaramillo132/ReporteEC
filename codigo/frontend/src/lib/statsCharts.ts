@@ -22,7 +22,12 @@ export function rateFor(count: number, population: number | null | undefined): n
   return population ? (count / population) * 100000 : null
 }
 
-const LOW_POPULATION_NOTE = 'población menor a 10.000: tasa poco estable'
+/**
+ * What ⚠ means. The flag is computed on the population base of the whole
+ * period (summed over the selected years), so the text names that base, not
+ * the place's population.
+ */
+export const LOW_POPULATION_TEXT = 'Base de población pequeña en el período (menos de 10.000): la tasa es poco estable'
 
 export interface ChartBar {
   key: string
@@ -33,7 +38,7 @@ export interface ChartBar {
   valueLabel: string
   /** The other figure, for the tooltip and the table. */
   detail: string
-  /** Under 10.000 inhabitants: the rate is unstable (marked ⚠). */
+  /** A population base under 10.000 for the period: the rate is unstable (marked ⚠). */
   lowPopulation?: boolean
 }
 
@@ -57,7 +62,7 @@ export function typeBars(rows: StatsRow[], types: IncidentType[]): (ChartBar & {
 /**
  * Places ranked by rate (highest first, at most `limit`), as bars whose length
  * is the rate. The label reads «66,1 (3.456)»: the rate, then the count; a
- * place under 10.000 inhabitants keeps its ⚠. Places without a rate are left
+ * place whose population base for the period is under 10.000 keeps its ⚠. Places without a rate are left
  * out, as in rankByRate.
  */
 export function rateBars(rows: StatsRow[], limit = Infinity, unit = 'casos'): ChartBar[] {
@@ -66,7 +71,7 @@ export function rateBars(rows: StatsRow[], limit = Infinity, unit = 'casos'): Ch
     label: placeName(row.label),
     value: row.rate_per_100k,
     valueLabel: `${formatRate(row.rate_per_100k)}${row.low_population_warning ? ' ⚠' : ''} (${formatCount(row.count)})`,
-    detail: `${formatCount(row.count)} ${unit}${row.low_population_warning ? ` · ${LOW_POPULATION_NOTE}` : ''}`,
+    detail: `${formatCount(row.count)} ${unit}${row.low_population_warning ? ` · ${LOW_POPULATION_TEXT.toLowerCase()}` : ''}`,
     lowPopulation: row.low_population_warning,
   }))
 }
@@ -85,6 +90,18 @@ export function yearTotalsFromRows(rows: StatsRow[]): YearTotal[] {
 }
 
 /**
+ * One total per year in `years` (oldest first). A year the response has no
+ * row for counts 0 cases, but its rate is unknown (null): that response
+ * carries no population for it, and a made-up 0,0 would read as a real rate.
+ */
+export function yearTotalsFor(rows: StatsRow[], years: number[]): YearTotal[] {
+  const totals = yearTotalsFromRows(rows)
+  return [...new Set(years)]
+    .sort((a, b) => a - b)
+    .map((year) => totals.find((t) => t.year === year) ?? { year, count: 0, rate: null })
+}
+
+/**
  * Strong (selected years) and muted (other years) colours for the year-trend
  * columns, each pair taken from its section's own ramp (DESIGN.md): the
  * scoped extortion ramp, the `sello` ramp for traffic crashes, and neutral
@@ -93,7 +110,8 @@ export function yearTotalsFromRows(rows: StatsRow[]): YearTotal[] {
 export const TREND_COLORS = {
   extorsion: { strong: EXTORSION_COLOR.critico, muted: EXTORSION_COLOR.moderado },
   siniestros: { strong: SINIESTROS_COLOR.critico, muted: SINIESTROS_COLOR.moderado },
-  detentions: { strong: '#56626e', muted: '#9aa3ab' },
+  // ink-3 and --color-ink-faint: neutral greys that never mean "no data".
+  detentions: { strong: '#56626e', muted: '#929ba1' },
 } as const
 
 export interface TrendColumn {

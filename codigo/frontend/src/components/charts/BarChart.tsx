@@ -51,8 +51,8 @@ const LABEL_INSET = 6
 
 /**
  * Horizontal ranked bars: one row per category, label above its bar, the value
- * at the bar tip. Bars are at most 24px thick, square at the baseline and
- * rounded at the data end. The label's room is reserved before scaling, so a
+ * at the bar tip. Bars are at most 24px thick and square at every corner
+ * (DESIGN.md). The label's room is reserved before scaling, so a
  * value is never clipped by its own bar.
  */
 export function BarChart({

@@ -49,9 +49,10 @@ const MARKER_SIZE = 18
  * Columns grouped along an ordered axis (typically years), one column per
  * series in a fixed order, so each series keeps its place and colour in every
  * group and is compared on the shared zero baseline. Columns are at most 24px
- * with a 2px surface gap. The newest (last) group carries each series' mark on
- * its cap when there is room, as a direct label; the legend, the tooltip (one
- * readout per group, every series) and the table carry the rest.
+ * with a 2px surface gap, square at every corner (DESIGN.md). The newest
+ * (last) group carries each series' mark on its cap when there is room, as a
+ * direct label; the legend, the tooltip (one readout per group, every series)
+ * and the table carry the rest.
  */
 export function GroupedColumnChart({
   title,
@@ -132,7 +133,7 @@ export function GroupedColumnChart({
                       const x = padLeft + layout.columnX(gi, si)
                       return (
                         <g key={s.key} opacity={active !== null && active !== gi ? 0.55 : 1}>
-                          <path d={columnPath(x, baseline, layout.column, baseline - y(value), Math.min(4, layout.column / 2))} fill={s.color} />
+                          <path d={columnPath(x, baseline, layout.column, baseline - y(value))} fill={s.color} />
                           {showCaps && gi === lastGroup && s.marker && (
                             <svg
                               x={x + layout.column / 2 - capSize / 2}

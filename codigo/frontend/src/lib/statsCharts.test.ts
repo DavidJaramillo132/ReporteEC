@@ -11,6 +11,7 @@ import {
   trendLegend,
   typeBars,
   typesByYear,
+  yearTotalsFor,
   yearTotalsFromRows,
 } from './statsCharts'
 
@@ -61,7 +62,7 @@ describe('rateBars', () => {
   it('keeps the low-population mark in the label and explains it in the detail', () => {
     const [naves] = rateBars(rows, 1, 'denuncias')
     expect(naves.valueLabel).toBe('381,1 ⚠ (28)')
-    expect(naves.detail).toBe('28 denuncias · población menor a 10.000: tasa poco estable')
+    expect(naves.detail).toBe('28 denuncias · base de población pequeña en el período (menos de 10.000): la tasa es poco estable')
     expect(naves.lowPopulation).toBe(true)
   })
 })
@@ -93,6 +94,16 @@ describe('yearTotalsFromRows / trendColumns / trendLegend', () => {
     const colors = TREND_COLORS.extorsion
     expect(trendLegend(trendColumns(totals, [2024], colors), colors).map((l) => l.label)).toEqual(['Años elegidos', 'Otros años'])
     expect(trendLegend(trendColumns(totals, [2023, 2024, 2025], colors), colors).map((l) => l.label)).toEqual(['Años elegidos'])
+  })
+})
+
+describe('yearTotalsFor', () => {
+  it('keeps every selected year, and a year without a row has 0 cases but no rate (not 0,0)', () => {
+    const totals = yearTotalsFor([row({ key: '2025', count: 300, rate_per_100k: 1.5 })], [2025, 2024])
+    expect(totals).toEqual([
+      { year: 2024, count: 0, rate: null },
+      { year: 2025, count: 300, rate: 1.5 },
+    ])
   })
 })
 

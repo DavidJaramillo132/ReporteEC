@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from '../../lib/router'
+import { LOW_POPULATION_TEXT } from '../../lib/statsCharts'
 
 interface StatsSectionProps {
   id: string
@@ -37,5 +38,5 @@ export function ChartNote({ children }: { children: ReactNode }) {
 
 /** Explains the ⚠ next to a rate, only when some bar in the chart carries it. */
 export function LowPopulationNote({ shown }: { shown: boolean }) {
-  return shown ? <ChartNote>⚠ Población menor a 10.000 habitantes: la tasa es poco estable; léela junto con los casos.</ChartNote> : null
+  return shown ? <ChartNote>⚠ {LOW_POPULATION_TEXT}; léela junto con los casos.</ChartNote> : null
 }

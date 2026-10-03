@@ -202,10 +202,11 @@ export function Metodologia() {
 
         <Section id="poblacion-pequena" title="Cantones con poca población">
           <p>
-            Cuando la población de un cantón es menor a 10.000 habitantes, un solo caso de más o de menos cambia
-            mucho la tasa por 100.000 habitantes. Esas tasas aparecen marcadas con ⚠ en los gráficos y tablas de
-            estadísticas: son reales, pero conviene leerlas junto con el conteo, no solas. Con varios años elegidos,
-            el aviso mira la población sumada de esos años.
+            Cuando la base de población de un lugar en el período es pequeña (menos de 10.000 habitantes), un solo
+            caso de más o de menos cambia mucho la tasa por 100.000 habitantes. Esas tasas aparecen marcadas con ⚠ en
+            los gráficos y tablas de estadísticas: son reales, pero conviene leerlas junto con el conteo, no solas.
+            Con varios años elegidos, la base es la población sumada de esos años: un cantón pequeño puede dejar de
+            llevar la marca, porque varios años juntos le dan una base más grande y una tasa más estable.
           </p>
         </Section>
 

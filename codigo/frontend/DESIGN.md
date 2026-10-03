@@ -8,6 +8,7 @@ colors:
   ink: "#15212c"
   ink-2: "#384552"
   ink-3: "#56626e"
+  ink-faint: "#929ba1"
   rule-soft: "#c3cbc8"
   sello: "#1d4a73"
   sello-soft: "#d3dfe8"
@@ -114,17 +115,18 @@ Grouped as one role rather than tiered, because the four are co-equal, not a hie
 - **Night-Blue Ink** (`#15212c`): primary text, every 1px structural border, and the outline color for `oficial`/`verificado` marks.
 - **Ink, Secondary** (`#384552`): secondary text — subtitles, metadata rows, body copy in info panels, basemap place labels.
 - **Ink, Muted** (`#56626e`): tertiary/muted text — field labels, disabled captions; also the neutral hue the `ConfidenceChip` mark is drawn in, and the detentions heatmap's base tone.
+- **Ink, Faint** (`#929ba1`): ink-muted at 60% over paper, for de-emphasised chart marks only — the years outside the selection in the detentions trend. It never means "no data" (that is the choropleth's own `sin datos` grey, `#9aa3ab`).
 - **Soft Rule** (`#c3cbc8`): hairline dividers between list rows and table rows.
 
 ### Named Rules
 **The Two-Hue Rule.** Exactly two hue systems exist and they never mix. `sello` is the interface's one accent: it marks the masthead field and every active, selected, pressed, hovered, or focused control, everywhere in the product. The four incident-type inks mark what kind of case a record is, wherever it's drawn. This **retires the old Four Inks Rule**, which spent hue on confidence instead of type — a rule the data itself broke, since V1 is entirely `oficial` and confidence-as-hue painted every mark the same color (decided 2026-09-25, see `PRODUCT.md`). Confidence is drawn only as mark style now, never a hue.
 
-**Scoped exception: canton choropleths (decided 2026-09-26).** The canton layers are data fields, not marks or interface state. Siniestros uses a lightness ramp of `sello` and adds no hue. The extortion semáforo uses one warm-red family in four lightness steps, and fill opacity rises with the class as a cue that does not depend on color. Both appear only while their canton layer is switched on, and each has its own legend. Nothing else may reuse the extortion ramp.
+**Scoped exception: canton choropleths (decided 2026-09-26).** The canton layers are data fields, not marks or interface state. Siniestros uses a lightness ramp of `sello` and adds no hue. The extortion semáforo uses one warm-red family in four lightness steps, and fill opacity rises with the class as a cue that does not depend on color. On the map, both appear only while their canton layer is switched on, and each has its own legend. Off the map, the same two ramps are reused only by the Extorsión and Siniestros sections of Estadísticas, for those same indicators (see Chart color jobs below); nothing else may reuse the extortion ramp.
 
 **Chart color jobs (Estadísticas, decided 2026-10-03).** Charts add no hue; each color does one job, taken from the tokens above:
 - **Incident type** → the four type inks, always together with the type's `Mark` (shape) and its name: in the legend, next to each bar, in the tooltip, and on the newest group's column caps. Two inks fail the dataviz validator's lightness/chroma checks (sicariato too dark, desaparecida low chroma) while passing color-vision separation, so the mark and the direct label are mandatory, never optional.
 - **Year** (ordinal) → a lightness ramp of `sello`, `#7fa1bf` (oldest selected) to `#1d4a73` (newest). A year's shade depends on its rank in the selection, so every chart on one page passes the same selected years.
-- **Selected vs. other years** (a trend over every year the source has) → emphasis inside the section's own ramp: extortion `#6e1f14` / `#c98a5c`, traffic crashes `#1d4a73` / `#7fa1bf`, detentions `#56626e` / `#9aa3ab` (neutral greys only: police activity never takes a type ink or the incident ramp).
+- **Selected vs. other years** (a trend over every year the source has) → emphasis inside the section's own ramp: extortion `#6e1f14` / `#c98a5c`, traffic crashes `#1d4a73` / `#7fa1bf`, detentions `#56626e` / `#929ba1` (ink-muted and ink-faint: police activity never takes a type ink or the incident ramp, and the muted grey is not the choropleth's "no data" grey).
 - **One series of places** (rankings) → a single color for every bar: `sello`, or the section's strong step.
 
 ## Typography
@@ -223,7 +225,7 @@ A routed page (`src/pages/Estadisticas.tsx`, its sections in `src/pages/estadist
 ### Charts (`src/components/charts/`)
 Hand-built SVG, no chart library: `BarChart` (horizontal, ranked), `ColumnChart` (an ordered axis, usually years), `GroupedColumnChart` (one column per series inside each year) and `LineChart`, all inside `ChartFrame`. Every chart has a title, a legend when it has two or more series, a tooltip that hover and keyboard focus share (the plot is one tab stop; arrows walk the marks), selective direct labels, and a «Ver tabla» button that reveals the same numbers as a real table. Count and rate always travel together (label, tooltip or table); there is never a second axis. Marks are thin (bars and columns at most 24px, lines 2px), gridlines are solid hairlines, and text wears ink tokens, never the series color. Layout is measured in real pixels so labels keep their size at 390px. No animation.
 
-**Chart marks are the one place a corner rounds besides a `Mark`:** a bar or column rounds its data end (4px) and stays square on its baseline, so its length reads from a hard edge. Containers, controls and the chart frame itself keep the Square Corner Rule.
+Bars and columns follow the Square Corner Rule: square at every corner, so a length reads from a hard edge at both ends.
 
 ## Do's and Don'ts
 
@@ -241,7 +243,7 @@ Hand-built SVG, no chart library: `BarChart` (horizontal, ranked), `ColumnChart`
 ### Don't:
 - **Don't** use hue for confidence anywhere — that rule is retired; confidence is mark style only.
 - **Don't** introduce a second interface accent alongside `sello`; paper and ink stay neutral everywhere off a Mark.
-- **Don't** round a corner. 0 radius is the rule; a filled circle is reserved for marks and the small active-state halo behind one. The one other exception is a chart bar's or column's 4px data end (see Charts).
+- **Don't** round a corner. 0 radius is the rule; a filled circle is reserved for marks and the small active-state halo behind one. Chart bars and columns are square too.
 - **Don't** add a hue for a chart: years are a `sello` lightness ramp, types are the four inks with their marks, detentions are greys.
 - **Don't** use `.label` (the uppercase, condensed 12px caption style) as a decorative eyebrow above a heading.
 - **Don't** ship a working-looking control for a feature that isn't live yet; the "Reportar" entry point is deliberately hatched and its popover states plainly that it arrives in a future version.

@@ -3,6 +3,7 @@ import type { CantonIndicatorRow, CantonIndicatorYearTotal, StatsRow, Timeseries
 import { getCantonIndicators, getCantonIndicatorsSummary, getStats, getStatsTimeseries } from '../../lib/api'
 import { previousYearFor } from '../../lib/period'
 import { FIRST_YEAR, type Filters } from '../../lib/registry'
+import { filtersKey, statsView } from './statsView'
 
 export interface CantonIndicatorData {
   /** National total per available year. */
@@ -14,8 +15,8 @@ export interface CantonIndicatorData {
 }
 
 export interface StatsBundle {
-  /** The filters these numbers were loaded for (see `filtersKey`). */
-  key: string
+  /** The filters these numbers were loaded for: every caption is drawn from them. */
+  filters: Filters
   /** Every type, whatever the type filter: the filter chips count them all. */
   byType: StatsRow[]
   byPlace: StatsRow[]
@@ -33,24 +34,19 @@ export interface StatsBundle {
   siniestros: CantonIndicatorData
 }
 
-export function filtersKey(filters: Filters): string {
-  return JSON.stringify([filters.years, filters.months, filters.types, filters.province, filters.canton])
-}
-
 /**
  * Every number the Estadísticas page shows, for the current filters, in one
- * round of requests. While a new round loads, the previous bundle stays on
- * screen (marked `loading`) so the page never jumps back to a skeleton.
+ * round of requests. While a new round loads (or after it fails), the
+ * previous bundle stays on screen, marked stale, together with the filters it
+ * belongs to; see statsView.
  */
 export function useStatsData(filters: Filters) {
-  const key = filtersKey(filters)
   const [data, setData] = useState<StatsBundle | null>(null)
-  const [errorKey, setErrorKey] = useState<string | null>(null)
+  const [failedKey, setFailedKey] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
     const signal = controller.signal
-    const loadKey = filtersKey(filters)
     const { years, months, types } = filters
     const place = { province: filters.province, canton: filters.canton }
     const previousYear = previousYearFor(years, FIRST_YEAR)
@@ -92,7 +88,7 @@ export function useStatsData(filters: Filters) {
           siniestrosRanking,
         ]) => {
           setData({
-            key: loadKey,
+            filters,
             byType: byType.rows,
             byPlace: byPlace.rows,
             cantonRanking: cantonRanking.rows,
@@ -105,19 +101,18 @@ export function useStatsData(filters: Filters) {
             extorsion: { summary: extorsionSummary.years, rows: extorsionRanking.rows, usedYears: extorsionRanking.years },
             siniestros: { summary: siniestrosSummary.years, rows: siniestrosRanking.rows, usedYears: siniestrosRanking.years },
           })
-          setErrorKey(null)
+          setFailedKey(null)
         },
       )
       .catch((error: unknown) => {
         if (!signal.aborted) {
           console.error(error)
-          setErrorKey(loadKey)
+          setFailedKey(filtersKey(filters))
         }
       })
 
     return () => controller.abort()
   }, [filters])
 
-  const failed = errorKey === key
-  return { data, loading: data?.key !== key && !failed, failed }
+  return { data, ...statsView(data, filters, failedKey) }
 }
