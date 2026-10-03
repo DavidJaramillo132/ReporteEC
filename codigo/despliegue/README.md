@@ -292,12 +292,17 @@ límites de memoria (el VPS no tiene swap).
    rec up -d --build
    rec run --rm backend alembic upgrade head
    ```
-4. **Datos:** primero los cantones (los homicidios sin coordenadas usan su
-   centroide), luego el resto. Usa `worker`, que tiene más memoria:
+4. **Datos**, en este orden. Usa `worker`, que tiene más memoria.
+   - Primero los archivos del Ministerio: crean los nombres de provincias y
+     cantones con los que se emparejan los límites.
+   - Después los cantones y la población.
+   - Por último, `homicidios --force`, que agrega los casos sin coordenadas
+     ubicándolos en el centroide de su cantón.
    ```bash
+   rec run --rm worker python -m app.modules.ingestion all
    rec run --rm worker python -m app.modules.ingestion cantons --file /data/raw/dpa/cantones_ecuador_simplificado.geojson
    rec run --rm worker python -m app.modules.ingestion population --file /data/raw/poblacion/Total_cantonal_2010-2035.xlsx
-   rec run --rm worker python -m app.modules.ingestion all
+   rec run --rm worker python -m app.modules.ingestion homicidios --force
    rec run --rm worker python -m app.modules.ingestion extorsion --file /data/raw/oeco/noticias_delito_2019_2025.csv
    # Un archivo por año: anual cuando existe (el de 2021 trae también 2014–2020), si no, trimestrales.
    rec run --rm worker python -m app.modules.ingestion siniestros \
