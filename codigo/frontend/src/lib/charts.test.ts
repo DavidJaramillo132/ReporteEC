@@ -1,0 +1,177 @@
+import { describe, expect, it } from 'vitest'
+import {
+  SELLO,
+  SELLO_LIGHT,
+  bandLayout,
+  barPath,
+  columnPath,
+  mixHex,
+  nearestIndex,
+  niceScale,
+  seriesByYear,
+  tooltipPlacement,
+  yearColor,
+} from './charts'
+
+describe('yearColor', () => {
+  const years = [2022, 2023, 2024, 2025]
+
+  it('makes the newest year sello and the oldest the lightest step', () => {
+    expect(yearColor(2025, years)).toBe(SELLO)
+    expect(yearColor(2022, years)).toBe(SELLO_LIGHT)
+  })
+
+  it('darkens monotonically with the year', () => {
+    const channel = (hex: string) => parseInt(hex.slice(1, 3), 16)
+    const reds = years.map((year) => channel(yearColor(year, years)))
+    expect(reds).toEqual([...reds].sort((a, b) => b - a))
+    expect(new Set(reds).size).toBe(years.length)
+  })
+
+  it('is independent of the order or duplicates in the input', () => {
+    expect(yearColor(2023, [2025, 2022, 2024, 2023, 2023])).toBe(yearColor(2023, years))
+  })
+
+  it('uses plain sello for a single year or a year outside the set', () => {
+    expect(yearColor(2025, [2025])).toBe(SELLO)
+    expect(yearColor(2019, years)).toBe(SELLO)
+  })
+
+  it('keeps a year the same colour whatever else is selected only by rank, not by value', () => {
+    expect(yearColor(2024, [2023, 2024])).toBe(SELLO)
+  })
+})
+
+describe('mixHex', () => {
+  it('returns the ends and a midpoint', () => {
+    expect(mixHex('#000000', '#ffffff', 0)).toBe('#000000')
+    expect(mixHex('#000000', '#ffffff', 1)).toBe('#ffffff')
+    expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080')
+  })
+})
+
+describe('niceScale', () => {
+  it('rounds the top up to a clean tick', () => {
+    expect(niceScale(87)).toEqual({ max: 100, ticks: [0, 20, 40, 60, 80, 100] })
+  })
+
+  it('covers the maximum and starts at zero', () => {
+    for (const value of [1, 7, 123, 4890, 15300, 99999]) {
+      const { max, ticks } = niceScale(value)
+      expect(ticks[0]).toBe(0)
+      expect(max).toBeGreaterThanOrEqual(value)
+      expect(ticks[ticks.length - 1]).toBe(max)
+    }
+  })
+
+  it('uses evenly spaced 1/2/5 steps', () => {
+    const { ticks } = niceScale(4890)
+    expect(ticks).toEqual([0, 1000, 2000, 3000, 4000, 5000])
+  })
+
+  it('gives an empty or all-zero series a usable axis', () => {
+    expect(niceScale(0)).toEqual({ max: 1, ticks: [0, 1] })
+    expect(niceScale(-3).max).toBe(1)
+  })
+
+  it('does not add a spare tick when the maximum is exactly on a step', () => {
+    expect(niceScale(100).max).toBe(100)
+  })
+})
+
+describe('bandLayout', () => {
+  it('caps the mark thickness and centres it in its band', () => {
+    const layout = bandLayout(2, 400, 24)
+    expect(layout.thickness).toBe(24)
+    expect(layout.start(0)).toBe(88)
+    expect(layout.start(1)).toBe(288)
+  })
+
+  it('leaves air between marks in a tight band', () => {
+    const layout = bandLayout(10, 100, 24)
+    expect(layout.thickness).toBeLessThan(layout.step)
+    expect(layout.thickness).toBeGreaterThan(0)
+  })
+})
+
+describe('nearestIndex', () => {
+  it('snaps to the closest position', () => {
+    expect(nearestIndex(48, [10, 50, 90])).toBe(1)
+    expect(nearestIndex(-100, [10, 50, 90])).toBe(0)
+    expect(nearestIndex(500, [10, 50, 90])).toBe(2)
+  })
+
+  it('returns -1 with nothing to snap to', () => {
+    expect(nearestIndex(5, [])).toBe(-1)
+  })
+})
+
+describe('barPath / columnPath', () => {
+  it('draws a bar square at the baseline and rounded at the end', () => {
+    const d = barPath(0, 10, 100, 14)
+    expect(d.startsWith('M 0 10')).toBe(true)
+    expect(d).toContain('Q 100 10 100 14')
+    expect(d.endsWith('H 0 Z')).toBe(true)
+  })
+
+  it('shrinks the radius for a tiny bar instead of overshooting', () => {
+    expect(barPath(0, 0, 2, 14)).toContain('Q 2 0 2 2')
+  })
+
+  it('draws a column from the baseline up, rounded at the top', () => {
+    const d = columnPath(10, 100, 20, 50)
+    expect(d.startsWith('M 10 100')).toBe(true)
+    expect(d).toContain('Q 10 50 14 50')
+  })
+
+  it('draws nothing for a zero value', () => {
+    expect(columnPath(10, 100, 20, 0)).toBe('')
+  })
+})
+
+describe('tooltipPlacement', () => {
+  it('opens right of and below an anchor in the top-left', () => {
+    const p = tooltipPlacement(0.2, 0.2)
+    expect(p.left).toBe('20%')
+    expect(p.top).toBe('20%')
+    expect(p.transform).toBe('translate(12px, 12px)')
+  })
+
+  it('flips left past the midpoint and above past 60% of the height', () => {
+    expect(tooltipPlacement(0.9, 0.2).transform).toBe('translate(calc(-100% - 12px), 12px)')
+    expect(tooltipPlacement(0.2, 0.9).transform).toBe('translate(12px, calc(-100% - 12px))')
+  })
+
+  it('clamps anchors outside the box', () => {
+    const p = tooltipPlacement(-1, 4)
+    expect(p.left).toBe('0%')
+    expect(p.top).toBe('100%')
+  })
+})
+
+describe('seriesByYear', () => {
+  const points = [
+    { year: 2025, month: 1, count: 5 },
+    { year: 2025, month: 2, count: 7 },
+    { year: 2024, month: 2, count: 3 },
+  ]
+
+  it('builds one ascending series per year over exactly the selected months', () => {
+    const result = seriesByYear(points, [2025, 2024], [1, 2])
+    expect(result.map((s) => s.year)).toEqual([2024, 2025])
+    expect(result[0].values).toEqual([
+      { month: 1, count: 0 },
+      { month: 2, count: 3 },
+    ])
+    expect(result[1].values).toEqual([
+      { month: 1, count: 5 },
+      { month: 2, count: 7 },
+    ])
+  })
+
+  it('keeps a year with no rows as zeros and ignores months outside the selection', () => {
+    const result = seriesByYear(points, [2023, 2025], [2])
+    expect(result[0]).toEqual({ year: 2023, values: [{ month: 2, count: 0 }] })
+    expect(result[1].values).toEqual([{ month: 2, count: 7 }])
+  })
+})
