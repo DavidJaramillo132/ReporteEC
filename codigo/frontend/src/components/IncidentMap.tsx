@@ -43,6 +43,8 @@ interface IncidentMapProps {
   cantonRows: CantonIndicatorRow[]
   /** The years `cantonRows` cover, already formatted -- shown in the click popup. */
   cantonYears: string
+  /** How many years `cantonYears` spans: with several, the popup's rate is a per-year average. */
+  cantonYearCount: number
   selectedId: number | null
   /** The selected incident's own coordinates, from the click event that selected it -- used only to keep IncidentCard anchored to its point as the map moves. */
   selectedCoordinates: [number, number] | null
@@ -67,6 +69,7 @@ export function IncidentMap({
   cantonLayer,
   cantonRows,
   cantonYears,
+  cantonYearCount,
   selectedId,
   selectedCoordinates,
   initialView,
@@ -93,6 +96,7 @@ export function IncidentMap({
     cantonLayer,
     cantonRows,
     cantonYears,
+    cantonYearCount,
   })
   useEffect(() => {
     latest.current = {
@@ -106,6 +110,7 @@ export function IncidentMap({
       cantonLayer,
       cantonRows,
       cantonYears,
+      cantonYearCount,
     }
   })
 
@@ -218,14 +223,14 @@ export function IncidentMap({
       })
 
       map.on('click', 'cantons-fill', (event) => {
-        const { cantonLayer: activeLayer, cantonRows: rows, cantonYears: years } = latest.current
+        const { cantonLayer: activeLayer, cantonRows: rows, cantonYears: years, cantonYearCount: yearCount } = latest.current
         if (activeLayer === 'none') return
         const code = event.features?.[0]?.properties?.code as string | undefined
         const row = code ? rows.find((r) => r.code === code) : undefined
         if (!row) return
         new Popup({ closeButton: true, maxWidth: '260px' })
           .setLngLat(event.lngLat)
-          .setHTML(buildCantonPopupHtml(activeLayer, row, years))
+          .setHTML(buildCantonPopupHtml(activeLayer, row, years, yearCount))
           .addTo(map)
       })
       map.on('mouseenter', 'cantons-fill', () => {

@@ -1,7 +1,7 @@
 import { ColumnChart } from '../../components/charts/ColumnChart'
 import type { StatsRow } from '../../lib/api'
 import { yearColor } from '../../lib/charts'
-import { formatPeriodLabel, previousYearFor } from '../../lib/period'
+import { formatPeriodLabel, previousYearFor, rateLabel } from '../../lib/period'
 import { FIRST_YEAR, type IncidentType, formatCount } from '../../lib/registry'
 import { formatRate } from '../../lib/stats'
 import { LOW_POPULATION_TEXT, incompleteYearNote, rateFor, rateText, yearTotalsFor } from '../../lib/statsCharts'
@@ -44,7 +44,7 @@ export function Summary({ years, months, types, areaName, byType, byYear, previo
         <dl className="grid grid-cols-2 content-start gap-x-6 gap-y-4 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
           <Figure label="Casos" value={formatCount(total)} />
           <Figure
-            label={several ? 'Tasa por 100.000 hab., promedio por año' : 'Tasa por 100.000 hab.'}
+            label={rateLabel('Tasa por 100.000 hab.', years.length)}
             value={formatRate(rate)}
             warning={lowPopulation}
           />

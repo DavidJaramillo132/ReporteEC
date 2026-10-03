@@ -1,7 +1,7 @@
 import { BarChart } from '../../components/charts/BarChart'
 import { ColumnChart } from '../../components/charts/ColumnChart'
 import { CANTON_INDICATOR_LABEL, indicatorRowsToStatsRows, noDataMessage } from '../../lib/cantonChoropleth'
-import { formatYears } from '../../lib/period'
+import { formatYears, rateLabel } from '../../lib/period'
 import { formatRate } from '../../lib/stats'
 import { TREND_COLORS, rateBars, trendColumns, trendLegend } from '../../lib/statsCharts'
 import { ChartNote, LowPopulationNote, StatsSection } from './StatsSection'
@@ -50,11 +50,11 @@ export function CantonIndicatorSection({ indicator, id, title, measures, anchor,
       <div>
         <BarChart
           title={`Cantones con mayor tasa (15)${data.usedYears.length ? `, ${formatYears(data.usedYears)}` : ''}`}
-          subtitle={`Tasa por 100.000 habitantes y, entre paréntesis, el total de ${unit}.`}
+          subtitle={`${rateLabel('Tasa por 100.000 habitantes', data.usedYears.length)} y, entre paréntesis, el total de ${unit}.`}
           data={top}
           color={colors.strong}
           formatValue={formatRate}
-          valueHeader="Tasa por 100.000"
+          valueHeader={rateLabel('Tasa por 100.000', data.usedYears.length)}
           detailHeader={capitalUnit}
           categoryHeader="Cantón"
           emptyText={noDataMessage(indicator, formatYears(years))}

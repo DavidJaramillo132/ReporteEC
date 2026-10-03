@@ -163,7 +163,8 @@ export function Mapa({
   const cantonRows = cantonDataFresh?.rows ?? []
   // The years the backend actually used (selected years with data); the
   // selected ones while loading.
-  const cantonYears = formatYears(cantonDataFresh?.years.length ? cantonDataFresh.years : activeFilters.years)
+  const cantonYearList = cantonDataFresh?.years.length ? cantonDataFresh.years : activeFilters.years
+  const cantonYears = formatYears(cantonYearList)
   const cantonHasNoData = cantonDataFresh !== null && cantonDataFresh.years.length === 0
   const cantonLatestYear = cantonDataFresh?.available_years.length ? Math.max(...cantonDataFresh.available_years) : null
 
@@ -216,6 +217,7 @@ export function Mapa({
             cantonLayer={cantonLayer}
             cantonRows={cantonRows}
             cantonYears={cantonYears}
+            cantonYearCount={cantonYearList.length}
             selectedId={selection?.id ?? null}
             selectedCoordinates={selection?.coordinates ?? null}
             initialView={mapView}
@@ -236,6 +238,7 @@ export function Mapa({
             cantonLayer={cantonLayer}
             cantonBreakpoints={cantonDataFresh?.breakpoints ?? null}
             cantonYears={cantonYears}
+            cantonYearCount={cantonYearList.length}
             onShowIntro={onShowIntro}
           />
 

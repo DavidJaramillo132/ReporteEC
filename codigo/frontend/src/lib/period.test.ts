@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  rateLabel,
   formatMonths,
   formatPeriodLabel,
   formatYears,
@@ -109,5 +110,15 @@ describe('previousYearFor', () => {
 
   it('is null before the first year', () => {
     expect(previousYearFor([2019], 2019)).toBeNull()
+  })
+})
+
+describe('rateLabel', () => {
+  it('keeps the text for a single year', () => {
+    expect(rateLabel('Tasa por 100.000 hab.', 1)).toBe('Tasa por 100.000 hab.')
+  })
+
+  it('marks the rate as a per-year average for several years', () => {
+    expect(rateLabel('Tasa por 100.000 hab.', 3)).toBe('Tasa por 100.000 hab., promedio por año')
   })
 })

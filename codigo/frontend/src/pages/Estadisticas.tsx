@@ -147,6 +147,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
                   <TerritorySection
                     provinceName={provinceName}
                     cantonSelected={shown.canton !== null}
+                    years={shown.years}
                     byPlace={data.byPlace}
                     cantonRanking={data.cantonRanking}
                   />

@@ -1,6 +1,7 @@
 import { BarChart } from '../../components/charts/BarChart'
 import { ColumnChart } from '../../components/charts/ColumnChart'
 import type { StatsRow } from '../../lib/api'
+import { rateLabel } from '../../lib/period'
 import { formatRate } from '../../lib/stats'
 import { TREND_COLORS, incompleteYearNote, rateBars, trendColumns, trendLegend, yearTotalsFromRows } from '../../lib/statsCharts'
 import { LowPopulationNote, StatsSection } from './StatsSection'
@@ -48,11 +49,11 @@ export function PoliceSection({ years, months, periodTo, detentionsByYear, deten
       <div>
         <BarChart
           title="Provincias, por tasa de detenciones"
-          subtitle="Tasa por 100.000 habitantes y, entre paréntesis, el total de detenciones."
+          subtitle={`${rateLabel('Tasa por 100.000 habitantes', years.length)} y, entre paréntesis, el total de detenciones.`}
           data={provinces}
           color={colors.strong}
           formatValue={formatRate}
-          valueHeader="Tasa por 100.000"
+          valueHeader={rateLabel('Tasa por 100.000', years.length)}
           detailHeader="Detenciones"
           categoryHeader="Provincia"
         />

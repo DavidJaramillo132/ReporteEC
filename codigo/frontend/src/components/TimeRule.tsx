@@ -14,6 +14,15 @@ interface TimeRuleProps {
 }
 
 /**
+ * Shortcut links stay mounted so keyboard focus survives a click; when their
+ * result is already the selection they read as spent (aria-disabled, no-op).
+ */
+const quickLink = (spent: boolean) =>
+  `ml-3 shrink-0 text-[13px] underline underline-offset-3 ${
+    spent ? 'cursor-default text-ink-3 no-underline' : 'hover:no-underline'
+  }`
+
+/**
  * The one moving axis of the page: a ruled scale of years (each one toggles
  * in or out of the selection) and the months that apply to every selected
  * year beneath it.
@@ -62,20 +71,26 @@ export function TimeRule({ years: selectedYears, months, availableYears, lastMon
               )
             })}
           </div>
-          {!everyYearSelected && availableYears.length > 1 && (
+          {availableYears.length > 1 && (
             <button
               type="button"
-              onClick={() => onYears([...availableYears].sort((a, b) => a - b))}
-              className="ml-3 shrink-0 text-[13px] underline underline-offset-3 hover:no-underline"
+              aria-disabled={everyYearSelected}
+              onClick={() => {
+                if (!everyYearSelected) onYears([...availableYears].sort((a, b) => a - b))
+              }}
+              className={quickLink(everyYearSelected)}
             >
-              Todos
+              Todos los años
             </button>
           )}
-          {!onlyLatestSelected && latestYear !== null && (
+          {latestYear !== null && (
             <button
               type="button"
-              onClick={() => onYears([latestYear])}
-              className="ml-3 shrink-0 text-[13px] underline underline-offset-3 hover:no-underline"
+              aria-disabled={onlyLatestSelected}
+              onClick={() => {
+                if (!onlyLatestSelected) onYears([latestYear])
+              }}
+              className={quickLink(onlyLatestSelected)}
             >
               Último
             </button>
@@ -110,15 +125,16 @@ export function TimeRule({ years: selectedYears, months, availableYears, lastMon
               )
             })}
           </div>
-          {!allSelected && (
-            <button
-              type="button"
-              onClick={() => onMonths(published)}
-              className="ml-3 text-[13px] underline underline-offset-3 hover:no-underline"
-            >
-              Todos los meses
-            </button>
-          )}
+          <button
+            type="button"
+            aria-disabled={allSelected}
+            onClick={() => {
+              if (!allSelected) onMonths(published)
+            }}
+            className={quickLink(allSelected)}
+          >
+            Todos los meses
+          </button>
         </fieldset>
       </div>
     </div>

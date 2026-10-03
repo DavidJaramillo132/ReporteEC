@@ -98,3 +98,12 @@ export function formatPeriodLabel(years: number[], months: number[]): string {
   if (years.length === 1) return `${formatMonths(months)} ${years[0]}`
   return `${formatYears(years)}, ${formatMonths(months)}`
 }
+
+/**
+ * With several selected years every rate is a per-year average (cases over all
+ * the years divided by the population summed over them). A rate label says so;
+ * with one year the label is unchanged.
+ */
+export function rateLabel(base: string, yearCount: number): string {
+  return yearCount > 1 ? `${base}, promedio por año` : base
+}

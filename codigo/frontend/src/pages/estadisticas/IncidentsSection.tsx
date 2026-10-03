@@ -4,7 +4,7 @@ import { LineChart } from '../../components/charts/LineChart'
 import { typeSeries } from '../../components/charts/typeEncoding'
 import type { StatsRow, TimeseriesPoint } from '../../lib/api'
 import { yearColor } from '../../lib/charts'
-import { formatPeriodLabel } from '../../lib/period'
+import { formatPeriodLabel, rateLabel } from '../../lib/period'
 import { type IncidentType, MONTHS } from '../../lib/registry'
 import { formatRate } from '../../lib/stats'
 import { incompleteYearNote, monthlyLinesByYear, rateFor, typeBars, typesByYear } from '../../lib/statsCharts'
@@ -50,10 +50,10 @@ export function IncidentsSection({ years, months, types, byType, timeseries, byY
     <StatsSection id="incidentes" title="Incidentes" measures={`Casos por tipo y por mes, ${period}.`} anchor="conteo-y-tasa">
       <BarChart
         title="Casos por tipo"
-        subtitle="Casos y, entre paréntesis, la tasa por 100.000 habitantes."
+        subtitle={`Casos y, entre paréntesis, ${rateLabel('la tasa por 100.000 habitantes', years.length)}.`}
         data={bars}
         valueHeader="Casos"
-        detailHeader="Tasa"
+        detailHeader={rateLabel('Tasa', years.length)}
         categoryHeader="Tipo"
         emptyText="No hay casos de los tipos elegidos en este período."
       />
