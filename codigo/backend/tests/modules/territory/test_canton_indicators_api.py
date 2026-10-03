@@ -329,3 +329,32 @@ def test_indicator_years_wins_over_year_and_legacy_year_still_works(
 def test_indicators_without_any_year_is_a_422(client: TestClient):
     response = client.get("/api/cantons/indicators", params={"indicator": "siniestros"})
     assert response.status_code == 422
+
+
+def test_canton_missing_population_for_a_selected_year_has_no_rate_or_class(
+    client: TestClient, db_session: Session
+):
+    source = make_source(db_session, slug="inec-estra")
+    for code in ("0901", "0902"):
+        _seed_canton(db_session, code, f"Canton {code}")
+        _seed_indicator(db_session, source.id, code, 2024, 5)
+        _seed_indicator(db_session, source.id, code, 2025, 5)
+    _seed_population(db_session, "0901", 2024, 50_000)
+    _seed_population(db_session, "0901", 2025, 50_000)
+    _seed_population(db_session, "0902", 2025, 50_000)  # no 2024 row: partial denominator
+    db_session.commit()
+
+    response = client.get(
+        "/api/cantons/indicators", params={"indicator": "siniestros", "years": "2024,2025"}
+    )
+
+    body = response.json()
+    rows = {row["code"]: row for row in body["rows"]}
+    assert rows["0902"]["value"] == 10
+    assert rows["0902"]["population"] is None
+    assert rows["0902"]["rate_per_100k"] is None
+    assert rows["0902"]["class"] is None
+    assert rows["0901"]["rate_per_100k"] == 10.0  # 10 / 100_000 * 100_000
+    assert rows["0901"]["class"] == "bajo"
+    # Only 0901 feeds the distribution.
+    assert body["breakpoints"] == pytest.approx({"p25": 10.0, "p50": 10.0, "p75": 10.0})

@@ -123,16 +123,23 @@ def get_canton_indicators(
     }
     population_by_canton: dict[str, int] = {
         code: int(total)
-        for code, total in session.execute(
-            select(CantonPopulation.canton_code, func.sum(CantonPopulation.population))
+        for code, total, year_count in session.execute(
+            select(
+                CantonPopulation.canton_code,
+                func.sum(CantonPopulation.population),
+                func.count(func.distinct(CantonPopulation.year)),
+            )
             .where(CantonPopulation.year.in_(used_years))
             .group_by(CantonPopulation.canton_code)
         ).all()
+        # A canton missing a population row for any used year has a partial
+        # denominator: treat it as having no population at all.
+        if year_count == len(used_years)
     }
     cantons = session.scalars(select(Canton).order_by(Canton.code)).all()
 
     # First pass: the rate distribution itself -- only a canton with value>0
-    # AND a known, non-zero population for this exact year contributes (see
+    # AND a known, non-zero population for EVERY selected year contributes (see
     # the module docstring on why value==0 is excluded, and the class
     # docstring above on why a missing/zero population is too).
     rates: list[float] = []
