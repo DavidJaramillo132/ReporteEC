@@ -2,7 +2,6 @@
 tags: [arquitectura, stack, infraestructura]
 actualizado: 2026-09-22
 ---
-
 # Stack e Infraestructura
 
 > [!success] Estado
@@ -13,31 +12,32 @@ actualizado: 2026-09-22
 
 ## Recomendación
 
-| Capa | Tecnología | Por qué |
-|---|---|---|
-| Base de datos | **PostgreSQL 17 + PostGIS 3** | Estándar para datos geográficos. Los datos ya vienen en WGS84 |
-| Ingesta (ETL y scraper) | **Python 3.12** | Lo mejor para leer XLSX/CSV, limpiar datos y consumir APIs. Los scripts actuales ya son Python |
-| Gestor del backend | **uv** | Crea el entorno, fija Python 3.12, instala dependencias y las congela en `uv.lock` |
-| Gestor del frontend | **Bun** | Instala dependencias y ejecuta Vite. Solo se usa para desarrollar y construir |
-| API | **FastAPI** (Python) | Mismo lenguaje que la ingesta: un solo lenguaje en todo el servidor |
-| Teselas del mapa | **Martin** | Servidor de teselas del propio proyecto MapLibre; genera el mapa directo desde PostGIS |
-| Frontend | **React + TypeScript + Vite + Tailwind CSS** | Aplicación centrada en el mapa; Vite es simple y rápido |
-| Mapa | **MapLibre GL JS** | Ya elegido. Tiene capa de mapa de calor nativa |
-| PWA | **vite-plugin-pwa** | Instalación, service worker y, en v2, notificaciones |
-| Contenedores | **Docker Compose** | Todo el sistema se levanta con un comando, igual en local y en el servidor |
-| Servidor web | **Caddy** | Ya elegido. HTTPS automático |
-| Servidor | **VPS Ubuntu Server en Azure** | Ya elegido. Para empezar alcanza con 2 vCPU y 4 GB de RAM |
-| Dominio | **GoDaddy** | Ya elegido. Solo apunta al IP del VPS |
+| Capa                    | Tecnología                                        | Por qué                                                                                       |
+| ----------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Base de datos           | **PostgreSQL 17 + PostGIS 3**                | Estándar para datos geográficos. Los datos ya vienen en WGS84                                |
+| Ingesta (ETL y scraper) | **Python 3.12**                              | Lo mejor para leer XLSX/CSV, limpiar datos y consumir APIs. Los scripts actuales ya son Python |
+| Gestor del backend      | **uv**                                       | Crea el entorno, fija Python 3.12, instala dependencias y las congela en`uv.lock`            |
+| Gestor del frontend     | **Bun**                                      | Instala dependencias y ejecuta Vite. Solo se usa para desarrollar y construir                  |
+| API                     | **FastAPI** (Python)                         | Mismo lenguaje que la ingesta: un solo lenguaje en todo el servidor                            |
+| Teselas del mapa        | **Martin**                                   | Servidor de teselas del propio proyecto MapLibre; genera el mapa directo desde PostGIS         |
+| Frontend                | **React + TypeScript + Vite + Tailwind CSS** | Aplicación centrada en el mapa; Vite es simple y rápido                                      |
+| Mapa                    | **MapLibre GL JS**                           | Ya elegido. Tiene capa de mapa de calor nativa                                                 |
+| PWA                     | **vite-plugin-pwa**                          | Instalación, service worker y, en v2, notificaciones                                          |
+| Contenedores            | **Docker Compose**                           | Todo el sistema se levanta con un comando, igual en local y en el servidor                     |
+| Servidor web            | **Caddy**                                    | Ya elegido. HTTPS automático                                                                  |
+| Servidor                | **VPS Ubuntu Server en Azure**               | Ya elegido. Para empezar alcanza con 2 vCPU y 4 GB de RAM                                      |
+| Dominio                 | **GoDaddy**                                  | Ya elegido. Solo apunta al IP del VPS                                                          |
 
 ### Solo para la v2
 
-| Necesidad | Tecnología |
-|---|---|
-| Tiempo real en el mapa | **Server-Sent Events** desde FastAPI + `LISTEN/NOTIFY` de PostgreSQL |
-| Notificaciones | **Web Push** con claves VAPID (`pywebpush` en el servidor) |
-| Imágenes de reportes | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia en `backend/app/modules/storage/` |
+| Necesidad              | Tecnología                                                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Tiempo real en el mapa | **Server-Sent Events** desde FastAPI + `LISTEN/NOTIFY` de PostgreSQL                                                              |
+| Notificaciones         | **Web Push** con claves VAPID (`pywebpush` en el servidor)                                                                        |
+| Imágenes de reportes  | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia en `backend/app/modules/storage/` |
 
 ### Almacenamiento analítico unificado
+
 PostgreSQL 17 con PostGIS 3 asume tanto el rol operacional (OLTP) como el analítico (OLAP). Con menos de 1 millón de registros esperados en la fase actual, la combinación de particionamiento anual, índices GiST espaciales y vistas materializadas resuelve las consultas estadísticas y de agregación en milisegundos, eliminando la necesidad de almacenes de datos externos (Data Warehouses).
 
 ## Decisiones cerradas por esta recomendación
@@ -82,10 +82,10 @@ declara Node en la primera línea. Para que corra con Bun, el script `dev` de
 "dev": "bunx --bun vite"
 ```
 
-| Comando | Para qué |
-|---|---|
-| `bun run dev` | Servidor de desarrollo |
-| `bun run build` | Genera los archivos finales en `dist/` |
+| Comando           | Para qué                               |
+| ----------------- | --------------------------------------- |
+| `bun run dev`   | Servidor de desarrollo                  |
+| `bun run build` | Genera los archivos finales en`dist/` |
 
 **Bun no corre en el servidor.** En producción Caddy sirve los archivos
 estáticos de `dist/`.
@@ -102,12 +102,12 @@ uv add "fastapi[standard]" sqlalchemy geoalchemy2 "psycopg[binary]" alembic http
 uv add --dev pytest ruff
 ```
 
-| Comando | Para qué |
-|---|---|
-| `uv run fastapi dev app/main.py` | La API en desarrollo |
-| `uv run python -m app.workers.historical_worker` | Un worker |
-| `uv run pytest` | Tests |
-| `uv run ruff check` | Revisión de estilo y errores |
+| Comando                                            | Para qué                     |
+| -------------------------------------------------- | ----------------------------- |
+| `uv run fastapi dev app/main.py`                 | La API en desarrollo          |
+| `uv run python -m app.workers.historical_worker` | Un worker                     |
+| `uv run pytest`                                  | Tests                         |
+| `uv run ruff check`                              | Revisión de estilo y errores |
 
 El sistema tiene Python 3.14, pero con `--python 3.12` uv descarga y usa esa
 versión solo para el proyecto, sin tocar la del sistema.
@@ -127,13 +127,13 @@ PostgreSQL + PostGIS, Martin, backend y frontend, con recarga automática al
 editar el código. El compose de producción, con Caddy, irá en
 `codigo/despliegue/`.
 
-| Archivo | Para qué |
-|---|---|
-| `codigo/docker-compose.yml` | Define los cuatro servicios |
-| `codigo/backend/Dockerfile` | Imagen del backend con uv (etapa `dev`) |
-| `codigo/frontend/Dockerfile` | Imagen del frontend con Bun (etapa `dev`) |
-| `codigo/.env.example` | Plantilla de variables, **sí** se sube a git |
-| `codigo/.env` | Tus valores reales, **no** se sube a git |
+| Archivo                        | Para qué                                          |
+| ------------------------------ | -------------------------------------------------- |
+| `codigo/docker-compose.yml`  | Define los cuatro servicios                        |
+| `codigo/backend/Dockerfile`  | Imagen del backend con uv (etapa`dev`)           |
+| `codigo/frontend/Dockerfile` | Imagen del frontend con Bun (etapa`dev`)         |
+| `codigo/.env.example`        | Plantilla de variables,**sí** se sube a git |
+| `codigo/.env`                | Tus valores reales,**no** se sube a git      |
 
 ```bash
 cd codigo

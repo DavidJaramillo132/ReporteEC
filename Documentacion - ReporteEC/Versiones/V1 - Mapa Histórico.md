@@ -179,7 +179,7 @@ Lista para revisar a mano antes de dar la V1 por terminada.
 - [ ] Cada marcador tiene el color de su nivel de confianza y el ícono de su
   tipo
 - [ ] Tocar un punto muestra tipo, fecha, lugar, fuente y enlace
-- [ ] Cambiar de año no cambia el color de los marcadores
+- [x] Cambiar de año no cambia el color de los marcadores
 - [ ] El mapa carga rápido con todos los años activados
 
 ### Filtros y estadísticas

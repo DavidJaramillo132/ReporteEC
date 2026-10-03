@@ -66,3 +66,11 @@ __pycache__/
 
 # impeccable design tool (local state, screenshots, live mode)
 .impeccable/
+
+# local AI-tool and editor caches inside the docs vault (never versioned)
+Documentacion - ReporteEC/.claude/
+Documentacion - ReporteEC/.copilot/
+Documentacion - ReporteEC/.opencode/
+# Obsidian plugin code and settings (a plugin's data.json can hold API keys);
+# community-plugins.json, the list of enabled plugins, stays versioned
+Documentacion - ReporteEC/.obsidian/plugins/
