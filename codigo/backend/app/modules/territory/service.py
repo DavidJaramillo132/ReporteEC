@@ -96,28 +96,39 @@ def classify(rate: float, breakpoints: Breakpoints) -> str:
 
 
 def get_canton_indicators(
-    session: Session, indicator: str, year: int
-) -> tuple[list[CantonIndicatorRow], Breakpoints | None, list[int]]:
+    session: Session, indicator: str, years: Sequence[int]
+) -> tuple[list[CantonIndicatorRow], Breakpoints | None, list[int], list[int]]:
+    """Per-canton value, population and quartile class over the selected years.
+
+    Only selected years present in `available_years` count. Each canton's value
+    is its sum over those years and its population the sum of its population
+    over the SAME years; quartiles are computed over those combined rates.
+    Returns (rows, breakpoints, available_years, years actually used).
+    """
     available_years = sorted(
         session.scalars(
             select(CantonIndicator.year).where(CantonIndicator.indicator == indicator).distinct()
         )
     )
 
-    value_by_canton: dict[str, int] = dict(
-        session.execute(
+    used_years = sorted(set(years) & set(available_years))
+
+    value_by_canton: dict[str, int] = {
+        code: int(total)
+        for code, total in session.execute(
             select(CantonIndicator.canton_code, func.sum(CantonIndicator.value))
-            .where(CantonIndicator.indicator == indicator, CantonIndicator.year == year)
+            .where(CantonIndicator.indicator == indicator, CantonIndicator.year.in_(used_years))
             .group_by(CantonIndicator.canton_code)
         ).all()
-    )
-    population_by_canton: dict[str, int] = dict(
-        session.execute(
-            select(CantonPopulation.canton_code, CantonPopulation.population).where(
-                CantonPopulation.year == year
-            )
+    }
+    population_by_canton: dict[str, int] = {
+        code: int(total)
+        for code, total in session.execute(
+            select(CantonPopulation.canton_code, func.sum(CantonPopulation.population))
+            .where(CantonPopulation.year.in_(used_years))
+            .group_by(CantonPopulation.canton_code)
         ).all()
-    )
+    }
     cantons = session.scalars(select(Canton).order_by(Canton.code)).all()
 
     # First pass: the rate distribution itself -- only a canton with value>0
@@ -163,7 +174,7 @@ def get_canton_indicators(
                 indicator_class=indicator_class,
             )
         )
-    return rows, breakpoints, available_years
+    return rows, breakpoints, available_years, used_years
 
 
 def get_indicator_summary(session: Session, indicator: str) -> list[IndicatorYearTotal]:

@@ -241,3 +241,91 @@ def test_summary_gives_national_yearly_totals_and_a_population_weighted_rate(
     assert response.json()["years"] == [
         {"year": 2024, "value": 10, "population": 100_000, "rate_per_100k": 10.0}
     ]
+
+
+# ---------------------------------------------------------------------------
+# Several years at once
+# ---------------------------------------------------------------------------
+
+
+def _seed_two_year_cantons(db_session: Session) -> None:
+    source = make_source(db_session, slug="inec-estra")
+    # (code, value 2024, value 2025, population 2024, population 2025):
+    # combined rates are exactly 10, 20, 30, 40 per 100.000 over 2024+2025.
+    for code, v24, v25, p24, p25 in (
+        ("0901", 4, 6, 60_000, 40_000),  # 10 / 100_000
+        ("0902", 5, 5, 20_000, 30_000),  # 10 / 50_000 -> 20
+        ("0903", 0, 15, 10_000, 40_000),  # 15 / 50_000 -> 30
+        ("0904", 10, 10, 25_000, 25_000),  # 20 / 50_000 -> 40
+    ):
+        _seed_canton(db_session, code, f"Canton {code}")
+        _seed_indicator(db_session, source.id, code, 2024, v24)
+        _seed_indicator(db_session, source.id, code, 2025, v25)
+        _seed_population(db_session, code, 2024, p24)
+        _seed_population(db_session, code, 2025, p25)
+        _seed_population(db_session, code, 2023, 1)  # must not leak into the sum
+    db_session.commit()
+
+
+def test_two_year_sums_and_quartiles_over_the_combined_rates(
+    client: TestClient, db_session: Session
+):
+    _seed_two_year_cantons(db_session)
+
+    response = client.get(
+        "/api/cantons/indicators", params={"indicator": "siniestros", "years": "2024,2025"}
+    )
+
+    body = response.json()
+    assert body["year"] == 2025
+    assert body["years"] == [2024, 2025]
+    assert body["breakpoints"] == pytest.approx({"p25": 10.0, "p50": 20.0, "p75": 30.0})
+    rows = {row["code"]: row for row in body["rows"]}
+    assert (rows["0901"]["value"], rows["0901"]["population"]) == (10, 100_000)
+    assert rows["0901"]["rate_per_100k"] == 10.0
+    assert rows["0901"]["class"] == "bajo"
+    assert (rows["0903"]["value"], rows["0903"]["population"]) == (15, 50_000)
+    assert rows["0902"]["class"] == "moderado"
+    assert rows["0903"]["class"] == "alto"
+    assert rows["0904"]["class"] == "critico"
+
+
+def test_a_selected_year_outside_available_years_is_ignored(
+    client: TestClient, db_session: Session
+):
+    _seed_two_year_cantons(db_session)
+
+    response = client.get(
+        "/api/cantons/indicators", params={"indicator": "siniestros", "years": "2023,2025"}
+    )
+
+    body = response.json()
+    assert body["year"] == 2025
+    assert body["years"] == [2025]  # 2023 has population but no indicator data
+    rows = {row["code"]: row for row in body["rows"]}
+    assert (rows["0901"]["value"], rows["0901"]["population"]) == (6, 40_000)
+
+
+def test_indicator_years_wins_over_year_and_legacy_year_still_works(
+    client: TestClient, db_session: Session
+):
+    _seed_two_year_cantons(db_session)
+
+    both = client.get(
+        "/api/cantons/indicators",
+        params={"indicator": "siniestros", "years": "2024,2025", "year": 2024},
+    ).json()
+    assert both["years"] == [2024, 2025]
+
+    legacy = client.get(
+        "/api/cantons/indicators", params={"indicator": "siniestros", "year": 2024}
+    ).json()
+    assert legacy["year"] == 2024
+    assert legacy["years"] == [2024]
+    rows = {row["code"]: row for row in legacy["rows"]}
+    assert (rows["0901"]["value"], rows["0901"]["population"]) == (4, 60_000)
+
+
+def test_indicators_without_any_year_is_a_422(client: TestClient):
+    response = client.get("/api/cantons/indicators", params={"indicator": "siniestros"})
+    assert response.status_code == 422

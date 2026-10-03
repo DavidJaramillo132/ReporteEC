@@ -200,3 +200,112 @@ def test_withdrawn_incidents_are_excluded(client: TestClient, db_session: Sessio
     response = client.get("/api/stats", params={"dimension": "type", "year": 2025})
 
     assert response.json()["rows"] == []
+
+
+def _seed_two_years(db_session: Session) -> None:
+    source = make_source(db_session)
+    _seed_place(db_session, "0901", "09")
+    _seed_population(db_session, "0901", 2023, 10_000)  # never selected below
+    _seed_population(db_session, "0901", 2024, 100_000)
+    _seed_population(db_session, "0901", 2025, 300_000)
+    for year, count in ((2023, 5), (2024, 3), (2025, 1)):
+        for _ in range(count):
+            make_incident(
+                db_session,
+                source,
+                occurred_at=datetime(year, 3, 1, 8, 0, tzinfo=GUAYAQUIL),
+                province_code="09",
+                canton_code="0901",
+            )
+    db_session.commit()
+
+
+def test_years_sums_counts_and_population_over_exactly_the_selected_years(
+    client: TestClient, db_session: Session
+):
+    _seed_two_years(db_session)
+
+    response = client.get(
+        "/api/stats", params={"dimension": "canton", "years": "2024,2025", "province": "09"}
+    )
+
+    row = response.json()["rows"][0]
+    assert row["count"] == 4  # 3 + 1; the 2023 incidents are out
+    assert row["population"] == 400_000  # 100_000 + 300_000, not 2023's
+    assert row["rate_per_100k"] == 1.0  # 4 / 400_000 * 100_000
+
+
+def test_years_wins_over_year_when_both_are_given(client: TestClient, db_session: Session):
+    _seed_two_years(db_session)
+
+    response = client.get(
+        "/api/stats",
+        params={"dimension": "canton", "years": "2024,2025", "year": 2023, "province": "09"},
+    )
+
+    row = response.json()["rows"][0]
+    assert row["count"] == 4
+    assert row["population"] == 400_000
+
+
+def test_legacy_year_still_selects_a_single_year(client: TestClient, db_session: Session):
+    _seed_two_years(db_session)
+
+    response = client.get(
+        "/api/stats", params={"dimension": "canton", "year": 2024, "province": "09"}
+    )
+
+    row = response.json()["rows"][0]
+    assert row["count"] == 3
+    assert row["population"] == 100_000
+    assert row["rate_per_100k"] == 3.0  # 3 / 100_000 * 100_000
+
+
+def test_malformed_years_is_a_422(client: TestClient):
+    response = client.get("/api/stats", params={"dimension": "type", "years": "2024,abc"})
+    assert response.status_code == 422
+
+
+def test_years_use_local_time_at_the_new_year_boundary(client: TestClient, db_session: Session):
+    source = make_source(db_session)
+    _seed_place(db_session, "0901", "09")
+    _seed_population(db_session, "0901", 2023, 100_000)
+    _seed_population(db_session, "0901", 2024, 100_000)
+    _seed_population(db_session, "0901", 2025, 100_000)
+    # 2025-01-01 03:00 UTC is 2024-12-31 22:00 in Guayaquil: local year 2024.
+    make_incident(
+        db_session,
+        source,
+        occurred_at=datetime(2025, 1, 1, 3, 0, tzinfo=UTC),
+        province_code="09",
+        canton_code="0901",
+    )
+    # 2024-01-01 03:00 UTC is 2023-12-31 22:00 local: local year 2023.
+    make_incident(
+        db_session,
+        source,
+        occurred_at=datetime(2024, 1, 1, 3, 0, tzinfo=UTC),
+        province_code="09",
+        canton_code="0901",
+    )
+    db_session.commit()
+
+    two_years = client.get("/api/stats", params={"dimension": "year", "years": "2024,2025"})
+    assert {row["key"]: row["count"] for row in two_years.json()["rows"]} == {"2024": 1}
+
+    earlier_pair = client.get("/api/stats", params={"dimension": "year", "years": "2023,2024"})
+    counts = {row["key"]: row["count"] for row in earlier_pair.json()["rows"]}
+    assert counts == {"2023": 1, "2024": 1}
+
+
+def test_timeseries_points_for_several_years_keep_year_and_month(
+    client: TestClient, db_session: Session
+):
+    _seed_two_years(db_session)
+
+    response = client.get("/api/stats/timeseries", params={"years": "2024,2025"})
+
+    assert response.json()["points"] == [
+        {"year": 2024, "month": 3, "count": 3},
+        {"year": 2025, "month": 3, "count": 1},
+    ]

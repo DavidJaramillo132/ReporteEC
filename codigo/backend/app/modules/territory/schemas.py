@@ -28,6 +28,7 @@ class CantonIndicatorRowOut(BaseModel):
 class CantonIndicatorsResponse(BaseModel):
     indicator: str
     year: int
+    years: list[int]
     available_years: list[int]
     breakpoints: BreakpointsOut | None
     rows: list[CantonIndicatorRowOut]

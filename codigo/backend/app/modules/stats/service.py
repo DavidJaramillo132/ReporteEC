@@ -19,8 +19,8 @@ degenerates it trivially since each row already is one year):
 
     rate_per_100k = count / (population summed over every year in scope) * 100_000
 
-"Every year in scope" (`_years_in_scope`) is the single requested `year`
-when one is given, or every year known to the incidents/detentions table
+"Every year in scope" (`_years_in_scope`) is the requested `years`
+(one or several) when given, or every year known to the incidents/detentions table
 when it is not -- the SAME set of years for every row in one response, not
 narrowed per row to only the years that row happened to have a count in
 (a year with zero incidents still contributes its population to the
@@ -68,7 +68,7 @@ class Layer(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class StatsFilters:
-    year: int | None = None
+    years: Sequence[int] | None = None
     months: Sequence[int] | None = None
     types: Sequence[str] | None = None
     province: str | None = None
@@ -133,8 +133,8 @@ def _base_conditions(filters: StatsFilters) -> list:
         if filters.map_only:
             conditions.append(Incident.located_at.is_(None))
             conditions.append(Incident.location_precision != LocationPrecision.CANTON)
-    if filters.year is not None:
-        conditions.append(_local_year(model.occurred_at) == filters.year)
+    if filters.years:
+        conditions.append(_local_year(model.occurred_at).in_(filters.years))
     if filters.months:
         conditions.append(_local_month(model.occurred_at).in_(filters.months))
     if filters.types and filters.layer == Layer.INCIDENTS:
@@ -149,13 +149,13 @@ def _base_conditions(filters: StatsFilters) -> list:
 def _years_in_scope(session: Session, filters: StatsFilters) -> list[int]:
     """The set of years every row's population denominator sums over.
 
-    A single requested `year` narrows this to just that year; otherwise it
+    The requested `years` narrow this to exactly those years; otherwise it
     is every local year the layer's own table has ever recorded a row in,
     matching or not -- the full historical span, not just the current
     filter's hits (see the module docstring).
     """
-    if filters.year is not None:
-        return [filters.year]
+    if filters.years:
+        return sorted(set(filters.years))
     model = _model(filters.layer)
     min_year, max_year = session.execute(
         select(func.min(_local_year(model.occurred_at)), func.max(_local_year(model.occurred_at)))

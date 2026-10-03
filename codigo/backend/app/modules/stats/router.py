@@ -9,6 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.core.years import resolve_years
 from app.database.session import get_session
 from app.modules.stats.schemas import (
     StatsResponse,
@@ -30,6 +31,7 @@ def _split_strs(raw: str | None) -> list[str] | None:
 
 
 def _filters(
+    years: str | None,
     year: int | None,
     months: str | None,
     types: str | None,
@@ -39,7 +41,7 @@ def _filters(
     scope: Literal["all", "map"] = "all",
 ) -> StatsFilters:
     return StatsFilters(
-        year=year,
+        years=resolve_years(years, year),
         months=_split_ints(months),
         types=_split_strs(types),
         province=province,
@@ -53,7 +55,8 @@ def _filters(
 def stats(
     session: Session = Depends(get_session),
     dimension: Literal["type", "province", "canton", "month", "year"] = Query(...),
-    year: int | None = Query(default=None),
+    years: str | None = Query(default=None, description="Comma-separated years; wins over `year`"),
+    year: int | None = Query(default=None, description="Single year (legacy)"),
     months: str | None = Query(default=None, description="Comma-separated, 1-12"),
     types: str | None = Query(default=None, description="Comma-separated incident types"),
     province: str | None = Query(default=None, description="Province DPA code"),
@@ -63,7 +66,7 @@ def stats(
         default="all", description="'map' counts only cases the map draws"
     ),
 ) -> StatsResponse:
-    filters = _filters(year, months, types, province, canton, layer, scope)
+    filters = _filters(years, year, months, types, province, canton, layer, scope)
     rows = get_stats(session, Dimension(dimension), filters)
     return StatsResponse(
         dimension=dimension,
@@ -75,14 +78,15 @@ def stats(
 @router.get("/timeseries", response_model=TimeseriesResponse)
 def timeseries(
     session: Session = Depends(get_session),
-    year: int | None = Query(default=None),
+    years: str | None = Query(default=None, description="Comma-separated years; wins over `year`"),
+    year: int | None = Query(default=None, description="Single year (legacy)"),
     months: str | None = Query(default=None, description="Comma-separated, 1-12"),
     types: str | None = Query(default=None, description="Comma-separated incident types"),
     province: str | None = Query(default=None, description="Province DPA code"),
     canton: str | None = Query(default=None, description="Canton DPA code"),
     layer: Literal["incidents", "detentions"] = Query(default="incidents"),
 ) -> TimeseriesResponse:
-    filters = _filters(year, months, types, province, canton, layer)
+    filters = _filters(years, year, months, types, province, canton, layer)
     points = get_timeseries(session, filters)
     return TimeseriesResponse(
         layer=layer,

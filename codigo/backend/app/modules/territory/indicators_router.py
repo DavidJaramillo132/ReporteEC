@@ -6,9 +6,10 @@ what a zero-valued canton's class means.
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.years import resolve_years
 from app.database.session import get_session
 from app.modules.territory.schemas import (
     BreakpointsOut,
@@ -30,12 +31,19 @@ IndicatorLiteral = Literal["extorsion", "siniestros", "siniestros_fallecidos"]
 def canton_indicators(
     session: Session = Depends(get_session),
     indicator: IndicatorLiteral = Query(...),
-    year: int = Query(...),
+    years: str | None = Query(default=None, description="Comma-separated years; wins over `year`"),
+    year: int | None = Query(default=None, description="Single year (legacy)"),
 ) -> CantonIndicatorsResponse:
-    rows, breakpoints, available_years = get_canton_indicators(session, indicator, year)
+    selected = resolve_years(years, year)
+    if not selected:
+        raise HTTPException(status_code=422, detail="Provide `years` or `year`.")
+    rows, breakpoints, available_years, used_years = get_canton_indicators(
+        session, indicator, selected
+    )
     return CantonIndicatorsResponse(
         indicator=indicator,
-        year=year,
+        year=max(selected),
+        years=used_years,
         available_years=available_years,
         breakpoints=BreakpointsOut.model_validate(breakpoints) if breakpoints else None,
         rows=[
