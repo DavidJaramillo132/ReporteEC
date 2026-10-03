@@ -141,6 +141,12 @@ export function Metodologia() {
             Naves. El cantón pequeño tiene, en proporción, más del doble de riesgo para quien vive ahí. Por eso las
             dos cifras se muestran siempre juntas, nunca una sola.
           </p>
+          <p>
+            Con varios años elegidos, la tasa suma los casos de todos esos años y los divide entre la suma de la
+            población de cada uno de esos mismos años, nunca la de un solo año. El resultado es una tasa promedio por
+            año, comparable con la de un año suelto. En extorsión y siniestros por cantón, si a un cantón le falta la
+            población de alguno de los años elegidos, su tasa no se calcula.
+          </p>
         </Section>
 
         <Section id="detenciones" title="Detenciones: actividad policial">
@@ -164,10 +170,11 @@ export function Metodologia() {
         <Section id="semaforo-extorsion" title="El semáforo de extorsión">
           <p>
             Cada cantón se clasifica en bajo, moderado, alto o crítico según los cuartiles de la tasa de denuncias
-            de extorsión <strong className="font-semibold text-ink">de ese año</strong>, calculados solo entre los
-            cantones que tuvieron alguna denuncia. No es una escala fija ni una medida absoluta de peligro: es una
-            comparación relativa entre cantones en el mismo año, que puede correrse de un año a otro. Un cantón sin
-            ninguna denuncia ese año se marca aparte, como «sin denuncias», no como el nivel más bajo de la escala.
+            de extorsión <strong className="font-semibold text-ink">del año elegido</strong> (o de los años elegidos,
+            con la tasa combinada de cada cantón), calculados solo entre los cantones que tuvieron alguna denuncia. No
+            es una escala fija ni una medida absoluta de peligro: es una comparación relativa entre cantones en el
+            mismo período, que puede correrse de un año a otro. Un cantón sin ninguna denuncia en ese período se marca
+            aparte, como «sin denuncias», no como el nivel más bajo de la escala.
           </p>
         </Section>
 
@@ -196,8 +203,9 @@ export function Metodologia() {
         <Section id="poblacion-pequena" title="Cantones con poca población">
           <p>
             Cuando la población de un cantón es menor a 10.000 habitantes, un solo caso de más o de menos cambia
-            mucho la tasa por 100.000 habitantes. Esas tasas aparecen marcadas con ⚠ en las tablas de estadísticas:
-            son reales, pero conviene leerlas junto con el conteo, no solas.
+            mucho la tasa por 100.000 habitantes. Esas tasas aparecen marcadas con ⚠ en los gráficos y tablas de
+            estadísticas: son reales, pero conviene leerlas junto con el conteo, no solas. Con varios años elegidos,
+            el aviso mira la población sumada de esos años.
           </p>
         </Section>
 

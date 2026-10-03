@@ -121,6 +121,12 @@ Grouped as one role rather than tiered, because the four are co-equal, not a hie
 
 **Scoped exception: canton choropleths (decided 2026-09-26).** The canton layers are data fields, not marks or interface state. Siniestros uses a lightness ramp of `sello` and adds no hue. The extortion semáforo uses one warm-red family in four lightness steps, and fill opacity rises with the class as a cue that does not depend on color. Both appear only while their canton layer is switched on, and each has its own legend. Nothing else may reuse the extortion ramp.
 
+**Chart color jobs (Estadísticas, decided 2026-10-03).** Charts add no hue; each color does one job, taken from the tokens above:
+- **Incident type** → the four type inks, always together with the type's `Mark` (shape) and its name: in the legend, next to each bar, in the tooltip, and on the newest group's column caps. Two inks fail the dataviz validator's lightness/chroma checks (sicariato too dark, desaparecida low chroma) while passing color-vision separation, so the mark and the direct label are mandatory, never optional.
+- **Year** (ordinal) → a lightness ramp of `sello`, `#7fa1bf` (oldest selected) to `#1d4a73` (newest). A year's shade depends on its rank in the selection, so every chart on one page passes the same selected years.
+- **Selected vs. other years** (a trend over every year the source has) → emphasis inside the section's own ramp: extortion `#6e1f14` / `#c98a5c`, traffic crashes `#1d4a73` / `#7fa1bf`, detentions `#56626e` / `#9aa3ab` (neutral greys only: police activity never takes a type ink or the incident ramp).
+- **One series of places** (rankings) → a single color for every bar: `sello`, or the section's strong step.
+
 ## Typography
 
 **Display/Label Font:** Archivo Variable (self-hosted via `@fontsource-variable/archivo`, the width-axis build), falling back to "Archivo", system-ui, sans-serif.
@@ -186,7 +192,7 @@ A single non-wrapping row of bordered controls, all 32px tall. On narrow screens
 - Estadísticas reuses the strip without Capas.
 
 ### Time Rule
-Two segmented strips (years, months) inside a single bordered box with internal 1px dividers. Active cells are `bg-sello`/`text-paper` (previously ink); unavailable months/years are hatched, `cursor-not-allowed`, with an explanatory `title`.
+Two segmented strips (years, months) inside a single bordered box with internal 1px dividers. Several years can be active at once (at least one always is), with "Todos" and "Último" shortcuts; a month is available when any selected year has published it. Active cells are `bg-sello`/`text-paper` (previously ink); unavailable months/years are hatched, `cursor-not-allowed`, with an explanatory `title`.
 
 ### Map (`IncidentMap` + `basemap.ts` + `marks.ts`)
 A gazette-grey MapLibre basemap: land is `paper-deep` (`#dfe6e3`), water is a cool wash (`#aecbd8`), province borders are dashed ink at 45% opacity, country borders solid ink, roads and place labels in ink tones — unchanged in structure, tokens updated. Below zoom 8.5 (`MARKS_ZOOM`) the map shows a heatmap; above it, individual `Mark` symbols fade in as the heatmap fades out.
@@ -205,7 +211,19 @@ No registry column and no case list: clicking a mark opens `IncidentCard` instea
 `Metodologia` and `Fuentes` (`src/pages/`) are standalone routed pages now, not panel tabs — same `Section` pattern and unchanged prose, laid out for reading: a centered ~68ch column, a bordered "En esta página" table of contents linking to `id`-anchored `<h2>`s (`scroll-mt-*` keeps a jumped-to heading clear of nothing above it, since there is no longer a sticky masthead over the content), and each page sets its own `document.title`. The Methodology page's "Color y marca" section explains the current rule directly: hue and shape say the incident type; the mark's fill/outline style says how much confidence backs it (`Mark rellena` = oficial, `rellena con borde discontinuo` = verificado, `rayada` = reportado, `vacía con borde discontinuo` = en revisión), pulled live from `CONFIDENCE[c].style`.
 
 ### Estadísticas
-A routed page (`src/pages/Estadisticas.tsx`) reusing the map page's own `FilterStrip` (without its map-only controls) and `TimeRule` at the top, synced to the URL. Below them: a three-figure summary row (`dl`, tabular numerals, no cards) — cases in the filtered period, its rate ×100.000, and the change against the same months of the previous year — then a sticky section index (a left rail at `lg:`, a horizontally-scrollable bar below it) linking to five `id`-anchored sections: Incidentes, Territorio, Extorsión, Siniestros de tránsito, and Actividad policial (still labeled "no es inseguridad"). Each section keeps a one-line "what this measures" caption and a "Cómo se calcula" link to the matching `/metodologia#anchor`; `MonthlyChart` and `RateTable` are unchanged.
+A routed page (`src/pages/Estadisticas.tsx`, its sections in `src/pages/estadisticas/`) reusing the map page's own `FilterStrip` (without its map-only controls) and `TimeRule` at the top, synced to the URL; any set of years can be selected. Below them:
+
+- **Resumen** (`dl`, no cards): the cases and the rate ×100.000 for the filtered period as large proportional figures (32–40px, the same sans). With one year, the change against the same months of the previous year; with several, the rate is the average per year and a small column chart shows the cases per selected year in the year ramp.
+- A sticky section index (a left rail at `lg:`, a horizontally-scrollable bar below it) linking to five `id`-anchored sections, each with a one-line "what this measures" caption and a "Cómo se calcula" link to the matching `/metodologia#anchor`. At `xl:` a section lays its charts out in two columns.
+  - **Incidentes:** cases by type (horizontal bars, type inks and marks, «casos (tasa)» at the tip); with several years, cases per type and year as grouped columns; cases per month as one line per selected year.
+  - **Territorio:** provinces (or the chosen province's cantons) ranked by rate, and the national top 15 cantons by rate, «tasa (casos)» at the tip, ⚠ kept for places under 10.000 inhabitants.
+  - **Extorsión** and **Siniestros de tránsito:** the national total for every year the source has (selected years strong, the rest muted) and the top 15 cantons by rate for the selected years.
+  - **Actividad policial** (still labeled "no es inseguridad"): detentions per year and provinces ranked by rate, in neutral greys.
+
+### Charts (`src/components/charts/`)
+Hand-built SVG, no chart library: `BarChart` (horizontal, ranked), `ColumnChart` (an ordered axis, usually years), `GroupedColumnChart` (one column per series inside each year) and `LineChart`, all inside `ChartFrame`. Every chart has a title, a legend when it has two or more series, a tooltip that hover and keyboard focus share (the plot is one tab stop; arrows walk the marks), selective direct labels, and a «Ver tabla» button that reveals the same numbers as a real table. Count and rate always travel together (label, tooltip or table); there is never a second axis. Marks are thin (bars and columns at most 24px, lines 2px), gridlines are solid hairlines, and text wears ink tokens, never the series color. Layout is measured in real pixels so labels keep their size at 390px. No animation.
+
+**Chart marks are the one place a corner rounds besides a `Mark`:** a bar or column rounds its data end (4px) and stays square on its baseline, so its length reads from a hard edge. Containers, controls and the chart frame itself keep the Square Corner Rule.
 
 ## Do's and Don'ts
 
@@ -223,7 +241,8 @@ A routed page (`src/pages/Estadisticas.tsx`) reusing the map page's own `FilterS
 ### Don't:
 - **Don't** use hue for confidence anywhere — that rule is retired; confidence is mark style only.
 - **Don't** introduce a second interface accent alongside `sello`; paper and ink stay neutral everywhere off a Mark.
-- **Don't** round a corner. 0 radius is the rule; a filled circle is reserved for marks and the small active-state halo behind one.
+- **Don't** round a corner. 0 radius is the rule; a filled circle is reserved for marks and the small active-state halo behind one. The one other exception is a chart bar's or column's 4px data end (see Charts).
+- **Don't** add a hue for a chart: years are a `sello` lightness ramp, types are the four inks with their marks, detentions are greys.
 - **Don't** use `.label` (the uppercase, condensed 12px caption style) as a decorative eyebrow above a heading.
 - **Don't** ship a working-looking control for a feature that isn't live yet; the "Reportar" entry point is deliberately hatched and its popover states plainly that it arrives in a future version.
 - **Don't** add shadow to a card or panel that already sits in normal document flow — shadow is earned only by floating over the map plate.

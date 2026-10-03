@@ -43,9 +43,9 @@ V1 capabilities:
 - The reader can show their own position on the map ("Mi ubicación", browser geolocation). It stays in the browser and is never sent or stored.
 - Detentions are **police activity, not insecurity**: a separate heatmap-only layer, explicitly toggled and labeled, never merged with incidents.
 - Missing persons who were later located are removed from the map (they still count in statistics).
-- Filters: year (2019 to today), month, province, canton, type. Shared between the map and statistics pages, and saved in the URL's query string so a view can be shared or bookmarked (`lib/urlState.ts`); the URL wins over a locally saved consultation.
+- Filters: one or several years (2019 to today; the URL accepts `anio=2025`, `anio=2024,2025` or a range `anio=2019-2026`), month, province, canton, type. Shared between the map and statistics pages, and saved in the URL's query string so a view can be shared or bookmarked (`lib/urlState.ts`); the URL wins over a locally saved consultation.
 - No registry/list column: the map itself is the only view of individual cases. Clicking a mark opens a floating case card (a bottom sheet on mobile) with its type, date, place, case number and full provenance; it replaces the earlier registry column, which is deferred to V3's citizen-report list.
-- Statistics: absolute count and rate per 100,000 inhabitants, always shown together.
+- Statistics: absolute count and rate per 100,000 inhabitants, always shown together, drawn as charts that each open the same numbers as a table. With several years, a rate divides the cases of those years by the population of those same years (an average rate per year), never by a single year's population.
 - A visible methodological note: the map shows reported cases, not all crime that happens.
 - A dismissible first-visit intro explains what the map shows and does not show; it can be reopened at any time from the map legend.
 - Pages, each with its own URL (`lib/router.ts`, a small History-API router, no routing library): Map (`/`), Statistics (`/estadisticas`), Methodology (`/metodologia`), License and sources (`/fuentes`).
