@@ -48,7 +48,7 @@ export function sortStatsRows(
  * always -- a ranking has one natural direction). Rows with no rate never
  * appear: an unranked place is not the same as the country's least risky.
  */
-export function rankByRate(rows: StatsRow[], limit = 15): StatsRow[] {
+export function rankByRate(rows: StatsRow[], limit = 15): (StatsRow & { rate_per_100k: number })[] {
   return rows
     .filter((row): row is StatsRow & { rate_per_100k: number } => row.rate_per_100k !== null)
     .sort((a, b) => b.rate_per_100k - a.rate_per_100k || b.count - a.count)
