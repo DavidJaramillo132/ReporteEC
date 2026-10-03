@@ -3,7 +3,7 @@ import type { Filters } from './registry'
 import { filtersToSearch, hasUrlFilters, parseFiltersFromSearch } from './urlState'
 
 const DEFAULTS: Filters = {
-  year: 2026,
+  years: [2026],
   months: [1, 2, 3, 4, 5, 6, 7, 8],
   types: ['homicidio', 'sicariato', 'femicidio', 'desaparecida'],
   province: null,
@@ -28,7 +28,7 @@ describe('hasUrlFilters', () => {
 describe('parseFiltersFromSearch / filtersToSearch round trip', () => {
   it('round-trips a filters object with every field customized', () => {
     const filters: Filters = {
-      year: 2025,
+      years: [2024, 2025],
       months: [1, 3, 5],
       types: ['homicidio', 'femicidio'],
       province: '09',
@@ -57,10 +57,15 @@ describe('parseFiltersFromSearch / filtersToSearch round trip', () => {
 })
 
 describe('parseFiltersFromSearch invalid input', () => {
-  it('falls back to the default year for a non-numeric or out-of-range year', () => {
-    expect(parseFiltersFromSearch('?anio=abc', DEFAULTS, LAST_MONTH).year).toBe(DEFAULTS.year)
-    expect(parseFiltersFromSearch('?anio=1900', DEFAULTS, LAST_MONTH).year).toBe(DEFAULTS.year)
-    expect(parseFiltersFromSearch('?anio=3000', DEFAULTS, LAST_MONTH).year).toBe(DEFAULTS.year)
+  it('falls back to the default years for a non-numeric or out-of-range year', () => {
+    expect(parseFiltersFromSearch('?anio=abc', DEFAULTS, LAST_MONTH).years).toEqual(DEFAULTS.years)
+    expect(parseFiltersFromSearch('?anio=1900', DEFAULTS, LAST_MONTH).years).toEqual(DEFAULTS.years)
+    expect(parseFiltersFromSearch('?anio=3000', DEFAULTS, LAST_MONTH).years).toEqual(DEFAULTS.years)
+    expect(parseFiltersFromSearch('?anio=2026-2019', DEFAULTS, LAST_MONTH).years).toEqual(DEFAULTS.years)
+  })
+
+  it('drops invalid years but keeps the valid ones', () => {
+    expect(parseFiltersFromSearch('?anio=abc,2024,1900,2025', DEFAULTS, LAST_MONTH).years).toEqual([2024, 2025])
   })
 
   it('keeps only the recognized incident types', () => {
@@ -92,5 +97,33 @@ describe('month clamp against the data cut', () => {
 
   it('keeps a partial selection that is still within the published months', () => {
     expect(parseFiltersFromSearch('?meses=2,4', DEFAULTS, 8).months).toEqual([2, 4])
+  })
+})
+
+describe('years in the URL', () => {
+  const withYears = (years: number[]): Filters => ({ ...DEFAULTS, years })
+
+  it('parses a single year, a list and a range', () => {
+    expect(parseFiltersFromSearch('?anio=2025', DEFAULTS, LAST_MONTH).years).toEqual([2025])
+    expect(parseFiltersFromSearch('?anio=2025,2024', DEFAULTS, LAST_MONTH).years).toEqual([2024, 2025])
+    expect(parseFiltersFromSearch('?anio=2019-2026', DEFAULTS, LAST_MONTH).years).toEqual([
+      2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026,
+    ])
+  })
+
+  it('serializes three or more contiguous years as a range, otherwise as a list', () => {
+    expect(filtersToSearch(withYears([2019, 2020, 2021]), DEFAULTS, LAST_MONTH)).toBe('anio=2019-2021')
+    expect(filtersToSearch(withYears([2024, 2025]), DEFAULTS, LAST_MONTH)).toContain('anio=2024%2C2025')
+    expect(filtersToSearch(withYears([2019, 2021, 2022, 2023]), DEFAULTS, LAST_MONTH)).toContain('anio=2019%2C2021%2C2022%2C2023')
+  })
+
+  it('omits the param when the selection equals the default', () => {
+    expect(filtersToSearch(withYears([2026]), DEFAULTS, LAST_MONTH)).toBe('')
+  })
+
+  it('round-trips a range', () => {
+    const filters = withYears([2022, 2023, 2024, 2025])
+    const search = filtersToSearch(filters, DEFAULTS, LAST_MONTH)
+    expect(parseFiltersFromSearch(search, DEFAULTS, LAST_MONTH).years).toEqual(filters.years)
   })
 })

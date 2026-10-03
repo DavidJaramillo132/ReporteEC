@@ -131,7 +131,8 @@ export interface TimeseriesResponse {
 }
 
 interface StatsQueryBase {
-  year?: number | null
+  /** Selected years; sent as a comma list. */
+  years?: number[] | null
   months?: number[]
   types?: IncidentType[]
   province?: string | null
@@ -147,7 +148,7 @@ export interface StatsQuery extends StatsQueryBase {
 
 function statsParams(query: StatsQueryBase) {
   return {
-    year: query.year ?? undefined,
+    years: query.years?.length ? query.years.join(',') : undefined,
     months: query.months?.length ? query.months.join(',') : undefined,
     types: query.types?.length ? query.types.join(',') : undefined,
     province: query.province,
@@ -190,7 +191,7 @@ export interface CantonIndicatorRow {
   name: string
   province_code: string
   value: number
-  /** null only when value > 0 but no population figure exists for that year. */
+  /** null only when value > 0 but no population figure exists for every used year. */
   population: number | null
   rate_per_100k: number | null
   class: CantonIndicatorClass
@@ -198,7 +199,10 @@ export interface CantonIndicatorRow {
 
 export interface CantonIndicatorsResponse {
   indicator: CantonIndicator
+  /** The latest selected year. */
   year: number
+  /** The selected years actually used (those in available_years); may be empty. */
+  years: number[]
   available_years: number[]
   /** null for a year outside available_years (nothing meaningful to divide into quartiles). */
   breakpoints: { p25: number; p50: number; p75: number } | null
@@ -207,10 +211,10 @@ export interface CantonIndicatorsResponse {
 
 export function getCantonIndicators(
   indicator: CantonIndicator,
-  year: number,
+  years: number[],
   signal?: AbortSignal,
 ): Promise<CantonIndicatorsResponse> {
-  return fetchJson<CantonIndicatorsResponse>('/cantons/indicators', { indicator, year }, signal)
+  return fetchJson<CantonIndicatorsResponse>('/cantons/indicators', { indicator, years: years.join(',') }, signal)
 }
 
 export interface CantonIndicatorYearTotal {

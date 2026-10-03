@@ -5,7 +5,7 @@ import { Masthead } from './components/Masthead'
 import type { AdminUnitsResponse, MetaResponse } from './lib/api'
 import { getAdminUnits, getMeta } from './lib/api'
 import { hasSeenIntro, markIntroSeen } from './lib/firstVisit'
-import { lastPublishedMonth, monthsForYear } from './lib/period'
+import { lastPublishedMonthForYears, monthsForYear } from './lib/period'
 import { clearSavedView, loadSavedView, saveView } from './lib/persist'
 import type { Filters } from './lib/registry'
 import { FALLBACK_FILTERS, INCIDENT_TYPES } from './lib/registry'
@@ -22,9 +22,9 @@ const SAVED = loadSavedView()
 function defaultFilters(meta: MetaResponse): Filters {
   const until = meta.period.to
   const year = until ? Number(until.slice(0, 4)) : new Date().getFullYear()
-  const lastMonth = lastPublishedMonth(year, until)
+  const lastMonth = lastPublishedMonthForYears([year], until)
   return {
-    year,
+    years: [year],
     months: Array.from({ length: lastMonth }, (_, i) => i + 1),
     types: [...INCIDENT_TYPES],
     province: null,
@@ -40,7 +40,7 @@ function defaultFilters(meta: MetaResponse): Filters {
 function initialFilters(): Filters | null {
   const search = window.location.search
   if (hasUrlFilters(search)) {
-    return parseFiltersFromSearch(search, FALLBACK_FILTERS, lastPublishedMonth(FALLBACK_FILTERS.year, null))
+    return parseFiltersFromSearch(search, FALLBACK_FILTERS, lastPublishedMonthForYears(FALLBACK_FILTERS.years, null))
   }
   return SAVED?.filters ?? null
 }
@@ -84,7 +84,7 @@ export default function App() {
           // Re-clamp months now that the real data cut is known: the
           // optimistic guess used above (from the URL or a saved
           // consultation) assumed a full year for lack of anything better.
-          const realLastMonth = lastPublishedMonth(current.year, meta.period.to)
+          const realLastMonth = lastPublishedMonthForYears(current.years, meta.period.to)
           return { ...current, months: monthsForYear(current.months, 12, realLastMonth) }
         })
         setBootstrapStatus('ready')
@@ -98,7 +98,7 @@ export default function App() {
     return () => controller.abort()
   }, [bootstrapAttempt])
 
-  const lastMonth = lastPublishedMonth(filters?.year ?? FALLBACK_FILTERS.year, meta?.period.to)
+  const lastMonth = lastPublishedMonthForYears(filters?.years ?? FALLBACK_FILTERS.years, meta?.period.to)
   const urlDefaults = useMemo(() => (meta ? defaultFilters(meta) : FALLBACK_FILTERS), [meta])
 
   // Keeps the query string in sync with the filters, only on the two pages
@@ -114,14 +114,18 @@ export default function App() {
     if (filters && mapView) saveView({ filters, map: mapView })
   }, [filters, mapView])
 
-  const changeYear = useCallback(
-    (year: number) =>
+  const changeYears = useCallback(
+    (years: number[]) =>
       setFilters((f) =>
         f
           ? {
               ...f,
-              year,
-              months: monthsForYear(f.months, lastPublishedMonth(f.year, meta?.period.to), lastPublishedMonth(year, meta?.period.to)),
+              years,
+              months: monthsForYear(
+                f.months,
+                lastPublishedMonthForYears(f.years, meta?.period.to),
+                lastPublishedMonthForYears(years, meta?.period.to),
+              ),
             }
           : f,
       ),
@@ -143,7 +147,7 @@ export default function App() {
         <Mapa
           filters={filters}
           onUpdate={update}
-          onChangeYear={changeYear}
+          onChangeYears={changeYears}
           meta={meta}
           adminUnits={adminUnits}
           lastMonth={lastMonth}
@@ -161,7 +165,7 @@ export default function App() {
         />
       )}
       {route === 'estadisticas' && filters && (
-        <Estadisticas filters={filters} onUpdate={update} onChangeYear={changeYear} meta={meta} adminUnits={adminUnits} lastMonth={lastMonth} />
+        <Estadisticas filters={filters} onUpdate={update} onChangeYears={changeYears} meta={meta} adminUnits={adminUnits} lastMonth={lastMonth} />
       )}
       {route === 'metodologia' && (
         <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">

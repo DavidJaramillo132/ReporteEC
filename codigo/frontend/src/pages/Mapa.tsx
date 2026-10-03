@@ -6,7 +6,8 @@ import { MapLegend } from '../components/MapLegend'
 import { TimeRule } from '../components/TimeRule'
 import type { AdminUnitsResponse, CantonIndicatorsResponse, IncidentDetail, MetaResponse, StatsRow } from '../lib/api'
 import { getCantonIndicators, getIncident, getStats } from '../lib/api'
-import { checkYearAvailability, indicatorForLayer, noDataMessage } from '../lib/cantonChoropleth'
+import { indicatorForLayer, noDataMessage } from '../lib/cantonChoropleth'
+import { formatYears } from '../lib/period'
 import type { Filters } from '../lib/registry'
 import { CONFIDENCE_ORDER, FALLBACK_FILTERS, INCIDENT_TYPES } from '../lib/registry'
 
@@ -14,7 +15,7 @@ interface MapaProps {
   /** null only until the bootstrap fetch (meta + admin units) resolves -- the map still mounts and draws immediately (see FALLBACK_FILTERS), just without the filter/time controls yet. */
   filters: Filters | null
   onUpdate: (patch: Partial<Filters>) => void
-  onChangeYear: (year: number) => void
+  onChangeYears: (years: number[]) => void
   meta: MetaResponse | null
   adminUnits: AdminUnitsResponse | null
   lastMonth: number
@@ -37,7 +38,7 @@ interface Selection {
 export function Mapa({
   filters,
   onUpdate,
-  onChangeYear,
+  onChangeYears,
   meta,
   adminUnits,
   lastMonth,
@@ -67,7 +68,7 @@ export function Mapa({
   const offline = useOfflineStatus()
 
   // Type-chip counts (FilterStrip): from /api/stats?dimension=type, scoped
-  // to year/months/province/canton but deliberately WITHOUT bbox, so panning
+  // to years/months/province/canton but deliberately WITHOUT bbox, so panning
   // the map never changes them (see the plan).
   const [typeStats, setTypeStats] = useState<StatsRow[]>([])
   const [statsError, setStatsError] = useState(false)
@@ -79,7 +80,7 @@ export function Mapa({
       {
         dimension: 'type',
         scope: 'map',
-        year: filters.year,
+        years: filters.years,
         months: filters.months,
         province: filters.province,
         canton: filters.canton,
@@ -105,19 +106,20 @@ export function Mapa({
 
   // The canton choropleth's rows (extortion / traffic crashes): independent
   // of type/province/canton/months, so it only refetches on its own control
-  // or the year.
-  const [cantonData, setCantonData] = useState<CantonIndicatorsResponse | null>(null)
+  // or the years.
+  const [cantonData, setCantonData] = useState<{ key: string; data: CantonIndicatorsResponse } | null>(null)
+  const cantonKey = filters ? `${filters.cantonLayer}:${filters.years.join(',')}` : ''
   useEffect(() => {
     if (!filters || filters.cantonLayer === 'none') return
     const controller = new AbortController()
-    getCantonIndicators(indicatorForLayer(filters.cantonLayer), filters.year, controller.signal)
-      .then((result) => setCantonData(result))
+    getCantonIndicators(indicatorForLayer(filters.cantonLayer), filters.years, controller.signal)
+      .then((result) => setCantonData({ key: cantonKey, data: result }))
       .catch((error: unknown) => {
         if (!controller.signal.aborted) console.error(error)
       })
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.cantonLayer, filters?.year])
+  }, [filters?.cantonLayer, cantonKey])
 
   // The selected incident's full detail (source, record id) -- fetched fresh
   // for every new selection. Deliberately never resets `selectedDetail`
@@ -157,16 +159,13 @@ export function Mapa({
   )
 
   const cantonLayer = activeFilters.cantonLayer
-  const cantonDataFresh =
-    cantonData && cantonLayer !== 'none' && cantonData.indicator === indicatorForLayer(cantonLayer) && cantonData.year === activeFilters.year
-      ? cantonData
-      : null
+  const cantonDataFresh = cantonLayer !== 'none' && cantonData?.key === cantonKey ? cantonData.data : null
   const cantonRows = cantonDataFresh?.rows ?? []
-  const cantonYear = activeFilters.year
-  const cantonYearAvailability = useMemo(
-    () => (cantonDataFresh ? checkYearAvailability(cantonDataFresh.available_years, cantonDataFresh.year) : null),
-    [cantonDataFresh],
-  )
+  // The years the backend actually used (selected years with data); the
+  // selected ones while loading.
+  const cantonYears = formatYears(cantonDataFresh?.years.length ? cantonDataFresh.years : activeFilters.years)
+  const cantonHasNoData = cantonDataFresh !== null && cantonDataFresh.years.length === 0
+  const cantonLatestYear = cantonDataFresh?.available_years.length ? Math.max(...cantonDataFresh.available_years) : null
 
   const zoomedOut = (bounds?.zoom ?? 0) < MARKS_ZOOM
 
@@ -216,7 +215,7 @@ export function Mapa({
             showDetentions={activeFilters.detentions}
             cantonLayer={cantonLayer}
             cantonRows={cantonRows}
-            cantonYear={cantonYear}
+            cantonYears={cantonYears}
             selectedId={selection?.id ?? null}
             selectedCoordinates={selection?.coordinates ?? null}
             initialView={mapView}
@@ -236,7 +235,7 @@ export function Mapa({
             zoomedOut={zoomedOut}
             cantonLayer={cantonLayer}
             cantonBreakpoints={cantonDataFresh?.breakpoints ?? null}
-            cantonYear={cantonYear}
+            cantonYears={cantonYears}
             onShowIntro={onShowIntro}
           />
 
@@ -253,14 +252,14 @@ export function Mapa({
             />
           )}
 
-          {cantonLayer !== 'none' && cantonYearAvailability && !cantonYearAvailability.hasData && (
+          {cantonLayer !== 'none' && cantonHasNoData && (
             <div className="ink-in absolute top-3 left-1/2 z-10 w-max max-w-[calc(100%-6rem)] -translate-x-1/2 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
-              {noDataMessage(cantonLayer, cantonYear)}
-              {cantonYearAvailability.latestYear !== null && (
+              {noDataMessage(cantonLayer, formatYears(activeFilters.years))}
+              {cantonLatestYear !== null && (
                 <>
                   {' '}
-                  <button type="button" onClick={() => onChangeYear(cantonYearAvailability.latestYear!)} className="underline hover:no-underline">
-                    Ir a {cantonYearAvailability.latestYear}
+                  <button type="button" onClick={() => onChangeYears([cantonLatestYear])} className="underline hover:no-underline">
+                    Ir a {cantonLatestYear}
                   </button>
                 </>
               )}
@@ -299,11 +298,11 @@ export function Mapa({
 
         {filters && (
           <TimeRule
-            year={filters.year}
+            years={filters.years}
             months={filters.months}
             availableYears={meta?.years ?? []}
             lastMonth={lastMonth}
-            onYear={onChangeYear}
+            onYears={onChangeYears}
             onMonths={(months) => onUpdate({ months })}
           />
         )}

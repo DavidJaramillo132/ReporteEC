@@ -41,8 +41,8 @@ interface IncidentMapProps {
   cantonLayer: CantonLayer
   /** All 221 cantons' current rows for `cantonLayer`; empty while loading or when it is 'none'. */
   cantonRows: CantonIndicatorRow[]
-  /** The year `cantonRows` was fetched for -- shown in the click popup. */
-  cantonYear: number
+  /** The years `cantonRows` cover, already formatted -- shown in the click popup. */
+  cantonYears: string
   selectedId: number | null
   /** The selected incident's own coordinates, from the click event that selected it -- used only to keep IncidentCard anchored to its point as the map moves. */
   selectedCoordinates: [number, number] | null
@@ -66,7 +66,7 @@ export function IncidentMap({
   showDetentions,
   cantonLayer,
   cantonRows,
-  cantonYear,
+  cantonYears,
   selectedId,
   selectedCoordinates,
   initialView,
@@ -92,7 +92,7 @@ export function IncidentMap({
     selectedCoordinates,
     cantonLayer,
     cantonRows,
-    cantonYear,
+    cantonYears,
   })
   useEffect(() => {
     latest.current = {
@@ -105,7 +105,7 @@ export function IncidentMap({
       selectedCoordinates,
       cantonLayer,
       cantonRows,
-      cantonYear,
+      cantonYears,
     }
   })
 
@@ -218,14 +218,14 @@ export function IncidentMap({
       })
 
       map.on('click', 'cantons-fill', (event) => {
-        const { cantonLayer: activeLayer, cantonRows: rows, cantonYear: year } = latest.current
+        const { cantonLayer: activeLayer, cantonRows: rows, cantonYears: years } = latest.current
         if (activeLayer === 'none') return
         const code = event.features?.[0]?.properties?.code as string | undefined
         const row = code ? rows.find((r) => r.code === code) : undefined
         if (!row) return
         new Popup({ closeButton: true, maxWidth: '260px' })
           .setLngLat(event.lngLat)
-          .setHTML(buildCantonPopupHtml(activeLayer, row, year))
+          .setHTML(buildCantonPopupHtml(activeLayer, row, years))
           .addTo(map)
       })
       map.on('mouseenter', 'cantons-fill', () => {

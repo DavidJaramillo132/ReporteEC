@@ -9,7 +9,7 @@
  */
 import type { CantonLayer, Filters, IncidentType } from './registry'
 import { FIRST_YEAR, INCIDENT_TYPES } from './registry'
-import { monthsForYear } from './period'
+import { isContiguousRun, monthsForYear } from './period'
 
 const PARAM_KEYS = ['anio', 'meses', 'tipos', 'provincia', 'canton', 'capa', 'detenidos'] as const
 
@@ -43,6 +43,38 @@ function parseMonthsRaw(raw: string | null): number[] {
   return [...months].sort((a, b) => a - b)
 }
 
+/** `2025`, `2024,2025` or a range `2019-2026`; out-of-range or malformed parts are dropped. */
+function parseYearsRaw(raw: string | null, currentYear: number): number[] {
+  if (!raw) return []
+  const inRange = (y: number) => Number.isInteger(y) && y >= FIRST_YEAR && y <= currentYear
+  const years = new Set<number>()
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim()
+    const range = /^(\d{4})-(\d{4})$/.exec(trimmed)
+    if (range) {
+      const start = Number(range[1])
+      const end = Number(range[2])
+      if (inRange(start) && inRange(end) && end >= start) {
+        for (let y = start; y <= end; y++) years.add(y)
+      }
+      continue
+    }
+    if (/^\d{4}$/.test(trimmed) && inRange(Number(trimmed))) years.add(Number(trimmed))
+  }
+  return [...years].sort((a, b) => a - b)
+}
+
+/** Three or more consecutive years as `a-b`, otherwise a sorted comma list. */
+function serializeYears(years: number[]): string {
+  const sorted = [...years].sort((a, b) => a - b)
+  return isContiguousRun(sorted) ? `${sorted[0]}-${sorted[sorted.length - 1]}` : sorted.join(',')
+}
+
+function sameYears(a: number[], b: number[]): boolean {
+  const sortedB = [...b].sort((x, y) => x - y)
+  return a.length === b.length && [...a].sort((x, y) => x - y).every((y, i) => y === sortedB[i])
+}
+
 /**
  * Serializes months as `a-b` when they are a contiguous run of more than one
  * month, a bare `n` for a single month, `a,b,c` otherwise -- and omits the
@@ -63,19 +95,15 @@ function serializeMonths(months: number[], lastMonth: number): string | null {
  * Reads the filters the query string requests. `lastMonth` is the caller's
  * current data-cut knowledge (12 before `/api/meta` resolves, the real cut
  * afterwards, same two-step pattern App.tsx already uses for a year
- * switch) -- months are clamped to it via the same keep-or-fall-back-to-full
+ * switch; with several years, the max over them) -- months are clamped to it via the same keep-or-fall-back-to-full
  * rule `monthsForYear` uses for that switch.
  */
 export function parseFiltersFromSearch(search: string, defaults: Filters, lastMonth: number): Filters {
   const params = new URLSearchParams(search)
   const currentYear = new Date().getFullYear()
 
-  const rawYear = params.get('anio')
-  const year = (() => {
-    if (!rawYear) return defaults.year
-    const parsed = Number(rawYear)
-    return Number.isInteger(parsed) && parsed >= FIRST_YEAR && parsed <= currentYear ? parsed : defaults.year
-  })()
+  const parsedYears = parseYearsRaw(params.get('anio'), currentYear)
+  const years = parsedYears.length ? parsedYears : defaults.years
 
   const rawMonths = parseMonthsRaw(params.get('meses'))
   const months = rawMonths.length ? monthsForYear(rawMonths, 12, lastMonth) : defaults.months
@@ -95,14 +123,14 @@ export function parseFiltersFromSearch(search: string, defaults: Filters, lastMo
 
   const detentions = params.has('detenidos') ? params.get('detenidos') === '1' : defaults.detentions
 
-  return { year, months, types, province, canton, cantonLayer, detentions }
+  return { years, months, types, province, canton, cantonLayer, detentions }
 }
 
 /** The inverse of `parseFiltersFromSearch`: a minimal query string that round-trips through it. */
 export function filtersToSearch(filters: Filters, defaults: Filters, lastMonth: number): string {
   const params = new URLSearchParams()
 
-  if (filters.year !== defaults.year) params.set('anio', String(filters.year))
+  if (!sameYears(filters.years, defaults.years)) params.set('anio', serializeYears(filters.years))
 
   const meses = serializeMonths(filters.months, lastMonth)
   if (meses) params.set('meses', meses)

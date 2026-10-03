@@ -147,8 +147,9 @@ export const CANTON_INDICATOR_LABEL: Record<ActiveCantonLayer, string> = {
   siniestros: 'siniestros de tránsito',
 }
 
-export function noDataMessage(layer: ActiveCantonLayer, year: number): string {
-  return `Sin datos de ${CANTON_INDICATOR_LABEL[layer]} para ${year}.`
+/** `years` is the already-formatted period (see formatYears in lib/period.ts). */
+export function noDataMessage(layer: ActiveCantonLayer, years: string): string {
+  return `Sin datos de ${CANTON_INDICATOR_LABEL[layer]} para ${years}.`
 }
 
 /**
@@ -194,7 +195,7 @@ export const CANTON_CLASS_LABEL: Record<Exclude<CantonIndicatorClass, null>, str
 }
 
 /** The canton click popup's content, as a plain HTML string (see IncidentMap.tsx's `cantons-fill` click handler). */
-export function buildCantonPopupHtml(layer: ActiveCantonLayer, row: CantonIndicatorRow, year: number): string {
+export function buildCantonPopupHtml(layer: ActiveCantonLayer, row: CantonIndicatorRow, years: string): string {
   const rate =
     row.rate_per_100k === null ? 'Sin datos de población' : `${formatRate(row.rate_per_100k)} por 100.000 hab.`
   const classLabel = CANTON_CLASS_LABEL[row.class ?? 'null']
@@ -202,7 +203,7 @@ export function buildCantonPopupHtml(layer: ActiveCantonLayer, row: CantonIndica
     `<div class="text-[13px] text-ink-2">` +
     `<p class="font-semibold text-ink">${escapeHtml(placeName(row.name))}</p>` +
     `<dl class="mt-1 space-y-0.5">` +
-    `<div class="flex justify-between gap-3"><dt>${CANTON_INDICATOR_LABEL[layer]}, ${year}</dt><dd class="tabular-nums text-ink">${row.value}</dd></div>` +
+    `<div class="flex justify-between gap-3"><dt>${CANTON_INDICATOR_LABEL[layer]}, ${years}</dt><dd class="tabular-nums text-ink">${row.value}</dd></div>` +
     `<div class="flex justify-between gap-3"><dt>Tasa</dt><dd class="tabular-nums">${rate}</dd></div>` +
     `<div class="flex justify-between gap-3"><dt>Categoría</dt><dd>${classLabel}</dd></div>` +
     `<div class="flex justify-between gap-3"><dt>Fuente</dt><dd>${CANTON_SOURCE_LABEL[layer]}</dd></div>` +

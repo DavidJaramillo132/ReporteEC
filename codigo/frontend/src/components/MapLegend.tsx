@@ -13,7 +13,7 @@ interface MapLegendProps {
   zoomedOut: boolean
   cantonLayer: CantonLayer
   cantonBreakpoints: { p25: number; p50: number; p75: number } | null
-  cantonYear: number
+  cantonYears: string
   onShowIntro: () => void
 }
 
@@ -32,7 +32,7 @@ export function MapLegend({
   zoomedOut,
   cantonLayer,
   cantonBreakpoints,
-  cantonYear,
+  cantonYears,
   onShowIntro,
 }: MapLegendProps) {
   const [open, setOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
@@ -95,7 +95,7 @@ export function MapLegend({
         {cantonLayer !== 'none' && cantonBreakpoints && (
           <div className="space-y-1 border-t border-rule-soft pt-2 text-ink-2">
             <p className="text-ink-3">
-              Tasa de {CANTON_INDICATOR_LABEL[cantonLayer]} por 100.000 hab., cuartiles de {cantonYear}
+              Tasa de {CANTON_INDICATOR_LABEL[cantonLayer]} por 100.000 hab., cuartiles de {cantonYears}
             </p>
             <ul className="space-y-0.5">
               <li className="flex items-center gap-2">

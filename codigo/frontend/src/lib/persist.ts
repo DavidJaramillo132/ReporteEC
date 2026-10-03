@@ -14,10 +14,30 @@ export interface SavedView {
 
 const KEY = 'reporteec:consulta:v1'
 
+/**
+ * Older saves carry `filters.year: number`; they become `years: [year]`.
+ * Anything without a usable year selection is discarded.
+ */
+export function migrateSavedView(value: unknown): SavedView | null {
+  if (typeof value !== 'object' || value === null) return null
+  const view = value as { filters?: Record<string, unknown>; map?: MapView }
+  const filters = view.filters
+  if (!filters || typeof filters !== 'object') return null
+  const { year, years, ...rest } = filters
+  let migrated: number[] | null = null
+  if (Array.isArray(years) && years.length > 0 && years.every((y) => Number.isInteger(y))) {
+    migrated = [...(years as number[])].sort((a, b) => a - b)
+  } else if (typeof year === 'number' && Number.isInteger(year)) {
+    migrated = [year]
+  }
+  if (!migrated) return null
+  return { ...view, filters: { ...rest, years: migrated } } as SavedView
+}
+
 export function loadSavedView(): SavedView | null {
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as SavedView) : null
+    return raw ? migrateSavedView(JSON.parse(raw)) : null
   } catch {
     return null
   }

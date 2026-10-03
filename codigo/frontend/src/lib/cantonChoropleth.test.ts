@@ -120,8 +120,8 @@ describe('checkYearAvailability', () => {
 
 describe('noDataMessage', () => {
   it('names the indicator and year in Spanish, plain and calm', () => {
-    expect(noDataMessage('extorsion', 2027)).toBe('Sin datos de extorsión para 2027.')
-    expect(noDataMessage('siniestros', 2027)).toBe('Sin datos de siniestros de tránsito para 2027.')
+    expect(noDataMessage('extorsion', '2027')).toBe('Sin datos de extorsión para 2027.')
+    expect(noDataMessage('siniestros', '2027')).toBe('Sin datos de siniestros de tránsito para 2027.')
   })
 })
 
@@ -134,7 +134,7 @@ describe('indicatorForLayer', () => {
 
 describe('buildCantonPopupHtml', () => {
   it('includes the canton name, value, rate and source label', () => {
-    const html = buildCantonPopupHtml('extorsion', row({ name: 'GUAYAQUIL', value: 1234, rate_per_100k: 41.1 }), 2025)
+    const html = buildCantonPopupHtml('extorsion', row({ name: 'GUAYAQUIL', value: 1234, rate_per_100k: 41.1 }), '2025')
     expect(html).toContain('Guayaquil')
     expect(html).toContain('1234')
     expect(html).toContain('OECO/FGE')
@@ -142,13 +142,13 @@ describe('buildCantonPopupHtml', () => {
   })
 
   it('shows a population-missing message instead of a rate when rate_per_100k is null', () => {
-    const html = buildCantonPopupHtml('siniestros', row({ rate_per_100k: null }), 2025)
+    const html = buildCantonPopupHtml('siniestros', row({ rate_per_100k: null }), '2025')
     expect(html).toContain('Sin datos de población')
     expect(html).toContain('INEC')
   })
 
   it('escapes HTML-significant characters in the canton name', () => {
-    const html = buildCantonPopupHtml('extorsion', row({ name: '<script>' }), 2025)
+    const html = buildCantonPopupHtml('extorsion', row({ name: '<script>' }), '2025')
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;')
   })

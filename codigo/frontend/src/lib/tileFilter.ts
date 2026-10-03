@@ -3,7 +3,7 @@ import type { Filters } from './registry'
 
 /**
  * MapLibre filter selecting only the `map_incidents` tile features matching
- * the current year/months/types/province/canton filters. Used on the
+ * the current years/months/types/province/canton filters. Used on the
  * `incidents-heat` and `incidents-marks` layers via `map.setFilter`.
  *
  * bbox is deliberately not part of this: vector tiles are already spatially
@@ -11,10 +11,10 @@ import type { Filters } from './registry'
  * registry column's own /api/incidents fetch does.
  */
 export function buildTileFilter(
-  filters: Pick<Filters, 'year' | 'months' | 'types' | 'province' | 'canton'>,
+  filters: Pick<Filters, 'years' | 'months' | 'types' | 'province' | 'canton'>,
 ): ExpressionSpecification {
   const clauses: ExpressionSpecification[] = [
-    ['==', ['get', 'year'], filters.year],
+    ['in', ['get', 'year'], ['literal', filters.years]],
     ['in', ['get', 'month'], ['literal', filters.months]],
     ['in', ['get', 'type'], ['literal', filters.types]],
   ]

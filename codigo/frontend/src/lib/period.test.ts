@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { lastPublishedMonth, monthsForYear } from './period'
+import {
+  formatMonths,
+  formatPeriodLabel,
+  formatYears,
+  lastPublishedMonth,
+  lastPublishedMonthForYears,
+  monthsForYear,
+  toggleYear,
+} from './period'
 
 describe('lastPublishedMonth', () => {
   it('limits only the year of the data cut', () => {
@@ -35,5 +43,56 @@ describe('monthsForYear', () => {
 
   it('falls back to every month when nothing of the selection remains', () => {
     expect(monthsForYear([10, 11], 12, 8)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+  })
+})
+
+describe('lastPublishedMonthForYears', () => {
+  it('uses the max over the selected years', () => {
+    expect(lastPublishedMonthForYears([2026], '2026-08-31')).toBe(8)
+    expect(lastPublishedMonthForYears([2025, 2026], '2026-08-31')).toBe(12)
+    expect(lastPublishedMonthForYears([2019, 2025], '2026-08-31')).toBe(12)
+  })
+
+  it('has no months for an empty selection', () => {
+    expect(lastPublishedMonthForYears([], '2026-08-31')).toBe(0)
+  })
+
+  it('keeps a full selection full when a complete year joins the cut year', () => {
+    const last = lastPublishedMonthForYears([2025, 2026], '2026-08-31')
+    expect(monthsForYear([1, 2, 3, 4, 5, 6, 7, 8], 8, last)).toHaveLength(12)
+  })
+})
+
+describe('toggleYear', () => {
+  it('adds a year keeping the list sorted', () => {
+    expect(toggleYear([2026], 2024)).toEqual([2024, 2026])
+  })
+
+  it('removes a selected year', () => {
+    expect(toggleYear([2024, 2026], 2024)).toEqual([2026])
+  })
+
+  it('ignores removing the last remaining year', () => {
+    expect(toggleYear([2026], 2026)).toEqual([2026])
+  })
+})
+
+describe('formatPeriodLabel', () => {
+  it('names one year after its months', () => {
+    expect(formatPeriodLabel([2026], [1, 2, 3, 4, 5, 6, 7, 8])).toBe('enero–agosto 2026')
+  })
+
+  it('collapses three or more consecutive years into a range', () => {
+    const all = Array.from({ length: 12 }, (_, i) => i + 1)
+    expect(formatPeriodLabel([2024, 2025, 2026], all)).toBe('2024–2026, enero–diciembre')
+  })
+
+  it('lists non-consecutive years', () => {
+    expect(formatPeriodLabel([2019, 2021, 2023], [3])).toBe('2019, 2021 y 2023, marzo')
+  })
+
+  it('joins two years with «y» and scattered months with commas', () => {
+    expect(formatYears([2024, 2025])).toBe('2024 y 2025')
+    expect(formatMonths([1, 3, 5])).toBe('enero, marzo y mayo')
   })
 })

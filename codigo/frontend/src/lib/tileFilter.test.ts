@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Filters } from './registry'
 import { buildTileFilter } from './tileFilter'
 
-const base: Pick<Filters, 'year' | 'months' | 'types' | 'province' | 'canton'> = {
-  year: 2026,
+const base: Pick<Filters, 'years' | 'months' | 'types' | 'province' | 'canton'> = {
+  years: [2026],
   months: [1, 2, 3],
   types: ['homicidio', 'sicariato'],
   province: null,
@@ -11,10 +11,14 @@ const base: Pick<Filters, 'year' | 'months' | 'types' | 'province' | 'canton'> =
 }
 
 describe('buildTileFilter', () => {
+  it('matches any of several selected years with `in`', () => {
+    expect(buildTileFilter({ ...base, years: [2024, 2025] })[1]).toEqual(['in', ['get', 'year'], ['literal', [2024, 2025]]])
+  })
+
   it('filters by year, months and types, with no place clauses by default', () => {
     expect(buildTileFilter(base)).toEqual([
       'all',
-      ['==', ['get', 'year'], 2026],
+      ['in', ['get', 'year'], ['literal', [2026]]],
       ['in', ['get', 'month'], ['literal', [1, 2, 3]]],
       ['in', ['get', 'type'], ['literal', ['homicidio', 'sicariato']]],
     ])

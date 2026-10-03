@@ -85,7 +85,8 @@ export const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', '
 export type CantonLayer = 'none' | 'extorsion' | 'siniestros'
 
 export interface Filters {
-  year: number
+  /** Selected years, sorted ascending, never empty. */
+  years: number[]
   months: number[]
   types: IncidentType[]
   /** DPA province code (e.g. "09"), not the name. */
@@ -102,7 +103,7 @@ export interface Filters {
  * App.tsx and pages/Mapa.tsx.
  */
 export const FALLBACK_FILTERS: Filters = {
-  year: new Date().getFullYear(),
+  years: [new Date().getFullYear()],
   months: Array.from({ length: 12 }, (_, i) => i + 1),
   types: [...INCIDENT_TYPES],
   province: null,

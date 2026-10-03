@@ -6,6 +6,7 @@ import { TimeRule } from '../components/TimeRule'
 import type { AdminUnitsResponse, MetaResponse, StatsRow, TimeseriesPoint } from '../lib/api'
 import { getCantonIndicators, getCantonIndicatorsSummary, getStats, getStatsTimeseries } from '../lib/api'
 import { indicatorRowsToStatsRows, yearTotalsToStatsRows } from '../lib/cantonChoropleth'
+import { formatYears } from '../lib/period'
 import { FIRST_YEAR, MONTHS, TYPE_LABEL, type Filters, formatCount, placeName } from '../lib/registry'
 import { Link } from '../lib/router'
 import {
@@ -22,7 +23,7 @@ import {
 interface EstadisticasProps {
   filters: Filters
   onUpdate: (patch: Partial<Filters>) => void
-  onChangeYear: (year: number) => void
+  onChangeYears: (years: number[]) => void
   meta: MetaResponse | null
   adminUnits: AdminUnitsResponse | null
   lastMonth: number
@@ -61,7 +62,7 @@ const INDEX: IndexEntry[] = [
  * figures, and five sections behind a sticky index -- reusing MonthlyChart,
  * RateTable and lib/stats.ts unchanged, just reordered under the new index.
  */
-export function Estadisticas({ filters, onUpdate, onChangeYear, meta, adminUnits, lastMonth }: EstadisticasProps) {
+export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnits, lastMonth }: EstadisticasProps) {
   useEffect(() => {
     document.title = 'Estadísticas · ReporteEC'
   }, [])
@@ -75,24 +76,24 @@ export function Estadisticas({ filters, onUpdate, onChangeYear, meta, adminUnits
   useEffect(() => {
     const controller = new AbortController()
     const place = { province: filters.province, canton: filters.canton }
-    const previousYear = filters.year - 1
+    const previousYears = filters.years.map((y) => y - 1)
 
     Promise.all([
-      getStats({ dimension: 'type', year: filters.year, months: filters.months, ...place }, controller.signal),
-      getStats({ dimension: geoDimension, year: filters.year, months: filters.months, types: filters.types, ...place }, controller.signal),
-      getStats({ dimension: 'canton', year: filters.year, months: filters.months, types: filters.types }, controller.signal),
-      getStatsTimeseries({ year: filters.year, months: filters.months, types: filters.types, ...place }, controller.signal),
-      // A cheap comparison against the same months of the previous year --
+      getStats({ dimension: 'type', years: filters.years, months: filters.months, ...place }, controller.signal),
+      getStats({ dimension: geoDimension, years: filters.years, months: filters.months, types: filters.types, ...place }, controller.signal),
+      getStats({ dimension: 'canton', years: filters.years, months: filters.months, types: filters.types }, controller.signal),
+      getStatsTimeseries({ years: filters.years, months: filters.months, types: filters.types, ...place }, controller.signal),
+      // A cheap comparison against the same months of the previous years --
       // skipped before FIRST_YEAR, when there is nothing to compare against.
-      previousYear >= FIRST_YEAR
-        ? getStats({ dimension: 'type', year: previousYear, months: filters.months, types: filters.types, ...place }, controller.signal)
+      previousYears[0] >= FIRST_YEAR
+        ? getStats({ dimension: 'type', years: previousYears, months: filters.months, types: filters.types, ...place }, controller.signal)
         : Promise.resolve(null),
       getStats({ dimension: 'year', layer: 'detentions', months: filters.months, ...place }, controller.signal),
-      getStats({ dimension: 'province', layer: 'detentions', year: filters.year, months: filters.months }, controller.signal),
+      getStats({ dimension: 'province', layer: 'detentions', years: filters.years, months: filters.months }, controller.signal),
       getCantonIndicatorsSummary('extorsion', controller.signal),
-      getCantonIndicators('extorsion', filters.year, controller.signal),
+      getCantonIndicators('extorsion', filters.years, controller.signal),
       getCantonIndicatorsSummary('siniestros', controller.signal),
-      getCantonIndicators('siniestros', filters.year, controller.signal),
+      getCantonIndicators('siniestros', filters.years, controller.signal),
     ])
       .then(
         ([
@@ -158,11 +159,11 @@ export function Estadisticas({ filters, onUpdate, onChangeYear, meta, adminUnits
         }
       />
       <TimeRule
-        year={filters.year}
+        years={filters.years}
         months={filters.months}
         availableYears={meta?.years ?? []}
         lastMonth={lastMonth}
-        onYear={onChangeYear}
+        onYears={onChangeYears}
         onMonths={(months) => onUpdate({ months })}
       />
 
@@ -216,7 +217,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYear, meta, adminUnits
 
                 <div className="min-w-0">
                   <StatsSection id="incidentes" title="Incidentes" measures="Casos por tipo y su serie mensual, del año y meses filtrados." anchor="conteo-y-tasa">
-                    <MonthlyChart points={data.timeseries} months={filters.months} year={filters.year} />
+                    <MonthlyChart points={data.timeseries} months={filters.months} year={formatYears(filters.years)} />
                     <RateTable
                       className="mt-4"
                       caption="Casos y tasa por tipo de incidente (tasa = casos por 100.000 habitantes)"
@@ -277,7 +278,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYear, meta, adminUnits
                       defaultSort="label"
                       defaultDirection="asc"
                     />
-                    <h3 className="label mt-4 text-ink-3">Cantones con mayor tasa (top 15, {filters.year})</h3>
+                    <h3 className="label mt-4 text-ink-3">Cantones con mayor tasa (top 15, {formatYears(filters.years)})</h3>
                     <RateTable
                       className="mt-2"
                       caption="Los 15 cantones con mayor tasa de extorsión por 100.000 habitantes (tasa = casos por 100.000 habitantes)"
@@ -302,7 +303,7 @@ export function Estadisticas({ filters, onUpdate, onChangeYear, meta, adminUnits
                       defaultSort="label"
                       defaultDirection="asc"
                     />
-                    <h3 className="label mt-4 text-ink-3">Cantones con mayor tasa (top 15, {filters.year})</h3>
+                    <h3 className="label mt-4 text-ink-3">Cantones con mayor tasa (top 15, {formatYears(filters.years)})</h3>
                     <RateTable
                       className="mt-2"
                       caption="Los 15 cantones con mayor tasa de siniestros de tránsito por 100.000 habitantes (tasa = casos por 100.000 habitantes)"
@@ -398,7 +399,7 @@ function StatsSection({
   )
 }
 
-function MonthlyChart({ points, months, year }: { points: TimeseriesPoint[]; months: number[]; year: number }) {
+function MonthlyChart({ points, months, year }: { points: TimeseriesPoint[]; months: number[]; year: string }) {
   const series = buildMonthlySeries(points, months)
 
   if (series.length < 2) {
