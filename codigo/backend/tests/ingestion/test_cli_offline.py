@@ -1,6 +1,8 @@
 """The download-only command and --offline loading used by the data refresh script."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from app.modules.ingestion import __main__ as cli
 
@@ -56,3 +58,12 @@ def test_download_command_fetches_every_package_into_dest(tmp_path: Path, monkey
 
     assert requested == list(cli.CKAN_PACKAGES.values())
     assert capsys.readouterr().out.count(".xlsx") == 3
+
+
+def test_summary_says_skipped_for_an_earlier_run(capsys):
+    now = datetime.now(UTC)
+    earlier_run = SimpleNamespace(id=7, started_at=now - timedelta(days=1))
+
+    cli._print_summary(Path("homicidios.xlsx"), earlier_run, now)
+
+    assert capsys.readouterr().out.strip() == "homicidios.xlsx: already loaded (run 7), skipped"

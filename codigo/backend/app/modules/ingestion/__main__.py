@@ -24,6 +24,7 @@ multiple times, or invoke the command once per file.
 import argparse
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -105,7 +106,11 @@ def _files(source_slug: str, files: list[Path] | None, offline: bool) -> list[Pa
     return _download(CKAN_PACKAGES[source_slug], DEFAULT_RAW_DIR)
 
 
-def _print_summary(path: Path, run) -> None:
+def _print_summary(path: Path, run, started: datetime | None = None) -> None:
+    if started is not None and run.started_at < started:
+        # load_file returned the earlier successful run: nothing was reprocessed.
+        print(f"{path.name}: already loaded (run {run.id}), skipped")
+        return
     detail = json.loads(run.error_detail) if run.error_detail else {}
     skipped_total = sum(detail.get("skipped", {}).values())
     print(
@@ -138,8 +143,9 @@ def _run(
 ) -> None:
     with Session(get_engine()) as session:
         for path in files:
+            started = datetime.now(UTC)
             run = load_file(session, source_slug, path, normalize, target, force=force)
-            _print_summary(path, run)
+            _print_summary(path, run, started)
 
 
 def run_homicidios(files: list[Path] | None, *, force: bool = False, offline: bool = False) -> None:

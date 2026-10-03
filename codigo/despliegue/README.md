@@ -318,3 +318,25 @@ límites de memoria (el VPS no tiene swap).
    docker exec minigames-caddy-1 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
    docker exec minigames-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
    ```
+
+## 14. Actualizar los datos (CKAN bloquea el VPS)
+
+`datosabiertos.gob.ec` responde 403 a la IP del VPS, así que el `worker`
+no puede descargar desde allí y queda apagado. Para actualizar los datos,
+cuando el Ministerio publica un archivo nuevo (más o menos cada mes),
+ejecuta en **tu máquina**:
+
+```bash
+codigo/scripts/actualizar_datos.sh
+```
+
+El script descarga desde CKAN, sube los archivos con `rsync` y los carga en
+producción con `ingestion all --offline`. Los archivos ya cargados se
+saltan. Los datos del servidor se leen de `~/.config/reporteec/deploy.conf`,
+que está fuera del repositorio:
+
+```bash
+REPORTEEC_SSH_HOST=usuario@ip
+REPORTEEC_SSH_KEY=/ruta/a/la/llave.pem
+REPORTEEC_REMOTE_DIR=projects/ReporteEC
+```
