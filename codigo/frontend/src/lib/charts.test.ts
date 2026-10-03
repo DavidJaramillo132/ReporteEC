@@ -6,6 +6,7 @@ import {
   TYPE_ENCODING,
   barPath,
   columnPath,
+  groupedLayout,
   isPointerFocus,
   lineTable,
   mixHex,
@@ -15,6 +16,7 @@ import {
   seriesByYear,
   shouldClearOnLeave,
   spreadLabels,
+  tickGutter,
   tooltipPlacement,
   truncateLabel,
   yearColor,
@@ -98,6 +100,34 @@ describe('bandLayout', () => {
     const layout = bandLayout(10, 100, 24)
     expect(layout.thickness).toBeLessThan(layout.step)
     expect(layout.thickness).toBeGreaterThan(0)
+  })
+})
+
+describe('tickGutter', () => {
+  it('keeps the minimum for short labels and widens for long ones', () => {
+    expect(tickGutter(['0', '500', '1.000'])).toBe(42)
+    expect(tickGutter(['0', '50'], 40)).toBe(40)
+    expect(tickGutter(['0', '100.000'])).toBe(56)
+  })
+})
+
+describe('groupedLayout', () => {
+  it('caps each column, keeps a 2px gap and centres the group in its band', () => {
+    const layout = groupedLayout(2, 4, 400)
+    expect(layout.column).toBe(24)
+    expect(layout.groupWidth).toBe(102)
+    expect(layout.columnX(0, 0)).toBe(49)
+    expect(layout.columnX(0, 1)).toBe(49 + 26)
+    expect(layout.columnX(1, 3)).toBe(200 + 49 + 3 * 26)
+  })
+
+  it('narrows the columns in a tight band but always leaves air between groups', () => {
+    const layout = groupedLayout(8, 4, 310)
+    expect(layout.column).toBeGreaterThan(1)
+    expect(layout.column).toBeLessThan(24)
+    expect(layout.step - layout.groupWidth).toBeGreaterThanOrEqual(8)
+    // The last column of a group ends before the next group starts.
+    expect(layout.columnX(0, 3) + layout.column).toBeLessThan(layout.columnX(1, 0))
   })
 })
 

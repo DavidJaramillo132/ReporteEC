@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { PointerEvent, ReactNode } from 'react'
-import { lineTable, nearestIndex, nearestSeriesIndex, niceScale, spreadLabels, truncateLabel } from '../../lib/charts'
+import { lineTable, nearestIndex, nearestSeriesIndex, niceScale, spreadLabels, tickGutter, truncateLabel } from '../../lib/charts'
 import { formatCount } from '../../lib/registry'
 import { buildLinePath, linearScale } from '../../lib/stats'
 import { ChartFrame } from './ChartFrame'
@@ -112,7 +112,7 @@ export function LineChart({
           const maxChars = Math.floor((padRight - 14) / CHAR_WIDTH)
           const scale = niceScale(maxValue)
           const baseline = HEIGHT - PAD.bottom
-          const x0 = PAD.left
+          const x0 = tickGutter(scale.ticks.map(formatCount), PAD.left)
           const x1 = width - padRight
           // One point sits in the middle of the plot; linearScale would pin it to the left.
           const xAt = (i: number) => (xLabels.length === 1 ? (x0 + x1) / 2 : linearScale([0, xLabels.length - 1], [x0, x1])(i))

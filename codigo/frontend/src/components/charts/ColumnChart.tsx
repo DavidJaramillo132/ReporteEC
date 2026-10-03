@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { SELLO, bandLayout, columnPath, niceScale } from '../../lib/charts'
+import { SELLO, bandLayout, columnPath, niceScale, tickGutter } from '../../lib/charts'
 import { formatCount } from '../../lib/registry'
 import { linearScale } from '../../lib/stats'
 import { ChartFrame } from './ChartFrame'
@@ -35,6 +35,8 @@ interface ColumnChartProps {
   legend?: LegendItem[]
   emptyText?: string
   className?: string
+  /** Plot height in px, axis labels included. Default 200. */
+  height?: number
 }
 
 const HEIGHT = 200
@@ -58,6 +60,7 @@ export function ColumnChart({
   legend,
   emptyText = 'No hay datos para este periodo.',
   className,
+  height = HEIGHT,
 }: ColumnChartProps) {
   const table = {
     caption: `${title}: la misma información que el gráfico, en tabla.`,
@@ -87,9 +90,10 @@ export function ColumnChart({
         ariaLabel={`${title}. Gráfico de columnas con ${data.length} ${data.length === 1 ? 'valor' : 'valores'}.`}
         describe={describe}
         render={({ width, active, setActive }) => {
-          const plotWidth = Math.max(40, width - PAD.left - PAD.right)
-          const baseline = HEIGHT - PAD.bottom
           const scale = niceScale(Math.max(...data.map((d) => d.value)))
+          const padLeft = tickGutter(scale.ticks.map(formatCount), PAD.left)
+          const plotWidth = Math.max(40, width - padLeft - PAD.right)
+          const baseline = height - PAD.bottom
           const y = linearScale([0, scale.max], [baseline, PAD.top])
           const layout = bandLayout(data.length, plotWidth)
           const labelsFit = data.every((d) => valueText(d).length * CHAR_WIDTH + 4 <= layout.step)
@@ -99,15 +103,15 @@ export function ColumnChart({
             <>
               {scale.ticks.map((tick) => (
                 <g key={tick}>
-                  <line x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} stroke="var(--color-rule-soft)" strokeWidth={1} />
-                  <text x={PAD.left - 6} y={y(tick) + 4} textAnchor="end" fontSize={11.5} fill="var(--color-ink-3)" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  <line x1={padLeft} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} stroke="var(--color-rule-soft)" strokeWidth={1} />
+                  <text x={padLeft - 6} y={y(tick) + 4} textAnchor="end" fontSize={11.5} fill="var(--color-ink-3)" style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {formatCount(tick)}
                   </text>
                 </g>
               ))}
               {data.map((d, i) => {
-                const bandX = PAD.left + i * layout.step
-                const colX = PAD.left + layout.start(i)
+                const bandX = padLeft + i * layout.step
+                const colX = padLeft + layout.start(i)
                 const top = y(d.value)
                 const showLabel = labelsFit || i === maxIndex
                 return (
@@ -120,7 +124,7 @@ export function ColumnChart({
                       </text>
                     )}
                     {i % axisEvery === 0 && (
-                      <text x={colX + layout.thickness / 2} y={HEIGHT - 8} textAnchor="middle" fontSize={11.5} fill="var(--color-ink-2)">
+                      <text x={colX + layout.thickness / 2} y={height - 8} textAnchor="middle" fontSize={11.5} fill="var(--color-ink-2)">
                         {d.label}
                       </text>
                     )}
@@ -128,7 +132,7 @@ export function ColumnChart({
                       x={bandX}
                       y={0}
                       width={layout.step}
-                      height={HEIGHT}
+                      height={height}
                       fill="transparent"
                       onPointerEnter={() => setActive(i)}
                       onPointerDown={() => setActive(i)}
@@ -137,18 +141,18 @@ export function ColumnChart({
                   </g>
                 )
               })}
-              <line x1={PAD.left} x2={width - PAD.right} y1={baseline + 0.5} y2={baseline + 0.5} stroke="var(--color-ink-3)" strokeWidth={1} />
+              <line x1={padLeft} x2={width - PAD.right} y1={baseline + 0.5} y2={baseline + 0.5} stroke="var(--color-ink-3)" strokeWidth={1} />
             </>
           )
 
           const d = active !== null ? data[active] : null
           return {
             svg,
-            height: HEIGHT,
+            height,
             tooltip:
               d && active !== null
                 ? {
-                    x: PAD.left + layout.start(active) + layout.thickness / 2,
+                    x: padLeft + layout.start(active) + layout.thickness / 2,
                     y: y(d.value),
                     content: {
                       title: d.label,

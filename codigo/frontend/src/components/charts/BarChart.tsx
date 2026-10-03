@@ -31,6 +31,10 @@ interface BarChartProps {
   valueHeader?: string
   /** Header of the table column that carries `detail`, e.g. "Tasa por 100.000". */
   detailHeader?: string
+  /** Header of the first table column. Default "Categoría". */
+  categoryHeader?: string
+  /** Formats `value` in the tooltip, table and live region (e.g. a rate). Default: a whole count. */
+  formatValue?: (value: number) => string
   /** Legend entries; only drawn with two or more (e.g. one per incident type). */
   legend?: LegendItem[]
   emptyText?: string
@@ -42,6 +46,8 @@ const BAR_THICKNESS = 14
 const LABEL_BASELINE = 14
 const MARKER_SIZE = 18
 const CHAR_WIDTH = 6.8
+/** Labels and marks sit clear of the baseline rule. */
+const LABEL_INSET = 6
 
 /**
  * Horizontal ranked bars: one row per category, label above its bar, the value
@@ -56,14 +62,16 @@ export function BarChart({
   color = SELLO,
   valueHeader = 'Casos',
   detailHeader,
+  categoryHeader = 'Categoría',
+  formatValue = formatCount,
   legend,
   emptyText = 'No hay datos para este periodo.',
   className,
 }: BarChartProps) {
   const table = {
     caption: `${title}: la misma información que el gráfico, en tabla.`,
-    headers: ['Categoría', valueHeader, ...(detailHeader ? [detailHeader] : [])],
-    rows: data.map((d) => [d.label, formatCount(d.value), ...(detailHeader ? [d.detail ?? '—'] : [])]),
+    headers: [categoryHeader, valueHeader, ...(detailHeader ? [detailHeader] : [])],
+    rows: data.map((d) => [d.label, formatValue(d.value), ...(detailHeader ? [d.detail ?? '—'] : [])]),
   }
 
   if (data.length === 0) {
@@ -74,10 +82,10 @@ export function BarChart({
     )
   }
 
-  const valueText = (d: BarDatum) => d.valueLabel ?? formatCount(d.value)
+  const valueText = (d: BarDatum) => d.valueLabel ?? formatValue(d.value)
   const describe = (i: number) => {
     const d = data[i]
-    return `${d.label}: ${formatCount(d.value)} ${valueHeader.toLowerCase()}${d.detail ? `, ${d.detail}` : ''}. ${i + 1} de ${data.length}.`
+    return `${d.label}: ${formatValue(d.value)} ${valueHeader.toLowerCase()}${d.detail ? `, ${d.detail}` : ''}. ${i + 1} de ${data.length}.`
   }
 
   return (
@@ -91,7 +99,7 @@ export function BarChart({
           const reserve = Math.max(...data.map((d) => valueText(d).length)) * CHAR_WIDTH + 10
           const max = Math.max(1, ...data.map((d) => d.value))
           const x = linearScale([0, max], [0, Math.max(10, width - reserve)])
-          const maxChars = Math.max(6, Math.floor(width / CHAR_WIDTH))
+          const maxChars = Math.max(6, Math.floor((width - LABEL_INSET) / CHAR_WIDTH))
 
           const svg = (
             <>
@@ -99,14 +107,14 @@ export function BarChart({
                 const top = i * ROW_HEIGHT
                 const barY = top + 22
                 const barWidth = x(d.value)
-                const labelX = d.marker ? MARKER_SIZE + 6 : 0
+                const labelX = LABEL_INSET + (d.marker ? MARKER_SIZE + 6 : 0)
                 const text = d.label.length > maxChars ? `${d.label.slice(0, maxChars - 1)}…` : d.label
                 const fill = d.color ?? color
                 return (
                   <g key={d.key}>
                     {active === i && <rect x={0} y={top + 2} width={width} height={ROW_HEIGHT - 4} fill="var(--color-paper-deep)" />}
                     {d.marker && (
-                      <svg x={0} y={top + 2} width={MARKER_SIZE} height={MARKER_SIZE} overflow="visible">
+                      <svg x={LABEL_INSET} y={top + 2} width={MARKER_SIZE} height={MARKER_SIZE} overflow="visible">
                         {d.marker}
                       </svg>
                     )}
@@ -156,7 +164,7 @@ export function BarChart({
                     y: active * ROW_HEIGHT + 22,
                     content: {
                       title: d.label,
-                      rows: [{ label: valueHeader.toLowerCase(), value: formatCount(d.value), detail: d.detail, color: d.color ?? color, marker: d.marker }],
+                      rows: [{ label: valueHeader.toLowerCase(), value: formatValue(d.value), detail: d.detail, color: d.color ?? color, marker: d.marker }],
                     },
                   }
                 : null,

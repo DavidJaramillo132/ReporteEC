@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { BarChart } from './BarChart'
 import { ColumnChart } from './ColumnChart'
+import { GroupedColumnChart } from './GroupedColumnChart'
 import { LineChart } from './LineChart'
 import { typeSeries } from './typeEncoding'
 
@@ -85,5 +86,51 @@ describe('chart components (server render smoke)', () => {
     expect(t.color).toBe('#6d1f3b')
     expect(t.label).toBe('Sicariato')
     expect(t.marker).toBeTruthy()
+  })
+
+  it('BarChart draws a custom value label and otherwise falls back to formatValue', () => {
+    const html = renderToStaticMarkup(
+      <BarChart
+        title="Provincias, por tasa"
+        data={[{ key: '09', label: 'Guayas', value: 66.123, valueLabel: '66,1 (3.456)' }]}
+        formatValue={(v) => v.toFixed(1)}
+        categoryHeader="Provincia"
+      />,
+    )
+    expect(html).toContain('66,1 (3.456)')
+    expect(html).not.toContain('66,123')
+    // Without a valueLabel, the bar-tip label falls back to formatValue.
+    expect(renderToStaticMarkup(<BarChart title="T" data={[{ key: 'a', label: 'A', value: 66.123 }]} formatValue={(v) => v.toFixed(1)} />)).toContain('66.1')
+  })
+
+  it('ColumnChart takes a custom height', () => {
+    const html = renderToStaticMarkup(<ColumnChart title="Por año" height={170} data={[{ key: '2024', label: '2024', value: 3 }]} />)
+    expect(html).toContain('viewBox="0 0 360 170"')
+  })
+
+  it('GroupedColumnChart draws one column per series and group, a legend with marks and the newest group capped by marks', () => {
+    const series = [typeSeries('homicidio'), typeSeries('femicidio')]
+    const html = renderToStaticMarkup(
+      <GroupedColumnChart
+        title="Casos por tipo y año"
+        series={series}
+        groups={[
+          { key: '2024', label: '2024', values: [100, 5], details: ['1,0 por 100.000 hab.', '0,1 por 100.000 hab.'] },
+          { key: '2025', label: '2025', values: [120, 7], details: ['1,2 por 100.000 hab.', '0,1 por 100.000 hab.'] },
+        ]}
+      />,
+    )
+    expect(html).toContain('aria-label="Leyenda"')
+    expect(html).toContain('Homicidio')
+    expect(html.match(/fill="#b23b2a"/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(html.match(/fill="#8a55bd"/g)?.length).toBeGreaterThanOrEqual(2)
+    // Marks on the 2025 caps: a scaled nested svg per series.
+    expect(html.match(/viewBox="0 0 18 18"/g)?.length).toBe(2)
+    expect(html).toContain('2025')
+    expect(html).not.toContain('NaN')
+  })
+
+  it('GroupedColumnChart shows an empty message without groups', () => {
+    expect(renderToStaticMarkup(<GroupedColumnChart title="Vacío" groups={[]} series={[typeSeries('homicidio')]} />)).toContain('No hay datos')
   })
 })

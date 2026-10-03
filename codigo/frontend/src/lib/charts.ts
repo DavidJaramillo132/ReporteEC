@@ -74,6 +74,14 @@ export function niceScale(maxValue: number, target = 4): NiceScale {
   return { max: ticks[ticks.length - 1], ticks }
 }
 
+/**
+ * Left gutter for right-aligned y-axis tick labels: room for the longest
+ * label plus air, never below `min`. Keeps «100.000» from being clipped.
+ */
+export function tickGutter(labels: string[], min = 40, charWidth = 6.8): number {
+  return Math.max(min, Math.ceil(Math.max(0, ...labels.map((label) => label.length)) * charWidth + 8))
+}
+
 export interface BandLayout {
   /** Distance between the starts of two neighbouring bands. */
   step: number
@@ -91,6 +99,36 @@ export function bandLayout(count: number, length: number, maxThickness = 24, min
   const step = count > 0 ? length / count : length
   const thickness = Math.max(1, Math.min(maxThickness, step - Math.max(minGap, step * 0.3)))
   return { step, thickness, start: (index) => index * step + (step - thickness) / 2 }
+}
+
+export interface GroupedLayout {
+  /** Distance between the starts of two neighbouring groups. */
+  step: number
+  /** Width of each column inside a group. */
+  column: number
+  /** Width of a whole group (its columns plus the gaps between them). */
+  groupWidth: number
+  /** Left edge of column `seriesIndex` in group `groupIndex`. */
+  columnX: (groupIndex: number, seriesIndex: number) => number
+}
+
+/**
+ * Splits `length` into `groupCount` bands, each holding `seriesCount` columns
+ * of at most `maxColumn` with a `gap` of surface between neighbours. A group
+ * never fills its band: at least 30% (and 8px) is left as air between groups.
+ */
+export function groupedLayout(groupCount: number, seriesCount: number, length: number, maxColumn = 24, gap = 2): GroupedLayout {
+  const n = Math.max(1, seriesCount)
+  const step = groupCount > 0 ? length / groupCount : length
+  const room = Math.max(n, step - Math.max(8, step * 0.3))
+  const column = Math.max(1, Math.min(maxColumn, (room - (n - 1) * gap) / n))
+  const groupWidth = n * column + (n - 1) * gap
+  return {
+    step,
+    column,
+    groupWidth,
+    columnX: (groupIndex, seriesIndex) => groupIndex * step + (step - groupWidth) / 2 + seriesIndex * (column + gap),
+  }
 }
 
 /** Index of the entry in `positions` closest to `x`, or -1 when empty. */
