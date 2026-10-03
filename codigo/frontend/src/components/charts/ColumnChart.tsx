@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { SELLO, bandLayout, columnPath, niceScale } from '../../lib/charts'
 import { formatCount } from '../../lib/registry'
 import { linearScale } from '../../lib/stats'
@@ -16,6 +17,8 @@ export interface ColumnDatum {
   detail?: string
   /** Per-column colour, e.g. yearColor(year, years). Defaults to the chart colour. */
   color?: string
+  /** A registry <Mark /> (18px) shown in the tooltip so shape backs up hue. */
+  marker?: ReactNode
 }
 
 interface ColumnChartProps {
@@ -128,6 +131,7 @@ export function ColumnChart({
                       height={HEIGHT}
                       fill="transparent"
                       onPointerEnter={() => setActive(i)}
+                      onPointerDown={() => setActive(i)}
                       onPointerMove={() => setActive(i)}
                     />
                   </g>
@@ -148,7 +152,7 @@ export function ColumnChart({
                     y: y(d.value),
                     content: {
                       title: d.label,
-                      rows: [{ label: valueHeader.toLowerCase(), value: formatCount(d.value), detail: d.detail, color: d.color ?? color }],
+                      rows: [{ label: valueHeader.toLowerCase(), value: formatCount(d.value), detail: d.detail, color: d.color ?? color, marker: d.marker }],
                     },
                   }
                 : null,

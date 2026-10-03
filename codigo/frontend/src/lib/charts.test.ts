@@ -3,13 +3,20 @@ import {
   SELLO,
   SELLO_LIGHT,
   bandLayout,
+  TYPE_ENCODING,
   barPath,
   columnPath,
+  isPointerFocus,
+  lineTable,
   mixHex,
   nearestIndex,
+  nearestSeriesIndex,
   niceScale,
   seriesByYear,
+  shouldClearOnLeave,
+  spreadLabels,
   tooltipPlacement,
+  truncateLabel,
   yearColor,
 } from './charts'
 
@@ -173,5 +180,80 @@ describe('seriesByYear', () => {
     const result = seriesByYear(points, [2023, 2025], [2])
     expect(result[0]).toEqual({ year: 2023, values: [{ month: 2, count: 0 }] })
     expect(result[1].values).toEqual([{ month: 2, count: 7 }])
+  })
+})
+
+describe('isPointerFocus / shouldClearOnLeave', () => {
+  it('treats a focus right after a pointer press as pointer-caused', () => {
+    expect(isPointerFocus(1000, 1200)).toBe(true)
+    expect(isPointerFocus(1000, 1600)).toBe(false)
+    expect(isPointerFocus(null, 1200)).toBe(false)
+  })
+
+  it('does not clear on touch pointerleave', () => {
+    expect(shouldClearOnLeave('touch')).toBe(false)
+    expect(shouldClearOnLeave('mouse')).toBe(true)
+    expect(shouldClearOnLeave('pen')).toBe(true)
+  })
+})
+
+describe('spreadLabels', () => {
+  it('leaves well-separated labels alone', () => {
+    expect(spreadLabels([10, 40, 80], 13)).toEqual([10, 40, 80])
+  })
+
+  it('pushes colliding labels apart and keeps the input order', () => {
+    const out = spreadLabels([50, 20, 52], 13)
+    expect(out[1]).toBe(20)
+    expect(out[2] - out[0]).toBeGreaterThanOrEqual(13)
+    expect(out[0]).toBe(50)
+  })
+
+  it('stays inside the bounds', () => {
+    const out = spreadLabels([98, 99, 100], 13, 0, 100)
+    expect(Math.max(...out)).toBeLessThanOrEqual(100)
+    const sorted = [...out].sort((a, b) => a - b)
+    expect(sorted[1] - sorted[0]).toBeGreaterThanOrEqual(13)
+    expect(sorted[2] - sorted[1]).toBeGreaterThanOrEqual(13)
+  })
+})
+
+describe('nearestSeriesIndex / truncateLabel / TYPE_ENCODING', () => {
+  it('picks the closest series and ignores gaps', () => {
+    expect(nearestSeriesIndex([10, 50, null], 48)).toBe(1)
+    expect(nearestSeriesIndex([null, null], 5)).toBe(-1)
+  })
+
+  it('truncates only what does not fit', () => {
+    expect(truncateLabel('2025', 8)).toBe('2025')
+    expect(truncateLabel('Persona desaparecida', 8)).toBe('Persona…')
+  })
+
+  it('pairs each type with its ink and name', () => {
+    expect(TYPE_ENCODING.homicidio).toEqual({ key: 'homicidio', label: 'Homicidio', color: '#b23b2a' })
+    expect(Object.keys(TYPE_ENCODING)).toHaveLength(4)
+  })
+})
+
+describe('lineTable', () => {
+  const series = [
+    { label: '2024', values: [1, null] },
+    { label: '2025', values: [5, 6] },
+  ]
+  const fmt = (n: number) => `#${n}`
+
+  it('has one column per series and em dashes for gaps', () => {
+    const t = lineTable('Mes', ['Ene', 'Feb'], series, fmt)
+    expect(t.headers).toEqual(['Mes', '2024', '2025'])
+    expect(t.rows).toEqual([
+      ['Ene', '#1', '#5'],
+      ['Feb', '—', '#6'],
+    ])
+  })
+
+  it('adds the rate column per series when detailFor is given', () => {
+    const t = lineTable('Mes', ['Ene', 'Feb'], series, fmt, (si, i) => (si === 1 && i === 0 ? '1,5' : undefined))
+    expect(t.headers).toEqual(['Mes', '2024', '2024 (tasa)', '2025', '2025 (tasa)'])
+    expect(t.rows[0]).toEqual(['Ene', '#1', '—', '#5', '1,5'])
   })
 })

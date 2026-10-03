@@ -22,6 +22,10 @@ interface ChartFrameProps {
   subtitle?: string
   /** Shown only with two or more entries: one series is named by the title. */
   legend?: LegendItem[]
+  /** Key of the emphasised series (legend hover/focus or the plot), to bold its legend entry. */
+  highlightKey?: string | null
+  /** Called with a legend item's key on hover/focus and null on leave; makes entries focusable. */
+  onHighlight?: (key: string | null) => void
   table: ChartTable
   children: ReactNode
   className?: string
@@ -32,7 +36,7 @@ interface ChartFrameProps {
  * or more series only), the plot, and the «Ver tabla» toggle that reveals the
  * same numbers as a real table. The toggle is a button with aria-expanded.
  */
-export function ChartFrame({ title, subtitle, legend, table, children, className }: ChartFrameProps) {
+export function ChartFrame({ title, subtitle, legend, highlightKey, onHighlight, table, children, className }: ChartFrameProps) {
   const [showTable, setShowTable] = useState(false)
   const baseId = useId()
   const titleId = `${baseId}-title`
@@ -50,7 +54,15 @@ export function ChartFrame({ title, subtitle, legend, table, children, className
       {legend && legend.length >= 2 && (
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-ink-2" aria-label="Leyenda">
           {legend.map((item) => (
-            <li key={item.key} className="inline-flex items-center gap-1.5">
+            <li
+              key={item.key}
+              tabIndex={onHighlight ? 0 : undefined}
+              onPointerEnter={onHighlight ? () => onHighlight(item.key) : undefined}
+              onPointerLeave={onHighlight ? () => onHighlight(null) : undefined}
+              onFocus={onHighlight ? () => onHighlight(item.key) : undefined}
+              onBlur={onHighlight ? () => onHighlight(null) : undefined}
+              className={`inline-flex items-center gap-1.5 ${highlightKey === item.key ? 'font-semibold text-ink' : ''} ${onHighlight ? 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sello' : ''}`}
+            >
               {item.marker ?? (
                 <span
                   aria-hidden="true"

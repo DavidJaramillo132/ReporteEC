@@ -6,6 +6,8 @@
  */
 
 import type { TimeseriesPoint } from './api'
+import type { IncidentType } from './registry'
+import { TYPE_COLOR, TYPE_LABEL } from './registry'
 import type { MonthlyPoint } from './stats'
 import { buildMonthlySeries } from './stats'
 
@@ -179,4 +181,99 @@ export function seriesByYear(points: TimeseriesPoint[], years: number[], months:
 
 function round(value: number): number {
   return Math.round(value * 100) / 100
+}
+
+// ---- incident-type encoding --------------------------------------------------
+
+export interface TypeEncoding {
+  key: IncidentType
+  label: string
+  /** The type ink. Always drawn together with the registry mark (shape), never alone. */
+  color: string
+}
+
+/** Ink and name per incident type; the mark (shape) is attached by typeSeries(). */
+export const TYPE_ENCODING: Record<IncidentType, TypeEncoding> = {
+  homicidio: { key: 'homicidio', label: TYPE_LABEL.homicidio.one, color: TYPE_COLOR.homicidio },
+  sicariato: { key: 'sicariato', label: TYPE_LABEL.sicariato.one, color: TYPE_COLOR.sicariato },
+  femicidio: { key: 'femicidio', label: TYPE_LABEL.femicidio.one, color: TYPE_COLOR.femicidio },
+  desaparecida: { key: 'desaparecida', label: TYPE_LABEL.desaparecida.one, color: TYPE_COLOR.desaparecida },
+}
+
+// ---- pointer / focus interplay ------------------------------------------------
+
+/**
+ * A focus event that follows a pointer press within `windowMs` was caused by
+ * the pointer (touch fires compat mousedown after pointerup), so it must not
+ * override the item the pointer already selected.
+ */
+export function isPointerFocus(lastPointerDownAt: number | null, now: number, windowMs = 500): boolean {
+  return lastPointerDownAt !== null && now - lastPointerDownAt >= 0 && now - lastPointerDownAt < windowMs
+}
+
+/** Touch fires pointerleave right after pointerup; clearing then would erase a tap. */
+export function shouldClearOnLeave(pointerType: string): boolean {
+  return pointerType !== 'touch'
+}
+
+// ---- labels -------------------------------------------------------------------
+
+/** `text` cut to `maxChars` with an ellipsis. */
+export function truncateLabel(text: string, maxChars: number): string {
+  const max = Math.max(1, maxChars)
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+/**
+ * Nudges label positions apart so neighbours are at least `minGap` apart,
+ * keeping them inside [min, max] and as close to their targets as possible.
+ * Returned in the input order.
+ */
+export function spreadLabels(ys: number[], minGap: number, min = -Infinity, max = Infinity): number[] {
+  const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b])
+  const out = order.map((i) => Math.min(max, Math.max(min, ys[i])))
+  for (let i = 1; i < out.length; i++) out[i] = Math.max(out[i], out[i - 1] + minGap)
+  // If the push ran past `max`, clamp the last one and pull the stack back up.
+  if (out.length > 0) out[out.length - 1] = Math.min(out[out.length - 1], max)
+  for (let i = out.length - 2; i >= 0; i--) out[i] = Math.min(out[i], out[i + 1] - minGap)
+  const result = new Array<number>(ys.length)
+  order.forEach((original, i) => {
+    result[original] = out[i]
+  })
+  return result
+}
+
+/** The series whose value at the active x is closest to the pointer's y (null values never win). */
+export function nearestSeriesIndex(yPositions: (number | null)[], pointerY: number): number {
+  return nearestIndex(pointerY, yPositions.map((y) => y ?? Infinity))
+}
+
+// ---- tables -------------------------------------------------------------------
+
+export interface TableSeries {
+  label: string
+  values: (number | null)[]
+}
+
+/**
+ * Header and rows of a multi-series line chart's table twin: one column per
+ * series, plus (when `detailFor` is given) a column with the figure that goes
+ * with each count, so the table holds everything the tooltip does.
+ */
+export function lineTable(
+  categoryHeader: string,
+  xLabels: string[],
+  series: TableSeries[],
+  format: (value: number) => string,
+  detailFor?: (seriesIndex: number, pointIndex: number) => string | undefined,
+  detailHeader = 'tasa',
+): { headers: string[]; rows: string[][] } {
+  const value = (v: number | null | undefined) => (v === null || v === undefined ? '—' : format(v))
+  return {
+    headers: [categoryHeader, ...series.flatMap((s) => (detailFor ? [s.label, `${s.label} (${detailHeader})`] : [s.label]))],
+    rows: xLabels.map((label, i) => [
+      label,
+      ...series.flatMap((s, si) => (detailFor ? [value(s.values[i]), detailFor(si, i) ?? '—'] : [value(s.values[i])])),
+    ]),
+  }
 }

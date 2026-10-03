@@ -135,6 +135,7 @@ export function BarChart({
                       height={ROW_HEIGHT}
                       fill="transparent"
                       onPointerEnter={() => setActive(i)}
+                      onPointerDown={() => setActive(i)}
                       onPointerMove={() => setActive(i)}
                     />
                   </g>

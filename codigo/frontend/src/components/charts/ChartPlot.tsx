@@ -1,5 +1,6 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { isPointerFocus, shouldClearOnLeave } from '../../lib/charts'
 import { ChartTooltip } from './ChartTooltip'
 import type { TooltipContent } from './ChartTooltip'
 import { useChartWidth } from './useChartWidth'
@@ -39,6 +40,7 @@ export function ChartPlot({ count, ariaLabel, describe, render }: ChartPlotProps
   const { ref, width } = useChartWidth()
   const [active, setActive] = useState<number | null>(null)
   const hintId = useId()
+  const lastPointerDown = useRef<number | null>(null)
 
   const last = count - 1
   const safeActive = active !== null && active <= last ? active : null
@@ -67,9 +69,18 @@ export function ChartPlot({ count, ariaLabel, describe, render }: ChartPlotProps
       aria-label={ariaLabel}
       aria-describedby={hintId}
       onKeyDown={onKeyDown}
-      onFocus={() => setActive((current) => current ?? 0)}
+      onPointerDown={() => {
+        lastPointerDown.current = performance.now()
+      }}
+      onFocus={() => {
+        // A focus caused by a press keeps the item the pointer picked.
+        if (isPointerFocus(lastPointerDown.current, performance.now())) return
+        setActive((current) => current ?? 0)
+      }}
       onBlur={() => setActive(null)}
-      onPointerLeave={() => setActive(null)}
+      onPointerLeave={(event) => {
+        if (shouldClearOnLeave(event.pointerType)) setActive(null)
+      }}
       className="relative w-full max-w-full touch-pan-y focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sello"
     >
       <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true" className="block max-w-full">
