@@ -6,7 +6,7 @@ import { TimeRule } from '../components/TimeRule'
 import type { AdminUnitsResponse, MetaResponse, StatsRow, TimeseriesPoint } from '../lib/api'
 import { getCantonIndicators, getCantonIndicatorsSummary, getStats, getStatsTimeseries } from '../lib/api'
 import { indicatorRowsToStatsRows, yearTotalsToStatsRows } from '../lib/cantonChoropleth'
-import { formatYears } from '../lib/period'
+import { formatYears, previousYearFor } from '../lib/period'
 import { FIRST_YEAR, MONTHS, TYPE_LABEL, type Filters, formatCount, placeName } from '../lib/registry'
 import { Link } from '../lib/router'
 import {
@@ -76,17 +76,17 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
   useEffect(() => {
     const controller = new AbortController()
     const place = { province: filters.province, canton: filters.canton }
-    const previousYears = filters.years.map((y) => y - 1)
+    const previousYear = previousYearFor(filters.years, FIRST_YEAR)
 
     Promise.all([
       getStats({ dimension: 'type', years: filters.years, months: filters.months, ...place }, controller.signal),
       getStats({ dimension: geoDimension, years: filters.years, months: filters.months, types: filters.types, ...place }, controller.signal),
       getStats({ dimension: 'canton', years: filters.years, months: filters.months, types: filters.types }, controller.signal),
       getStatsTimeseries({ years: filters.years, months: filters.months, types: filters.types, ...place }, controller.signal),
-      // A cheap comparison against the same months of the previous years --
-      // skipped before FIRST_YEAR, when there is nothing to compare against.
-      previousYears[0] >= FIRST_YEAR
-        ? getStats({ dimension: 'type', years: previousYears, months: filters.months, types: filters.types, ...place }, controller.signal)
+      // A cheap comparison against the same months of the previous year --
+      // only for a single selected year, and skipped before FIRST_YEAR.
+      previousYear !== null
+        ? getStats({ dimension: 'type', years: [previousYear], months: filters.months, types: filters.types, ...place }, controller.signal)
         : Promise.resolve(null),
       getStats({ dimension: 'year', layer: 'detentions', months: filters.months, ...place }, controller.signal),
       getStats({ dimension: 'province', layer: 'detentions', years: filters.years, months: filters.months }, controller.signal),
@@ -190,13 +190,15 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
 
           {data && (
             <>
-              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-ink py-3 sm:grid-cols-3">
+              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-ink py-3 sm:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
                 <Figure label="Casos en el período" value={formatCount(totalCount ?? 0)} />
                 <Figure label={`Tasa ×100.000, ${rateAreaLabel}`} value={formatRate(overallRate)} warning={lowPopulation} />
-                <Figure
-                  label="Variación vs. mismo período, año anterior"
-                  value={change === null ? 'Sin dato' : `${change >= 0 ? '+' : '−'}${formatRate(Math.abs(change))} %`}
-                />
+                {filters.years.length === 1 && (
+                  <Figure
+                    label="Variación vs. mismo período, año anterior"
+                    value={change === null ? 'Sin dato' : `${change >= 0 ? '+' : '−'}${formatRate(Math.abs(change))} %`}
+                  />
+                )}
               </dl>
 
               <div className="mt-5 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start lg:gap-x-8">

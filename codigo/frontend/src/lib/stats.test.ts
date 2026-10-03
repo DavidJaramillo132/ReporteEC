@@ -141,6 +141,18 @@ describe('buildMonthlySeries', () => {
     expect(buildMonthlySeries(points, [6])).toEqual([{ month: 6, count: 1361 }])
   })
 
+  it('sums the same month across several years', () => {
+    const points: TimeseriesPoint[] = [
+      { year: 2024, month: 1, count: 5 },
+      { year: 2025, month: 1, count: 7 },
+      { year: 2025, month: 2, count: 3 },
+    ]
+    expect(buildMonthlySeries(points, [1, 2])).toEqual([
+      { month: 1, count: 12 },
+      { month: 2, count: 3 },
+    ])
+  })
+
   it('sorts the requested months regardless of the order they were given in', () => {
     expect(buildMonthlySeries([], [3, 1, 2]).map((p) => p.month)).toEqual([1, 2, 3])
   })

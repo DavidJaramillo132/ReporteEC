@@ -43,6 +43,12 @@ export function toggleYear(years: number[], year: number): number[] {
   return years.length === 1 ? years : years.filter((y) => y !== year)
 }
 
+/** The year to compare against: only for a single-year selection (and only if it is not before the first year). */
+export function previousYearFor(years: number[], firstYear: number): number | null {
+  if (years.length !== 1) return null
+  return years[0] - 1 >= firstYear ? years[0] - 1 : null
+}
+
 /** True for a sorted list of three or more consecutive integers. */
 export function isContiguousRun(values: number[]): boolean {
   return values.length >= 3 && values.every((v, i) => i === 0 || v === values[i - 1] + 1)

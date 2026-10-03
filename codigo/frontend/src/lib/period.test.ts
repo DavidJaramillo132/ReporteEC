@@ -6,6 +6,7 @@ import {
   lastPublishedMonth,
   lastPublishedMonthForYears,
   monthsForYear,
+  previousYearFor,
   toggleYear,
 } from './period'
 
@@ -94,5 +95,19 @@ describe('formatPeriodLabel', () => {
   it('joins two years with «y» and scattered months with commas', () => {
     expect(formatYears([2024, 2025])).toBe('2024 y 2025')
     expect(formatMonths([1, 3, 5])).toBe('enero, marzo y mayo')
+  })
+})
+
+describe('previousYearFor', () => {
+  it('is the year before a single selected year', () => {
+    expect(previousYearFor([2025], 2019)).toBe(2024)
+  })
+
+  it('is null for several years', () => {
+    expect(previousYearFor([2024, 2025], 2019)).toBeNull()
+  })
+
+  it('is null before the first year', () => {
+    expect(previousYearFor([2019], 2019)).toBeNull()
   })
 })

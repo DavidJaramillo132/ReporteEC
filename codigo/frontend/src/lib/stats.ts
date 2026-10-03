@@ -63,7 +63,7 @@ export interface MonthlyPoint {
 }
 
 /**
- * `points` (one entry per (year, month) the API returned) reduced to exactly
+ * `points` (one entry per (year, month) the API returned, summed per month across years) reduced to exactly
  * the months in the selected period, IN ORDER, each defaulting to 0 when the
  * API returned nothing for it.
  *
@@ -77,7 +77,9 @@ export interface MonthlyPoint {
  * that, not a different scale or path algorithm.
  */
 export function buildMonthlySeries(points: TimeseriesPoint[], months: number[]): MonthlyPoint[] {
-  const countByMonth = new Map(points.map((point) => [point.month, point.count]))
+  // With several years the same month appears once per year: sum them.
+  const countByMonth = new Map<number, number>()
+  for (const point of points) countByMonth.set(point.month, (countByMonth.get(point.month) ?? 0) + point.count)
   return [...months].sort((a, b) => a - b).map((month) => ({ month, count: countByMonth.get(month) ?? 0 }))
 }
 
