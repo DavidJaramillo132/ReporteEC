@@ -271,3 +271,45 @@ docker compose -f compose.prod.yml --env-file .env up -d --build
 Si la migración nueva ya corrió y rompió algo que un simple rollback de
 código no arregla, restaura el respaldo más reciente anterior al despliegue
 (sección 9) y luego haz el `checkout` de arriba.
+
+## 13. Detrás de un Caddy compartido (VPS de Playhub)
+
+En el VPS de Playhub otro Caddy (`~/projects/MiniGames`) ya ocupa los
+puertos 80/443 y da HTTPS a varios subdominios de `playhubb.site`. ReporteEC
+no publica puertos: su propio Caddy sirve la PWA y `/api` y `/tiles` por
+HTTP dentro de Docker. Además, se une a la red `caddy_net` como
+`reporteec-web`. El override es `compose.behind-proxy.yml`, que también fija
+límites de memoria (el VPS no tiene swap).
+
+1. **DNS en GoDaddy:** registro `A`, nombre `reporteec`, valor
+   `158.23.163.230`.
+2. **`.env`** en `codigo/despliegue/`, con `DOMAIN=:80` y
+   `CORS_ORIGINS=https://reporteec.playhubb.site`. La contraseña debe ser
+   hexadecimal, porque va dentro de una URL.
+3. **Construir y levantar:**
+   ```bash
+   alias rec='docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env'
+   rec up -d --build
+   rec run --rm backend alembic upgrade head
+   ```
+4. **Datos:** primero los cantones (los homicidios sin coordenadas usan su
+   centroide), luego el resto. Usa `worker`, que tiene más memoria:
+   ```bash
+   rec run --rm worker python -m app.modules.ingestion cantons --file /data/raw/dpa/cantones_ecuador_simplificado.geojson
+   rec run --rm worker python -m app.modules.ingestion population --file /data/raw/poblacion/Total_cantonal_2010-2035.xlsx
+   rec run --rm worker python -m app.modules.ingestion all
+   rec run --rm worker python -m app.modules.ingestion extorsion --file /data/raw/oeco/noticias_delito_2019_2025.csv
+   # Un archivo por año: anual cuando existe (el de 2021 trae también 2014–2020), si no, trimestrales.
+   rec run --rm worker python -m app.modules.ingestion siniestros \
+     $(for f in 2021_anual 2022_anual 2023_anual 2024_anual 2025_anual 2026_t1 2026_t2; do printf -- '--file /data/raw/inec/inec_estra_%s_datos_abiertos.zip ' "$f"; done)
+   ```
+5. **Caddy de Playhub:** respalda el archivo y agrega el bloque al final con
+   `>>`. No uses `sed -i`, porque el archivo está montado por inodo dentro
+   del contenedor. Valida y recarga sin cortar los otros sitios:
+   ```bash
+   cd ~/projects/MiniGames
+   cp Caddyfile Caddyfile.bak.$(date +%Y%m%d-%H%M%S)
+   printf '\nreporteec.playhubb.site {\n\tencode zstd gzip\n\treverse_proxy reporteec-web:80\n}\n' >> Caddyfile
+   docker exec minigames-caddy-1 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+   docker exec minigames-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+   ```

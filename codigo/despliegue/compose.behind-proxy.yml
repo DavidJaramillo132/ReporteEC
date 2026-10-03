@@ -1,0 +1,44 @@
+# Override for a host where another Caddy already owns ports 80/443 and
+# terminates HTTPS for several subdomains (the Playhub VPS: see README.md
+# "Detrás de un Caddy compartido").
+#
+# This stack's own Caddy keeps serving the PWA and proxying /api and /tiles,
+# but over plain HTTP inside Docker, with no published ports. It joins the
+# shared proxy network as `reporteec-web`, and the shared Caddy forwards the
+# subdomain to it:
+#
+#   reporteec.example.com {
+#       reverse_proxy reporteec-web:80
+#   }
+#
+# Usage (from codigo/despliegue/, .env with DOMAIN=:80):
+#   docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env up -d --build
+#
+# Memory limits keep this stack from starving the other projects on a small
+# shared VPS with no swap; the worker gets the most because a full reload of
+# the historical detentions file peaks near 1 GB.
+services:
+  postgres:
+    mem_limit: 768m
+
+  martin:
+    mem_limit: 256m
+
+  backend:
+    mem_limit: 512m
+
+  worker:
+    mem_limit: 1280m
+
+  caddy:
+    container_name: reporteec-web
+    ports: !reset []
+    mem_limit: 128m
+    networks:
+      - default
+      - shared_proxy
+
+networks:
+  shared_proxy:
+    name: ${SHARED_PROXY_NETWORK:-caddy_net}
+    external: true
