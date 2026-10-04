@@ -1,6 +1,6 @@
 ---
 tags: [arquitectura, plataforma, backend, postgis, fastapi]
-actualizado: 2026-09-24
+actualizado: 2026-10-03
 estado: aprobado
 ---
 
@@ -60,6 +60,14 @@ Navegadores Web (PWA)     Móviles (Android/iOS)      Clientes B2B (API)
                     │  - routes_worker        │
                     └─────────────────────────┘
 ```
+
+> [!info] En producción (V1 publicada)
+> El sitio corre en https://reporteec.playhubb.site. El Caddy de ReporteEC
+> (`reporteec-web`) sirve la PWA, `/api` y `/tiles`, y queda detrás de un Caddy
+> compartido con otros proyectos, que ocupa los puertos 80/443 y da el HTTPS.
+> Solo `historical_worker` existe hoy, y no corre en el VPS porque
+> `datosabiertos.gob.ec` le responde 403: los datos se actualizan desde la
+> máquina del desarrollador con `codigo/scripts/actualizar_datos.sh`.
 
 ---
 

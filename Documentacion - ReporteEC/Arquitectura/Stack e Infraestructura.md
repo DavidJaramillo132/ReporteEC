@@ -1,6 +1,6 @@
 ---
 tags: [arquitectura, stack, infraestructura]
-actualizado: 2026-09-22
+actualizado: 2026-10-03
 ---
 # Stack e Infraestructura
 
@@ -34,7 +34,7 @@ actualizado: 2026-09-22
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Tiempo real en el mapa | **Server-Sent Events** desde FastAPI + `LISTEN/NOTIFY` de PostgreSQL                                                              |
 | Notificaciones         | **Web Push** con claves VAPID (`pywebpush` en el servidor)                                                                        |
-| Imágenes de reportes  | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia en `backend/app/modules/storage/` |
+| Imágenes de reportes  | **Azure Blob Storage** ahora y **Amazon S3** en el futuro, detrás de una interfaz propia (módulo de almacenamiento, aún no existe) |
 
 ### Almacenamiento analítico unificado
 
@@ -106,6 +106,7 @@ uv add --dev pytest ruff
 | -------------------------------------------------- | ----------------------------- |
 | `uv run fastapi dev app/main.py`                 | La API en desarrollo          |
 | `uv run python -m app.workers.historical_worker` | Un worker                     |
+| `uv run python -m app.ingestion <comando>`       | Cargar datos (CLI de ingesta) |
 | `uv run pytest`                                  | Tests                         |
 | `uv run ruff check`                              | Revisión de estilo y errores |
 
@@ -124,8 +125,8 @@ RUN uv sync --frozen --no-cache
 
 `codigo/docker-compose.yml` levanta todo el entorno de desarrollo:
 PostgreSQL + PostGIS, Martin, backend y frontend, con recarga automática al
-editar el código. El compose de producción, con Caddy, irá en
-`codigo/despliegue/`.
+editar el código. El compose de producción está en
+`codigo/despliegue/` (`compose.prod.yml`).
 
 | Archivo                        | Para qué                                          |
 | ------------------------------ | -------------------------------------------------- |
@@ -155,19 +156,31 @@ colaborador instalen exactamente lo mismo.
 ## Infraestructura
 
 ```
-Internet ─► GoDaddy (DNS) ─► VPS Ubuntu (Azure)
-                              └─ Docker Compose
-                                  ├─ Caddy        (HTTPS, entrada única)
+Internet ─► GoDaddy (DNS) ─► VPS Ubuntu (Azure, compartido con otros proyectos)
+                              ├─ Caddy compartido (de otro proyecto: puertos 80/443, HTTPS)
+                              │     └─ red Docker `caddy_net` ─► reporteec-web
+                              └─ Docker Compose (compose.prod.yml + compose.behind-proxy.yml)
+                                  ├─ Caddy        (reporteec-web: sirve la PWA, /api y /tiles)
                                   ├─ frontend     (archivos estáticos de la PWA)
                                   ├─ backend      (FastAPI)
                                   ├─ martin       (teselas)
                                   ├─ postgres     (PostgreSQL + PostGIS)
-                                  └─ ingesta      (tareas programadas)
+                                  └─ worker       (ingesta; apagado en producción)
 ```
 
-- **Respaldo diario** de la base de datos con `pg_dump` a almacenamiento externo.
-- **Tareas programadas:** v1 revisa CKAN a diario y carga solo si hay archivos
-  nuevos; v2 consulta las noticias de la Policía cada pocos minutos.
+La V1 está publicada en https://reporteec.playhubb.site. El VPS es Ubuntu 24.04
+con 2 vCPU y 3,8 GB de RAM. Los pasos están en `codigo/despliegue/README.md`
+(«Detrás de un Caddy compartido» y «Actualizar los datos»).
+
+- **Respaldo diario** de la base de datos: una tarea cron en el servidor
+  (08:00 UTC) ejecuta `codigo/despliegue/backup.sh`.
+- **Tareas programadas:** el `historical_worker` está pensado para revisar
+  CKAN a diario y cargar solo si hay archivos nuevos, pero **no corre en
+  producción**: `datosabiertos.gob.ec` responde 403 a la IP del VPS. Los datos
+  se actualizan desde la máquina del desarrollador con
+  `codigo/scripts/actualizar_datos.sh` (descarga, `rsync` al servidor y
+  `python -m app.ingestion all --offline`). La V3 consultará las noticias de la
+  Policía cada pocos minutos.
 - Los datos crudos descargados **no se versionan** (`codigo/data/raw/`).
 
 ## Primer paso técnico: esqueleto de punta a punta

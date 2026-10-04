@@ -1,6 +1,6 @@
 ---
 tags: [arquitectura, modulos, estructura]
-actualizado: 2026-09-22
+actualizado: 2026-10-03
 ---
 # Módulos del Sistema
 
@@ -23,7 +23,7 @@ codigo/
 ├── backend/                 Monolito modular (Python + FastAPI)
 │   ├── app/
 │   │   ├── main.py          arranque de la API (monta los routers bajo /api)
-│   │   ├── core/            configuración y utilidades comunes
+│   │   ├── core/            configuración, zona horaria y rango de años
 │   │   ├── database/        conexión, sesión, tipos y vistas (`map_incidents`…)
 │   │   ├── modules/         lógica de negocio, un módulo por dominio
 │   │   │   ├── incidents/   modelos, esquemas, servicio (consultas) y router
@@ -32,7 +32,7 @@ codigo/
 │   │   │   ├── territory/   provincias, cantones, población e indicadores cantonales
 │   │   │   ├── stats/       conteos y tasas por 100.000 hab.
 │   │   │   ├── meta/        estado de la carga de datos
-│   │   │   └── …            v2: routes, notifications, storage (aún no existen)
+│   │   │   └── …            futuro: routes, notifications, almacenamiento (aún no existen)
 │   │   ├── ingestion/       pipeline de datos (no es un dominio de negocio)
 │   │   │   ├── __main__.py  CLI: `python -m app.ingestion <comando>`
 │   │   │   ├── jobs.py      tareas que usan la CLI y el worker
@@ -43,14 +43,14 @@ codigo/
 │   │   │   ├── records.py   registro normalizado común
 │   │   │   └── models.py    `PipelineRun` (historial de corridas)
 │   │   └── workers/         procesos que corren aparte de la API
-│   │       ├── historical_worker.py   ingesta de datos oficiales (v1)
-│   │       ├── news_worker.py         noticias de la Policía (v2)
+│   │       ├── historical_worker.py   ingesta de datos oficiales (v1; no corre en producción)
+│   │       ├── news_worker.py         noticias de la Policía (v3)
 │   │       └── processing_worker.py   IA + geocodificación (futuro)
 │   ├── migrations/          PostGIS: tablas y funciones para teselas
 │   └── tests/
 ├── frontend/                PWA con el mapa (React + TypeScript + Vite + MapLibre)
 ├── despliegue/              VPS: Docker Compose, Caddy, Martin, respaldos
-└── scripts/                 utilidades de inspección
+└── scripts/                 utilidades de inspección y `actualizar_datos.sh` (actualiza los datos de producción)
 ```
 
 ## Flujo de datos
@@ -80,13 +80,19 @@ Un **adaptador por fuente**, todos con la misma interfaz:
 | Adaptador                                                    | Versión  |
 | ------------------------------------------------------------ | --------- |
 | `mdi_homicidios`, `mdi_desaparecidas`, `mdi_detenidos` | v1        |
-| `fge_extorsion` (noticias del delito FGE / OECO)             | v1        |
+| `oeco_extorsion` (noticias del delito FGE / OECO)            | v1        |
 | `inec_siniestros` (por cantón)                            | v1        |
-| `inec_poblacion`                                           | v1        |
-| `policia_noticias`                                         | v2        |
+| población INEC (cargador `loaders/territory.py`, sin adaptador propio) | v1        |
+| `policia_noticias`                                         | v3        |
 | `telegram`                                                 | V3 — ver[[Telegram - Fuentes Colaboradoras]] |
 
-### backend — esquema (`migraciones/`)
+> [!info] En producción
+> `datosabiertos.gob.ec` bloquea la IP del VPS (403), así que el worker diario
+> no corre allí. Los datos se actualizan desde la máquina del desarrollador con
+> `codigo/scripts/actualizar_datos.sh`, que sube los archivos al servidor y
+> ejecuta `python -m app.ingestion all --offline`.
+
+### backend — esquema (`migrations/`)
 
 - **Tabla única de incidentes** con geometría `Point, 4326`, tipo,
   `nivel_confianza`, `vigencia`, `fuente`, `estado`, `fusionado_con`
@@ -117,7 +123,7 @@ sería lentísimo. Martin (v1) publica **solo** `map_incidents` y
 desactivado (`auto_publish: false`): nunca expone `incidents`, `detentions`
 ni ninguna otra tabla directamente.
 
-### backend — almacenamiento (`app/modules/storage/`, V2, aún no creado)
+### backend — almacenamiento (módulo futuro, ligado a los reportes ciudadanos de la V3; aún no creado)
 
 Las imágenes de los reportes ciudadanos se guardan en un bucket. El código usa
 una **interfaz propia** (subir, obtener URL, borrar) con una implementación

@@ -125,6 +125,9 @@ nueva (ver "Actualizaciones" más abajo).
 las descarga y carga solo, apenas arranca y luego cada 24 horas. Para no
 esperar el primer ciclo:
 
+> Si el portal bloquea la IP del VPS (responde 403), el worker no puede
+> descargar: sigue la sección 14, «Actualizar los datos».
+
 ```bash
 docker compose -f compose.prod.yml --env-file .env run --rm backend \
   python -m app.ingestion all

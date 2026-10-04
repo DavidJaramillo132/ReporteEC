@@ -1,7 +1,7 @@
 ---
 tags: [version, v1, mapa-historico]
-actualizado: 2026-09-23
-estado: por empezar
+actualizado: 2026-10-03
+estado: publicada, en cierre
 ---
 # V1 — Mapa Histórico
 
@@ -12,6 +12,18 @@ estado: por empezar
 > y las siguientes versiones se sumen sin rehacer nada.
 
 Visión general de las versiones en [[Hoja de Ruta]].
+
+> [!success] Estado actual (2026-10-03)
+> La V1 está **publicada** en https://reporteec.playhubb.site (HTTPS), con
+> los datos oficiales cargados y verificados contra los archivos de origen.
+> Para darla por cerrada falta:
+>
+> 1. **Licencia del código:** sigue «por definir»; la página de fuentes lo
+>    dice y no hay archivo `LICENSE`.
+> 2. **Worker diario:** `datosabiertos.gob.ec` responde 403 a la IP del VPS,
+>    así que el worker no corre en producción. Por ahora los datos se
+>    actualizan a mano con `codigo/scripts/actualizar_datos.sh`.
+> 3. **Pruebas manuales:** las casillas sin marcar de la lista de abajo.
 
 ---
 
@@ -27,7 +39,8 @@ Antes de construir funciones, probar que el stack funciona de punta a punta.
 4. **Esqueleto:** homicidios de 2026 → PostGIS → Martin → puntos en el mapa del
    navegador
 5. Verificar fuentes pendientes: población por cantón del INEC y año de inicio
-   de los siniestros del INEC
+   de los siniestros del INEC *(resuelto: ambas están cargadas; los siniestros
+   empiezan en 2019)*
 
 **Se termina cuando** aparecen puntos reales en un mapa en el navegador. Si
 ese camino funciona, el [[Stack e Infraestructura]] queda probado.
@@ -68,12 +81,23 @@ Tipos de incidente según [[Tipos de Incidente]].
   ([[Niveles de Confianza]], decidido 2026-09-25)
 - **Detalle al tocar un punto:** tipo, fecha, lugar, fuente, nivel de confianza
   y enlace a la fuente original
-- **Filtros:** año (2019 → hoy), mes, provincia, cantón, tipo
+- **Filtros:** año (uno o varios, 2019 → hoy), mes, provincia, cantón y tipo,
+  en una sola fila con las listas «Tipos» y «Capas». «Capas» reúne la capa por
+  cantón (ninguna, extorsión o siniestros de tránsito) y el mapa de calor de
+  detenciones. Los filtros se guardan en la dirección de la página
+- **Los homicidios sin coordenadas** (811) se guardan en un punto dentro de su
+  cantón (`location_precision = 'canton'`): cuentan en las estadísticas, pero
+  no se dibujan en el mapa
 - **Nota metodológica visible:** el mapa muestra denuncias, no todo el delito
   que ocurre
 
 ### Estadísticas
 
+- Gráficos hechos a mano (SVG, sin librería), cada uno con un botón
+  «Ver tabla» que muestra las mismas cifras
+- Aceptan cualquier conjunto de años. Con varios años, la tasa es un
+  **promedio por año**: casos entre la población sumada de esos años, por
+  100.000 habitantes
 - Por tipo, provincia, cantón y mes
 - **Conteo** (cuántos casos) y **tasa por 100.000 habitantes** (qué tan
   probable es por persona), siempre juntos
@@ -103,9 +127,12 @@ información. Debe explicar:
 ### Página de licencia y fuentes
 
 - Atribución de cada fuente: Ministerio del Interior, INEC
-- **Licencia de los datos abiertos** del portal `datosabiertos.gob.ec`
-  *(revisar sus condiciones exactas)*
-- Licencia de la propia plataforma y de su código
+- **Licencia de los datos abiertos** del portal `datosabiertos.gob.ec`:
+  revisado, no tiene un texto de licencia explícito, así que se citan bajo las
+  condiciones generales del portal
+- Límites de provincias y cantones: geoBoundaries (CC BY 4.0). Mapa base:
+  OpenStreetMap (ODbL)
+- Licencia de la propia plataforma y de su código: **por definir** (pendiente)
 - **Aviso de responsabilidad:** la información proviene de terceros y se
   muestra con su nivel de confianza; ReporteEC no afirma que los hechos
   ocurrieron
@@ -117,15 +144,30 @@ información. Debe explicar:
   `location_precision`, identificador de origen. `vigencia` se calcula a partir
   de la fecha
 - **Un adaptador por fuente** en `backend/app/ingestion/`
-- **Worker histórico** que revisa CKAN a diario y carga solo archivos nuevos
+- **Worker histórico** (`app/workers/historical_worker.py`) que revisa CKAN a
+  diario y carga solo archivos nuevos. **No corre en producción**: CKAN bloquea
+  la IP del VPS (403). Allí los datos se actualizan desde la máquina del
+  desarrollador con `codigo/scripts/actualizar_datos.sh`, que descarga los
+  archivos, los sube con `rsync` y ejecuta `python -m app.ingestion all --offline`
 - **Tabla `pipeline_runs`**: cada ejecución queda registrada con registros
   procesados, duplicados y errores
 - **Ingesta idempotente:** correrla dos veces da el mismo resultado
+  (`UNIQUE(source_id, source_record_id)` y, por archivo, `pipeline_runs.file_hash`:
+  un archivo ya cargado se salta)
+- **Población por cantón** (proyecciones del INEC): la tasa de un año usa la
+  población de ese mismo año
 
 ### Despliegue
 
-- VPS Ubuntu en Azure, Docker Compose, Caddy con HTTPS, dominio en GoDaddy
-- Respaldo diario de la base de datos
+- VPS Ubuntu 24.04 (2 vCPU, 3,8 GB de RAM) compartido con otros proyectos,
+  Docker Compose (`compose.prod.yml` + `compose.behind-proxy.yml`). Un Caddy
+  compartido, de otro proyecto, ocupa los puertos 80/443, da el HTTPS y envía
+  el tráfico al contenedor `reporteec-web` por la red `caddy_net`
+- Subdominio `reporteec.playhubb.site`, con el DNS en GoDaddy
+- Respaldo diario de la base de datos: una tarea cron a las 08:00 UTC ejecuta
+  `codigo/despliegue/backup.sh`
+- Pasos en `codigo/despliegue/README.md` («Detrás de un Caddy compartido» y
+  «Actualizar los datos»)
 - **PWA instalable**, solo consulta
 
 ---
@@ -164,40 +206,40 @@ Lista para revisar a mano antes de dar la V1 por terminada.
 
 ### Datos
 
-- [ ] Homicidios, desaparecidas y detenidos aparecen desde 2019
-- [ ] El total de homicidios de un año coincide con el total del archivo
+- [x] Homicidios, desaparecidas y detenidos aparecen desde 2019
+- [x] El total de homicidios de un año coincide con el total del archivo
   oficial de ese año
 - [ ] Ningún punto cae fuera de Ecuador
-- [ ] Correr la ingesta dos veces no duplica registros
-- [ ] Una persona desaparecida con fecha de localización no aparece en el mapa
+- [x] Correr la ingesta dos veces no duplica registros
+- [x] Una persona desaparecida con fecha de localización no aparece en el mapa
 
 ### Mapa
 
-- [ ] Los puntos se ven al acercar y el mapa de calor al alejar
-- [ ] Los detenidos solo aparecen al activar su capa, y nunca mezclados con
+- [x] Los puntos se ven al acercar y el mapa de calor al alejar
+- [x] Los detenidos solo aparecen al activar su capa, y nunca mezclados con
   los incidentes
-- [ ] Cada marcador tiene el color de su nivel de confianza y el ícono de su
-  tipo
-- [ ] Tocar un punto muestra tipo, fecha, lugar, fuente y enlace
+- [x] Cada marcador tiene el color y la forma de su tipo, y el estilo de trazo
+  de su nivel de confianza
+- [x] Tocar un punto muestra tipo, fecha, lugar, fuente y enlace
 - [x] Cambiar de año no cambia el color de los marcadores
 - [ ] El mapa carga rápido con todos los años activados
 
 ### Filtros y estadísticas
 
-- [ ] Filtrar por provincia, cantón, tipo, año y mes cambia el mapa y las cifras
-- [ ] Cada tasa aparece junto a su conteo
-- [ ] Los siniestros se ven por cantón
+- [x] Filtrar por provincia, cantón, tipo, año y mes cambia el mapa y las cifras
+- [x] Cada tasa aparece junto a su conteo
+- [x] Los siniestros se ven por cantón
 
 ### Páginas
 
-- [ ] La página de inicio explica qué es la plataforma y cómo leer el mapa
-- [ ] La metodología explica conteo, tasa, niveles de confianza y denuncias
-- [ ] La página de licencia atribuye cada fuente
+- [x] La página de inicio explica qué es la plataforma y cómo leer el mapa
+- [x] La metodología explica conteo, tasa, niveles de confianza y denuncias
+- [x] La página de licencia atribuye cada fuente
 
 ### Instalación
 
 - [ ] La PWA se instala en Android y en iPhone
-- [ ] El sitio carga por HTTPS con el dominio propio
+- [x] El sitio carga por HTTPS con el dominio propio
 
 ## Terminada cuando
 

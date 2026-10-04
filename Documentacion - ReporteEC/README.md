@@ -1,6 +1,6 @@
 ---
 tags: [reporteec, indice]
-actualizado: 2026-09-24
+actualizado: 2026-10-03
 ---
 
 # ReporteEC
@@ -11,9 +11,10 @@ evaluación de riesgo en rutas por horario, e indicadores de extorsión comercia
 registro con un nivel de confianza que declara de dónde salió la información.
 
 > [!info] Estado del proyecto
-> **Fase: definición y arquitectura.** Decisiones de producto consolidadas, hoja de ruta
-> definida en [[Hoja de Ruta]] y stack soberano aprobado (PostGIS + Martin + FastAPI).
-> Solo existen scripts de inspección y el prototipo del scraper.
+> **V1 publicada** en https://reporteec.playhubb.site (2026-10-03), en cierre: faltan la
+> licencia del código, el worker diario (CKAN bloquea el VPS, por ahora la actualización es
+> manual) y las pruebas manuales. Detalle en [[V1 - Mapa Histórico]] y [[Hoja de Ruta]].
+> Stack: PostGIS + Martin + FastAPI. Las versiones V2 a V4 siguen en diseño.
 
 ## Mapa de la documentación
 
@@ -43,7 +44,7 @@ registro con un nivel de confianza que declara de dónde salió la información.
 - [[Telegram - Fuentes Colaboradoras]] — canales y grupos que colaboran (V4)
 
 ### Arquitectura
-- [[Stack e Infraestructura]] — stack aprobado e infraestructura en VPS Azure
+- [[Stack e Infraestructura]] — stack aprobado e infraestructura en VPS Ubuntu (Azure)
 - [[Módulos del Sistema]] — cómo se divide el código y fluyen los datos
 - [[Arquitectura de la Plataforma]] — especificación del monolito modular FastAPI + PostGIS + Martin
 

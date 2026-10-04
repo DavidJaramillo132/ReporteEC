@@ -1,6 +1,6 @@
 ---
 tags: [desarrollo, guia, pasos, implementacion, hoja-tecnica]
-actualizado: 2026-09-24
+actualizado: 2026-10-03
 ---
 
 # Guía de Desarrollo e Implementación Técnica
@@ -45,7 +45,7 @@ FASE 4: V4 — Red Colaborativa e Inteligencia Artificial
 > **Meta:** Levantar la infraestructura local mínima y ver el primer punto real del Ministerio del Interior dibujado en el mapa del navegador en menos de 30 minutos de trabajo.
 
 ### Paso 0.1: Entorno de Infraestructura Local
-* **Ubicación:** `codigo/despliegue/`
+* **Ubicación:** `codigo/` (el compose de producción vive en `codigo/despliegue/`)
 * **Acción:** Crear `docker-compose.yml` conteniendo:
   - `postgres`: Imagen `postgis/postgis:17-3.5` con persistencia en volumen y configuración optimizada (1.5 GB de memoria compartida).
   - `martin`: Imagen `ghcr.io/maplibre/martin` configurada para conectarse a PostGIS y exponer teselas en el puerto `3000`.
@@ -56,7 +56,7 @@ FASE 4: V4 — Red Colaborativa e Inteligencia Artificial
 * **Acción:**
   - Inicializar proyecto con **uv** (`pyproject.toml` con FastAPI, SQLAlchemy 2.0, GeoAlchemy2, psycopg 3 (síncrono), Alembic, pydantic).
   - Crear configuración central en `app/core/config.py` leyendo variables de `.env`.
-  - Crear modelo `incidents` en `app/models/incident.py` con campo geométrico `geom GEOMETRY(Point, 4326)`.
+  - Crear modelo `incidents` en `app/modules/incidents/models.py` con campo geométrico `geom GEOMETRY(Point, 4326)`.
   - Generar migración inicial con Alembic.
 
 ### Paso 0.3: Ingesta del Primer Dataset (Homicidios 2026)
@@ -84,13 +84,15 @@ FASE 4: V4 — Red Colaborativa e Inteligencia Artificial
 
 ## 4. FASE 1: V1 — Observatorio Histórico y Riesgo Comercial
 
-Detalle completo en [[V1 - Mapa Histórico]].
+Detalle completo en [[V1 - Mapa Histórico]]. **Publicada el 2026-10-03** en
+https://reporteec.playhubb.site; está en cierre (licencia del código, worker
+diario y pruebas manuales).
 
 1. **Carga de Geometrías DPA:**
-   - Cargar `cantones_ecuador_simplificado.geojson` en la tabla `territorios_dpa`.
+   - Cargar `cantones_ecuador_simplificado.geojson` en la tabla `cantons` (carga con `python -m app.ingestion cantons --file …`).
    - Crear índices espaciales GiST sobre los polígonos cantonales.
 2. **Carga de Población INEC (2010–2035):**
-   - Procesar `Total_cantonal_2010-2035.xlsx` y cargar la serie histórica cantonal en `poblacion_cantones`.
+   - Procesar `Total_cantonal_2010-2035.xlsx` y cargar la serie histórica cantonal en `canton_population` (`python -m app.ingestion population --file …`).
 3. **Ingesta Completa del Ministerio del Interior (2019–2026):**
    - Adaptador de Desaparecidas (gestión de casos localizados vs. activos).
    - Adaptador de Detenidos (capa de actividad policial en mapa de calor independiente).
