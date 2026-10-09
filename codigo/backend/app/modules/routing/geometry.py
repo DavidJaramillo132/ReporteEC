@@ -20,6 +20,7 @@ The database probes its GiST index once per piece (a 400 km route has
 from __future__ import annotations
 
 import math
+import struct
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -56,8 +57,12 @@ class RoutePiece:
     def buffer_m(self) -> float:
         return buffer_for_speed(self.average_speed_mps)
 
-    def wkt(self) -> str:
-        return "LINESTRING(" + ",".join(f"{lon} {lat}" for lon, lat in self.coords) + ")"
+    def wkb(self) -> bytes:
+        """The piece as a little-endian WKB LineString: exact doubles, no text to format."""
+        count = len(self.coords)
+        return struct.pack(
+            f"<BII{2 * count}d", 1, 2, count, *[value for point in self.coords for value in point]
+        )
 
 
 def _check_annotations(coords: Sequence[LonLat], *per_segment: Sequence[float]) -> None:
@@ -175,14 +180,32 @@ def simplify_line(
         dx, dy = xs[last] - ax, ys[last] - ay
         length_sq = dx * dx + dy * dy
         farthest, farthest_sq = -1, tolerance_sq
-        for index in range(first + 1, last):
-            px, py = xs[index] - ax, ys[index] - ay
-            if length_sq > 0:
-                t = min(1.0, max(0.0, (px * dx + py * dy) / length_sq))
-                px, py = px - t * dx, py - t * dy
-            distance_sq = px * px + py * py
-            if distance_sq > farthest_sq:
-                farthest, farthest_sq = index, distance_sq
+        # Hot loop (most of a long route's cold request time before it was
+        # tuned): no min/max calls, the clamp inlined, slices zipped instead
+        # of indexing. The arithmetic is the same operation for operation, so
+        # the kept points are bit-for-bit those of the textbook version (see
+        # test_simplify_matches_the_first_implementation_exactly).
+        points = zip(
+            range(first + 1, last), xs[first + 1 : last], ys[first + 1 : last], strict=True
+        )
+        if length_sq > 0:
+            for index, x, y in points:
+                px, py = x - ax, y - ay
+                t = (px * dx + py * dy) / length_sq
+                if t > 0.0:
+                    if t >= 1.0:
+                        px, py = px - dx, py - dy
+                    else:
+                        px, py = px - t * dx, py - t * dy
+                distance_sq = px * px + py * py
+                if distance_sq > farthest_sq:
+                    farthest, farthest_sq = index, distance_sq
+        else:  # the span closes on itself: distance to its end point
+            for index, x, y in points:
+                px, py = x - ax, y - ay
+                distance_sq = px * px + py * py
+                if distance_sq > farthest_sq:
+                    farthest, farthest_sq = index, distance_sq
         if farthest >= 0:
             keep[farthest] = 1
             stack.append((first, farthest))

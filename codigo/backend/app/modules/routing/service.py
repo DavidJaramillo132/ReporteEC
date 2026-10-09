@@ -6,9 +6,11 @@ Pipeline for one origin/destination pair (`analyze_route`):
    incidents routes use), a data version, and the national 24-hour curve.
    Cached in-process for `NATIONAL_CONTEXT_TTL_S`.
 2. `fetch_route_cases` -- ONE SQL statement intersects the incidents with the
-   route's 1 km pieces (`app.modules.routing.geometry`). The `&&` against
-   `ST_Expand` lets the GiST index on `incidents.geom` pick candidates; the
-   exact `ST_DWithin` on geography (meters) then applies each piece's
+   route's 1 km pieces (`app.modules.routing.geometry`), sent as WKB. The
+   pieces are materialized once (geometry, geography and index box), so no
+   piece is parsed or cast again for each candidate incident. The `&&`
+   against the box lets the GiST index on `incidents.geom` pick candidates;
+   the exact `ST_DWithin` on geography (meters) then applies each piece's
    1,000 m highway / 200 m urban buffer.
 3. `compute_route_density` -- recency weights, the hourly curve, shrinkage,
    weighted cases per km and the density for every departure hour (pure
@@ -18,7 +20,8 @@ Pipeline for one origin/destination pair (`analyze_route`):
 4. `find_blackspots` -- the same 1 km pieces, ranked by weighted cases.
 
 Everything is computed on the full OSRM geometry; only the line returned
-for drawing is simplified (Douglas-Peucker, 20 m). The in-process route
+for drawing is simplified (Douglas-Peucker, 20 m), on a helper thread while
+the spatial query runs (the query waits on the database without the GIL). The in-process route
 cache keeps a compact `RouteAnalysis` (no full geometry, pieces or case
 rows), and at most `MAX_CONCURRENT_COMPUTATIONS` uncached routes are
 computed at once per worker; past that, `RoutingBusy` (503).
@@ -51,6 +54,7 @@ import time
 from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal
@@ -358,20 +362,30 @@ def get_national_context(session: Session) -> NationalContext:
 # The spatial intersection.
 # ---------------------------------------------------------------------------
 
+# MATERIALIZED: without it the CTE is inlined and every candidate row parses
+# its piece again and casts it to geography (in ST_DWithin and again in
+# ST_Distance) -- about 2.7x slower on an 800 km route. Same functions, same
+# arguments, so the same rows; `p.piece` only breaks exact distance ties
+# (a case nearest to the point two pieces share) toward the earlier piece.
 _ROUTE_CASES_SQL = text(
     f"""
-    WITH pieces AS (
-        SELECT p.ordinal - 1 AS piece, ST_GeomFromText(p.wkt, 4326) AS geom, p.buffer_m
-        FROM unnest(CAST(:wkts AS text[]), CAST(:buffers AS double precision[]))
-            WITH ORDINALITY AS p(wkt, buffer_m, ordinal)
+    WITH pieces AS MATERIALIZED (
+        SELECT
+            p.ordinal - 1 AS piece,
+            g.geom::geography AS geog,
+            ST_Expand(g.geom, p.buffer_m / {_METERS_PER_DEGREE_LOWER_BOUND}) AS box,
+            p.buffer_m
+        FROM unnest(CAST(:wkbs AS bytea[]), CAST(:buffers AS double precision[]))
+            WITH ORDINALITY AS p(wkb, buffer_m, ordinal)
+        CROSS JOIN LATERAL (SELECT ST_GeomFromWKB(p.wkb, 4326) AS geom) AS g
     ),
     eligible AS (SELECT i.id, i.type, i.occurred_at, m.geom {_ELIGIBLE_FROM})
     SELECT DISTINCT ON (e.id) e.type, e.occurred_at, p.piece
     FROM pieces AS p
     JOIN eligible AS e
-      ON e.geom && ST_Expand(p.geom, p.buffer_m / {_METERS_PER_DEGREE_LOWER_BOUND})
-     AND ST_DWithin(e.geom::geography, p.geom::geography, p.buffer_m)
-    ORDER BY e.id, ST_Distance(e.geom::geography, p.geom::geography)
+      ON e.geom && p.box
+     AND ST_DWithin(e.geom::geography, p.geog, p.buffer_m)
+    ORDER BY e.id, ST_Distance(e.geom::geography, p.geog), p.piece
     """
 )
 
@@ -391,7 +405,7 @@ def fetch_route_cases(session: Session, pieces: Sequence[RoutePiece]) -> list[Ro
     rows = session.execute(
         _ROUTE_CASES_SQL,
         {
-            "wkts": [piece.wkt() for piece in pieces],
+            "wkbs": [piece.wkb() for piece in pieces],
             "buffers": [piece.buffer_m for piece in pieces],
             **_filter_params(),
         },
@@ -575,6 +589,13 @@ class RouteAnalysis:
         return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
 
 
+# Simplifies display lines while the spatial query runs; one slot per
+# concurrent computation (see `MAX_CONCURRENT_COMPUTATIONS`).
+_simplifier = ThreadPoolExecutor(
+    max_workers=MAX_CONCURRENT_COMPUTATIONS, thread_name_prefix="simplify"
+)
+
+
 def analyze_route(
     session: Session,
     route: OsrmRoute,
@@ -587,6 +608,7 @@ def analyze_route(
     The full route, its pieces and its cases are dropped once the analysis
     is built, so a cached analysis stays small (see `ROUTE_CACHE_SIZE`).
     """
+    display = _simplifier.submit(simplify_line, route.coordinates)
     density = compute_route_density(session, route, context)
     cases = density.cases
     return RouteAnalysis(
@@ -594,9 +616,7 @@ def analyze_route(
         destination=destination,
         distance_m=route.distance_m,
         duration_s=route.duration_s,
-        display_coordinates=array(
-            "d", (value for point in simplify_line(route.coordinates) for value in point)
-        ),
+        display_coordinates=array("d", (value for point in display.result() for value in point)),
         weighted_by_hour=density.weighted_by_hour,
         share=density.share,
         densities=density.densities,

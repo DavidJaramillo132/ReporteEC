@@ -34,7 +34,7 @@ def test_requests_the_full_annotated_geojson_route():
     assert dict(request.url.params) == {
         "overview": "full",
         "geometries": "geojson",
-        "annotations": "distance,duration,speed",
+        "annotations": "distance,speed",
     }
     assert route.distance_m == pytest.approx(72864.9)
 

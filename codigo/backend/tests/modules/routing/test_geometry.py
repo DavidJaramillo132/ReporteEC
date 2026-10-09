@@ -1,5 +1,8 @@
 """Cutting an OSRM route into buffered 1 km pieces, walking along it, simplifying it."""
 
+import random
+import struct
+
 import pytest
 
 from app.modules.routing.geometry import (
@@ -96,10 +99,12 @@ def test_pieces_reject_mismatched_annotations():
         build_pieces([(0.0, 0.0), (1.0, 0.0)], [1.0, 2.0], [1.0, 2.0])
 
 
-def test_wkt_lists_the_piece_vertices():
+def test_wkb_is_the_little_endian_linestring_of_the_piece_vertices():
     (piece,) = build_pieces([(-79.5, -2.0), (-79.49, -2.0)], [500.0], [25.0])
 
-    assert piece.wkt() == "LINESTRING(-79.5 -2.0,-79.49 -2.0)"
+    # byte order 1 (little endian), type 2 (LineString), 2 points, then x y pairs.
+    assert piece.wkb() == struct.pack("<BII4d", 1, 2, 2, -79.5, -2.0, -79.49, -2.0)
+    assert struct.unpack("<4d", piece.wkb()[9:]) == (-79.5, -2.0, -79.49, -2.0)
 
 
 def test_point_at_distance_interpolates_along_the_route():
@@ -137,3 +142,58 @@ def test_simplify_keeps_a_route_that_comes_back_to_its_start():
 
 def test_simplify_leaves_two_points_alone():
     assert simplify_line([(0.0, 0.0), (0.0, 0.0)]) == [(0.0, 0.0), (0.0, 0.0)]
+
+
+def _reference_simplify(coords, tolerance_m=20.0):
+    """The first `simplify_line`, kept verbatim as the oracle for the faster one."""
+    import math
+
+    count = len(coords)
+    if count <= 2:
+        return list(coords)
+    meters_per_degree = 6_371_008.8 * math.pi / 180
+    mean_lat = math.radians(sum(lat for _, lat in coords) / count)
+    xs = [lon * meters_per_degree * math.cos(mean_lat) for lon, _ in coords]
+    ys = [lat * meters_per_degree for _, lat in coords]
+    keep = bytearray(count)
+    keep[0] = keep[-1] = 1
+    tolerance_sq = tolerance_m * tolerance_m
+    stack = [(0, count - 1)]
+    while stack:
+        first, last = stack.pop()
+        if last - first < 2:
+            continue
+        ax, ay = xs[first], ys[first]
+        dx, dy = xs[last] - ax, ys[last] - ay
+        length_sq = dx * dx + dy * dy
+        farthest, farthest_sq = -1, tolerance_sq
+        for index in range(first + 1, last):
+            px, py = xs[index] - ax, ys[index] - ay
+            if length_sq > 0:
+                t = min(1.0, max(0.0, (px * dx + py * dy) / length_sq))
+                px, py = px - t * dx, py - t * dy
+            distance_sq = px * px + py * py
+            if distance_sq > farthest_sq:
+                farthest, farthest_sq = index, distance_sq
+        if farthest >= 0:
+            keep[farthest] = 1
+            stack.append((first, farthest))
+            stack.append((farthest, last))
+    return [coords[index] for index in range(count) if keep[index]]
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_simplify_matches_the_first_implementation_exactly(seed: int):
+    rng = random.Random(seed)
+    # A wandering line with long straight runs, loops back to its start and
+    # repeated points: every branch of the algorithm.
+    lon, lat = -79.9, -2.2
+    coords = []
+    for _ in range(3000):
+        lon += rng.choice((0.0, 0.0001, -0.0001, rng.uniform(-0.002, 0.002)))
+        lat += rng.choice((0.0, 0.0001, rng.uniform(-0.002, 0.002)))
+        coords.append((lon, lat))
+    coords.append(coords[0])
+    tolerance = rng.choice((5.0, 20.0, 80.0))
+
+    assert simplify_line(coords, tolerance) == _reference_simplify(coords, tolerance)

@@ -1,7 +1,7 @@
 """Client for the self-hosted OSRM routing service (car profile, Ecuador extract).
 
 One call: `GET /route/v1/driving/{lon},{lat};{lon},{lat}?overview=full&
-geometries=geojson&annotations=distance,duration,speed`, with a 2 s total
+geometries=geojson&annotations=distance,speed`, with a 2 s total
 deadline: connecting, sending, waiting and reading the body together, not
 2 s per phase (see `OsrmClient.route`).
 
@@ -158,7 +158,9 @@ class OsrmClient:
                 params={
                     "overview": "full",
                     "geometries": "geojson",
-                    "annotations": "distance,duration,speed",
+                    # Only what `parse_route` reads: per-segment durations would
+                    # add ~10% to the payload of a long route for nothing.
+                    "annotations": "distance,speed",
                 },
             )
         except httpx.HTTPError as exc:  # connect errors, timeouts, protocol errors
