@@ -1,16 +1,8 @@
-import {
-  AttributionControl,
-  GeolocateControl,
-  type LngLatBoundsLike,
-  Map as MapLibreMap,
-  NavigationControl,
-  Popup,
-  ScaleControl,
-} from 'maplibre-gl'
+import { type LngLatBoundsLike, type Map as MapLibreMap, Popup } from 'maplibre-gl'
 import { useEffect, useRef, useState } from 'react'
 import type { CantonIndicatorRow } from '../lib/api'
 import { TILES_URL } from '../lib/api'
-import { ECUADOR_BOUNDS, gazetteBasemap } from '../lib/basemap'
+import { ECUADOR_BOUNDS } from '../lib/basemap'
 import {
   buildCantonPopupHtml,
   buildFeatureStateEntries,
@@ -19,7 +11,10 @@ import {
 } from '../lib/cantonChoropleth'
 import { buildMarkImages } from '../lib/marks'
 import type { CantonLayer, Filters } from '../lib/registry'
+import { createGazetteMap, watchBasemap } from '../lib/gazetteMap'
 import { buildTileFilter } from '../lib/tileFilter'
+import { LocateButton, LocateNotice, MapNotice } from './LocateButton'
+import { useLocate } from './useLocate'
 
 export interface MapView {
   center: [number, number]
@@ -82,8 +77,7 @@ export function IncidentMap({
   const mapRef = useRef<MapLibreMap | null>(null)
   const readyRef = useRef(false)
   const [baseFailed, setBaseFailed] = useState(false)
-  const geolocateRef = useRef<GeolocateControl | null>(null)
-  const [location, setLocation] = useState<'off' | 'locating' | 'following' | 'shown' | 'denied' | 'unavailable'>('off')
+  const { location, bind: bindLocate, trigger: triggerLocate } = useLocate()
   // Latest props for handlers bound once at map creation.
   const latest = useRef({
     filters,
@@ -132,10 +126,9 @@ export function IncidentMap({
 
   useEffect(() => {
     if (!container.current) return
-    const map = new MapLibreMap({
-      container: container.current,
-      style: gazetteBasemap(),
-      ...(initialView
+    const { map, geolocate } = createGazetteMap(
+      container.current,
+      initialView
         ? { center: initialView.center, zoom: initialView.zoom }
         : {
             bounds: ECUADOR_BOUNDS as LngLatBoundsLike,
@@ -145,32 +138,10 @@ export function IncidentMap({
                 ? { top: 24, bottom: 24, right: 24, left: 270 }
                 : 16,
             },
-          }),
-      minZoom: 4,
-      maxZoom: 17,
-      attributionControl: false,
-      dragRotate: false,
-      pitchWithRotate: false,
-    })
+          },
+    )
     mapRef.current = map
-    map.touchZoomRotate.disableRotation()
-    map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
-    map.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-right')
-    map.addControl(new AttributionControl({ compact: true }), 'bottom-right')
-
-    // The reader's own position: computed in the browser and never sent anywhere.
-    const geolocate = new GeolocateControl({
-      positionOptions: { enableHighAccuracy: true, timeout: 15000 },
-      trackUserLocation: true,
-      showAccuracyCircle: true,
-      fitBoundsOptions: { maxZoom: 14 },
-    })
-    geolocateRef.current = geolocate
-    map.addControl(geolocate, 'top-right')
-    geolocate.on('trackuserlocationstart', () => setLocation('following'))
-    geolocate.on('trackuserlocationend', () => setLocation((s) => (s === 'following' ? 'shown' : s)))
-    geolocate.on('geolocate', () => setLocation((s) => (s === 'locating' ? 'following' : s)))
-    geolocate.on('error', (event) => setLocation(event.code === 1 ? 'denied' : 'unavailable'))
+    bindLocate(geolocate)
 
     const emitView = () => {
       const b = map.getBounds()
@@ -367,12 +338,7 @@ export function IncidentMap({
       updateSelectedPoint.current()
     })
     map.on('moveend', emitView)
-    map.on('error', (event) => {
-      if ((event as { sourceId?: string }).sourceId === 'base') setBaseFailed(true)
-    })
-    map.on('sourcedata', (event) => {
-      if (event.sourceId === 'base' && event.isSourceLoaded) setBaseFailed(false)
-    })
+    watchBasemap(map, setBaseFailed)
 
     return () => {
       readyRef.current = false
@@ -469,65 +435,10 @@ export function IncidentMap({
         role="region"
         aria-label="Mapa de incidentes registrados en Ecuador"
       />
-      <LocateButton
-        state={location}
-        onClick={() => {
-          if (!('geolocation' in navigator) || !window.isSecureContext) {
-            setLocation('unavailable')
-            return
-          }
-          if (location !== 'following' && location !== 'shown') setLocation('locating')
-          geolocateRef.current?.trigger()
-        }}
-      />
-      {(location === 'denied' || location === 'unavailable') && (
-        <p
-          role="status"
-          className="absolute top-3 left-1/2 z-10 w-max max-w-[calc(100%-6rem)] -translate-x-1/2 border border-ink bg-sheet px-3 py-1.5 text-[13px]"
-        >
-          {location === 'denied'
-            ? 'No diste permiso para usar tu ubicación. Puedes activarlo en los ajustes del navegador.'
-            : 'No se pudo obtener tu ubicación en este dispositivo.'}
-        </p>
-      )}
-      {baseFailed && (
-        <p
-          role="status"
-          className="absolute top-3 left-1/2 z-10 w-max max-w-[calc(100%-6rem)] -translate-x-1/2 border border-ink bg-sheet px-3 py-1.5 text-[13px]"
-        >
-          No se pudo cargar el mapa base. Los casos se muestran igual.
-        </p>
-      )}
+      <LocateButton state={location} onClick={triggerLocate} />
+      <LocateNotice state={location} />
+      {baseFailed && <MapNotice>No se pudo cargar el mapa base. Los casos se muestran igual.</MapNotice>}
     </div>
   )
 }
 
-const LOCATE_LABEL = {
-  off: 'Mi ubicación',
-  locating: 'Buscando tu ubicación…',
-  following: 'Siguiendo tu ubicación',
-  shown: 'Volver a mi ubicación',
-  denied: 'Mi ubicación',
-  unavailable: 'Mi ubicación',
-} as const
-
-function LocateButton({ state, onClick }: { state: keyof typeof LOCATE_LABEL; onClick: () => void }) {
-  const active = state === 'following'
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`absolute top-[86px] right-2.5 z-10 flex h-8 items-center gap-2 border border-ink px-2.5 text-[13px] font-medium transition-colors duration-150 ${
-        active ? 'bg-sello text-paper' : 'bg-sheet text-ink hover:bg-sello-soft'
-      }`}
-    >
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className={state === 'locating' ? 'animate-pulse' : ''}>
-        <circle cx="8" cy="8" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="8" cy="8" r="1.6" fill="currentColor" />
-        <path d="M8 0.8v2.6M8 12.6v2.6M0.8 8h2.6M12.6 8h2.6" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
-      {LOCATE_LABEL[state]}
-    </button>
-  )
-}
