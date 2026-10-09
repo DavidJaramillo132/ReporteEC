@@ -335,9 +335,21 @@ codigo/scripts/actualizar_datos.sh
 
 El script descarga desde CKAN, sube los archivos con `rsync` y los carga en
 producción con `ingestion all --offline`. Los archivos ya cargados se
-saltan. Después recalcula la escala de riesgo de rutas (paso 4, ver la
-sección 15). Los datos del servidor se leen de `~/.config/reporteec/deploy.conf`,
-que está fuera del repositorio:
+saltan.
+
+Durante esa carga (paso 3) el script **detiene el servicio `osrm`** y lo
+vuelve a levantar apenas termina, aunque la carga falle. El motivo es la
+memoria: `osrm` ocupa unos 700 MiB y una recarga completa del `worker` llega
+a cerca de 1 GB, y las dos cosas juntas no caben en el VPS (sin swap). Mientras
+dura la carga, la página de rutas responde «no disponible» con el botón
+«Reintentar»; el resto del sitio sigue igual. Si no pudo levantar `osrm`, el
+script lo dice y muestra el comando para hacerlo a mano. Si `osrm` no estaba
+corriendo (por ejemplo, porque aún no subiste sus datos), no lo toca.
+
+Después espera a que `osrm` esté listo (estado `healthy`, hasta 5 minutos;
+`OSRM_WAIT_S` cambia el plazo) y recalcula la escala de riesgo de rutas
+(paso 4, ver la sección 15). Los datos del servidor se leen de
+`~/.config/reporteec/deploy.conf`, que está fuera del repositorio:
 
 ```bash
 REPORTEEC_SSH_HOST=usuario@ip
@@ -366,12 +378,33 @@ codigo/scripts/preparar_osrm.sh --subir
 `--subir` lee los datos del servidor de `~/.config/reporteec/deploy.conf`,
 igual que `actualizar_datos.sh` (ver la sección 14).
 
-En el servidor, la primera vez levanta el servicio, y las siguientes veces
-reinícialo para que lea los datos nuevos:
+**Primer despliegue de las rutas (V2), en este orden.** Desde
+`codigo/despliegue/` en el servidor, con el alias `rec` de la sección 13:
+
+1. **Sube los datos de OSRM primero** (`preparar_osrm.sh --subir`, desde tu
+   máquina) y comprueba que el VPS tenga cerca de 1 GB libre en disco
+   (`df -h`). Sin los datos, `osrm` no arranca y se reinicia en bucle.
+2. Construye las imágenes: `rec build backend worker caddy`.
+3. Aplica las migraciones **antes** de levantar el backend nuevo, con la
+   imagen recién construida: `rec run --rm backend alembic upgrade head`.
+   Si el backend nuevo arranca antes, `/api/routes/risk` y
+   `/api/places/search` responden 500 hasta que la migración termina.
+4. Levanta `osrm` y espera a que esté listo: `rec up -d --wait osrm`.
+5. Levanta el resto: `rec up -d backend caddy`.
+6. Carga las cabeceras cantonales (una sola vez; ver abajo):
+   `rec run --rm worker python -m app.ingestion canton-seats`.
+7. Calcula la escala del puntaje:
+   `rec run --rm worker python -m app.ingestion route-reference`.
+
+El `backend` **no** declara `depends_on: osrm`. Es a propósito: si `osrm` cae
+o tarda en cargar, la API sigue funcionando y solo `/api/routes/risk`
+responde 503 con un mensaje en español. Con esa dependencia, un `osrm` caído
+impediría arrancar todo el backend (mapa, estadísticas y metodología).
+
+Para que `osrm` lea datos nuevos más adelante, reinícialo:
 
 ```bash
 cd projects/ReporteEC/codigo/despliegue
-docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env up -d osrm
 docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env restart osrm
 ```
 
@@ -381,6 +414,18 @@ Para comprobar que responde (debe devolver `"code":"Ok"`):
 docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env \
   exec osrm wget -qO- 'http://127.0.0.1:5000/route/v1/driving/-79.8862,-2.1894;-79.5340,-1.8022?overview=false'
 ```
+
+**Cabeceras cantonales.** Cuando alguien elige un cantón en la lista, la
+ruta empieza o termina en su cabecera cantonal (por ejemplo Puyo para
+Pastaza), no en un punto cualquiera del polígono, que puede quedar lejos de la
+ciudad y de toda vía. Las cabeceras salen de OpenStreetMap (© colaboradores de
+OpenStreetMap, ODbL) y están en `backend/app/ingestion/data/canton_seats.csv`,
+generado sin conexión con `codigo/scripts/generar_cabeceras.py` (ver su
+cabecera). El comando `canton-seats` las carga en la tabla `cantons`. Se
+puede repetir sin efectos y una recarga de `cantons` las conserva. Hay que
+cargarlas antes de `route-reference`, porque la escala se calcula entre
+cabeceras. Si a un cantón le falta cabecera, se usa un punto dentro de su
+polígono.
 
 **Escala del puntaje (0–100).** El puntaje de una ruta es un percentil: compara
 su exposición con la de unas 800 a 1.000 rutas de referencia (cifra aproximada; el trabajo imprime la exacta) entre cantones del
@@ -412,9 +457,20 @@ unos meses (Geofabrik actualiza el archivo a diario). La imagen de OSRM está
 fijada a una versión (`v6.0.0`); si la cambias, vuelve a preparar los datos,
 porque los archivos de una versión mayor no sirven con otra.
 
-**Memoria.** El servicio usa unos 660 MiB en reposo y tiene un límite de
-1024 MB en `compose.behind-proxy.yml`. Ese espacio sale del que tenía el
-`worker`, que no corre en producción.
+**Memoria.** Los `mem_limit` de `compose.behind-proxy.yml` son topes por
+contenedor, no reservas. El VPS tiene cerca de 1,4 GB disponibles y no tiene
+swap, así que lo que cuenta es la memoria que de verdad usa cada servicio:
+
+- `osrm`: unos 660–720 MiB residentes al terminar de cargar el mapa de
+  Ecuador (medido con `docker stats`). Tras cientos de consultas variadas
+  medimos hasta unos 825 MiB. Su tope es 1024 MB.
+- `worker`: no corre de forma permanente, pero `actualizar_datos.sh` lo
+  ejecuta en los pasos 3 y 4. Una recarga completa llega a cerca de 1 GB.
+
+Juntos pasarían de lo disponible, y el sistema podría matar cualquier proceso
+del VPS, incluidos los de otros sitios. Por eso `actualizar_datos.sh` detiene
+`osrm` mientras dura la carga del paso 3 y lo levanta antes del paso 4, que sí
+lo necesita. Después de desplegar, anota `free -m` y `docker stats --no-stream`.
 
 En desarrollo, el servicio está bajo el perfil `osrm` para que
 `docker compose up` no exija los datos:

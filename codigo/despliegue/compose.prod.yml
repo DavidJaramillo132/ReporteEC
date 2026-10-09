@@ -49,6 +49,9 @@ services:
       # extorsion, siniestros -- see despliegue/README.md "Carga inicial de
       # datos"); ./data/raw/mdi is where the CKAN-downloadable sources land.
       - ../data:/data
+    # Deliberately no depends_on osrm: a down or still-loading osrm only turns
+    # /api/routes/risk into a calm 503, while a hard dependency would keep the
+    # whole API (map, statistics) from starting. See README.md "Rutas (OSRM)".
     depends_on:
       postgres:
         condition: service_healthy

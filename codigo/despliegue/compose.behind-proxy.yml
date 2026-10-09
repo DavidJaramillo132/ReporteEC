@@ -31,9 +31,10 @@ services:
     mem_limit: 1280m
 
   # Measured locally with the same image and the Ecuador data (MLD): about
-  # 660 MiB resident (docker stats) after the healthcheck passed and a few
-  # route requests. 1024m is roughly 1.5x that. Uses part of the headroom of
-  # the worker above, which is not running in production.
+  # 660-720 MiB resident (docker stats) after loading, up to ~825 MiB after
+  # hundreds of varied requests. 1024m is a cap, not a reservation: osrm and
+  # a full worker reload (~1 GB peak) do not fit together in the VPS's
+  # memory, so scripts/actualizar_datos.sh stops osrm during that reload.
   osrm:
     mem_limit: 1024m
 
