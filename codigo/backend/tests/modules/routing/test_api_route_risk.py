@@ -1,0 +1,419 @@
+"""GET /api/routes/risk end to end, with OSRM faked and incidents in the test PostGIS.
+
+The synthetic route is a straight east-west road along lat -2.0 from lon
+-79.60 to -79.50 (~11.11 km). Incidents are placed due north of its midpoint
+at a chosen distance, so the buffer edges (1,000 m highway / 200 m urban)
+are tested in meters.
+"""
+
+from datetime import UTC, datetime, timedelta
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+
+from app.core.time import GUAYAQUIL
+from app.main import app
+from app.modules.incidents.models import IncidentStatus, IncidentType, LocationPrecision
+from app.modules.routing.osrm import parse_route
+from app.modules.routing.router import get_osrm_client
+from app.modules.routing.scoring import SHRINKAGE_K
+from app.modules.routing.service import (
+    NOTES,
+    compute_route_exposure,
+    load_national_context,
+)
+from tests.factories import make_incident, make_source
+from tests.modules.routing.fakes import (
+    HIGHWAY_SPEED_MPS,
+    URBAN_SPEED_MPS,
+    fake_client,
+    load_fixture,
+    meters_to_lat_degrees,
+    straight_route_payload,
+)
+
+ROAD_LAT = -2.0
+ROAD = [(-79.60, ROAD_LAT), (-79.55, ROAD_LAT), (-79.50, ROAD_LAT)]
+FROM, TO = "-79.6,-2.0", "-79.5,-2.0"
+WHEN = datetime(2025, 6, 1, 12, 0, tzinfo=GUAYAQUIL)
+
+
+def _use_osrm(answer) -> list[httpx.Request]:
+    """Answer every OSRM request with `answer`; return the list of requests seen."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if callable(answer):
+            return answer(request)
+        return httpx.Response(200, json=answer)
+
+    client = fake_client(handler)
+    app.dependency_overrides[get_osrm_client] = lambda: client
+    return seen
+
+
+def _road(speed_mps: float) -> dict:
+    return straight_route_payload(ROAD, [speed_mps, speed_mps])
+
+
+def _north_of_road(meters: float, lon: float = -79.55) -> dict:
+    return {"lon": lon, "lat": ROAD_LAT + meters_to_lat_degrees(meters)}
+
+
+def _risk(client: TestClient, hour: int = 12, **params) -> httpx.Response:
+    return client.get("/api/routes/risk", params={"from": FROM, "to": TO, "hour": hour, **params})
+
+
+def _ok(response: httpx.Response) -> dict:
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+# --- the buffer ---------------------------------------------------------------
+
+
+def test_highway_buffer_includes_800_m_and_excludes_1500_m(client: TestClient, db_session: Session):
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(800))
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(1500))
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    assert _ok(_risk(client))["cases"]["total"] == 1
+
+
+def test_urban_buffer_includes_150_m_and_excludes_300_m(client: TestClient, db_session: Session):
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(150))
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(300))
+    db_session.commit()
+    _use_osrm(_road(URBAN_SPEED_MPS))
+
+    assert _ok(_risk(client))["cases"]["total"] == 1
+
+
+def test_each_stretch_keeps_its_own_buffer(client: TestClient, db_session: Session):
+    # West half urban, east half highway: 600 m north counts only on the east half.
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(600, lon=-79.58))
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(600, lon=-79.52))
+    db_session.commit()
+    _use_osrm(straight_route_payload(ROAD, [URBAN_SPEED_MPS, HIGHWAY_SPEED_MPS]))
+
+    assert _ok(_risk(client))["cases"]["total"] == 1
+
+
+# --- which incidents count ----------------------------------------------------
+
+
+def test_only_located_violent_deaths_drawn_on_the_map_count(
+    client: TestClient, db_session: Session
+):
+    source = make_source(db_session)
+    near = _north_of_road(100)
+    make_incident(db_session, source, occurred_at=WHEN, type=IncidentType.HOMICIDIO, **near)
+    make_incident(db_session, source, occurred_at=WHEN, type=IncidentType.SICARIATO, **near)
+    make_incident(db_session, source, occurred_at=WHEN, type=IncidentType.FEMICIDIO, **near)
+    make_incident(
+        db_session,
+        source,
+        occurred_at=WHEN,
+        location_precision=LocationPrecision.APROXIMADA,
+        **near,
+    )
+    excluded = [
+        {"location_precision": LocationPrecision.CANTON},
+        {"type": IncidentType.DESAPARECIDA},
+        {"type": IncidentType.SINIESTRO_TRANSITO},
+        {"status": IncidentStatus.RETIRADO},
+        {"occurred_at": datetime(2018, 12, 31, 12, tzinfo=GUAYAQUIL)},
+    ]
+    for overrides in excluded:
+        make_incident(db_session, source, **{"occurred_at": WHEN, **near, **overrides})
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    cases = _ok(_risk(client))["cases"]
+
+    assert cases["total"] == 4
+    assert cases["by_type"] == {"homicidio": 2, "sicariato": 1, "femicidio": 1}
+
+
+def test_the_hour_is_local_time(client: TestClient, db_session: Session):
+    # 04:30 UTC on June 2nd is 23:30 on June 1st in Guayaquil.
+    source = make_source(db_session)
+    make_incident(
+        db_session,
+        source,
+        occurred_at=datetime(2025, 6, 2, 4, 30, tzinfo=UTC),
+        **_north_of_road(50),
+    )
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    hourly = _ok(_risk(client))["hourly"]
+
+    assert hourly[23]["weighted_cases"] == 1.0
+    assert hourly[4]["weighted_cases"] == 0.0
+
+
+def test_recency_weight_halves_at_one_year_before_the_data_cut(
+    client: TestClient, db_session: Session
+):
+    source = make_source(db_session)
+    cut = datetime(2025, 9, 30, 20, 0, tzinfo=GUAYAQUIL)
+    make_incident(db_session, source, occurred_at=cut, **_north_of_road(50))
+    make_incident(
+        db_session, source, occurred_at=cut - timedelta(days=365.25), **_north_of_road(60)
+    )
+    # Two years old, and far from the road: still sets nothing (the cut is the latest case).
+    make_incident(db_session, source, occurred_at=cut - timedelta(days=730.5), lat=-1.0)
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    body = _ok(_risk(client))
+
+    assert body["data_cut"] == "2025-09-30"
+    assert body["cases"]["weighted_total"] == pytest.approx(1.5)
+
+
+# --- the response -------------------------------------------------------------
+
+
+def test_response_shape_with_no_score_until_a_reference_exists(
+    client: TestClient, db_session: Session
+):
+    source = make_source(db_session)
+    for hour in (21, 22, 22):
+        make_incident(
+            db_session, source, occurred_at=WHEN.replace(hour=hour), **_north_of_road(100)
+        )
+    db_session.commit()
+    road = _road(HIGHWAY_SPEED_MPS)
+    _use_osrm(road)
+
+    body = _ok(_risk(client, hour=22))
+
+    assert body["origin"] == {"lon": -79.6, "lat": -2.0}
+    assert body["destination"] == {"lon": -79.5, "lat": -2.0}
+    assert body["geometry"]["type"] == "LineString"
+    assert body["geometry"]["coordinates"] == [list(point) for point in ROAD]
+    assert body["distance_km"] == pytest.approx(road["routes"][0]["distance"] / 1000, abs=0.01)
+    assert body["duration_min"] == pytest.approx(road["routes"][0]["duration"] / 60, abs=0.1)
+    assert [row["hour"] for row in body["hourly"]] == list(range(24))
+    assert sum(row["share"] for row in body["hourly"]) == pytest.approx(1.0, abs=1e-5)
+    assert body["selected"] == body["hourly"][22]
+    for row in body["hourly"]:
+        assert row["score"] is None
+        assert row["score_available"] is False
+        assert row["band"] is None
+        assert row["band_label"] is None
+    # With every case in the evening, leaving in the evening is the riskiest.
+    exposures = [row["exposure"] for row in body["hourly"]]
+    assert exposures.index(max(exposures)) == 22
+    assert body["best_hour"] != 22
+    assert body["low_data"] is True
+    assert body["notes"] == list(NOTES)
+    assert len(body["notes"]) == 3
+
+
+def test_low_data_is_false_from_k_weighted_cases(client: TestClient, db_session: Session):
+    source = make_source(db_session)
+    for _ in range(int(SHRINKAGE_K)):
+        make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(100))
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    assert _ok(_risk(client))["low_data"] is False
+
+
+def test_a_route_with_no_cases_follows_the_national_curve(client: TestClient, db_session: Session):
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN.replace(hour=3), lat=-1.0)  # far away
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    body = _ok(_risk(client))
+
+    assert body["cases"]["total"] == 0
+    assert [row["exposure"] for row in body["hourly"]] == [0.0] * 24
+    assert body["best_hour"] == 0
+    shares = [row["share"] for row in body["hourly"]]
+    # National curve: one case at 03h, smoothed -> 0.25 / 0.5 / 0.25.
+    assert shares[2:5] == pytest.approx([0.25, 0.5, 0.25])
+
+
+def test_blackspot_reports_its_km_types_peak_hours_and_dates(
+    client: TestClient, db_session: Session
+):
+    source = make_source(db_session)
+    # ~5.5 km from the origin (0.0494 degrees of longitude at ~111.1 km each).
+    near_km_5 = _north_of_road(100, lon=-79.5506)
+    cases = [
+        (IncidentType.HOMICIDIO, datetime(2024, 3, 1, 22, 15, tzinfo=GUAYAQUIL)),
+        (IncidentType.HOMICIDIO, datetime(2025, 5, 1, 22, 40, tzinfo=GUAYAQUIL)),
+        (IncidentType.SICARIATO, datetime(2025, 5, 2, 19, 0, tzinfo=GUAYAQUIL)),
+        (IncidentType.FEMICIDIO, datetime(2025, 6, 1, 8, 0, tzinfo=GUAYAQUIL)),
+        (IncidentType.HOMICIDIO, datetime(2025, 6, 1, 3, 0, tzinfo=GUAYAQUIL)),
+    ]
+    for kind, when in cases:
+        make_incident(db_session, source, occurred_at=when, type=kind, **near_km_5)
+    # One case elsewhere on the route: its piece stays below 3 weighted cases.
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(100, lon=-79.59))
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    (spot,) = _ok(_risk(client))["blackspots"]
+
+    assert (spot["km_from"], spot["km_to"]) == (5.0, 6.0)
+    assert spot["cases"] == 5
+    assert spot["by_type"] == {"homicidio": 3, "sicariato": 1, "femicidio": 1}
+    assert spot["weighted_cases"] >= 3
+    assert spot["peak_hours"][0] == 22
+    assert set(spot["peak_hours"]) <= {22, 19, 8, 3}
+    assert len(spot["peak_hours"]) == 3
+    assert (spot["first_date"], spot["last_date"]) == ("2024-03-01", "2025-06-01")
+    assert spot["lat"] == pytest.approx(ROAD_LAT)
+    assert -79.56 < spot["lon"] < -79.54
+
+
+def test_recorded_osrm_route_end_to_end(client: TestClient, db_session: Session):
+    payload = load_fixture()
+    vertex = payload["routes"][0]["geometry"]["coordinates"][400]
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN, lon=vertex[0], lat=vertex[1])
+    db_session.commit()
+    _use_osrm(payload)
+
+    body = _ok(
+        client.get(
+            "/api/routes/risk",
+            params={"from": "-79.8862,-2.1894", "to": "-79.5340,-1.8022", "hour": 7},
+        )
+    )
+
+    assert body["distance_km"] == pytest.approx(72.86, abs=0.01)
+    assert body["duration_min"] == pytest.approx(79.5, abs=0.1)
+    assert len(body["geometry"]["coordinates"]) == 853
+    assert body["cases"]["total"] == 1
+    assert body["selected"]["hour"] == 7
+
+
+# --- caching ------------------------------------------------------------------
+
+
+def test_identical_requests_route_once_and_coordinates_are_rounded(
+    client: TestClient, db_session: Session
+):
+    seen = _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    _ok(_risk(client, hour=3))
+    _ok(_risk(client, hour=20))  # same route, another hour: served from the cache
+    _ok(client.get("/api/routes/risk", params={"from": "-79.60001,-2.0", "to": TO, "hour": 1}))
+
+    assert len(seen) == 1
+    assert seen[0].url.path == "/route/v1/driving/-79.6,-2.0;-79.5,-2.0"
+
+
+# --- errors -------------------------------------------------------------------
+
+
+def test_no_route_is_a_404_in_spanish(client: TestClient, db_session: Session):
+    _use_osrm(lambda request: httpx.Response(400, json={"code": "NoRoute", "message": "x"}))
+
+    response = client.get(
+        "/api/routes/risk", params={"from": "-90.3,-0.7", "to": "-79.88,-2.19", "hour": 8}
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"].startswith("No encontramos una ruta")
+
+
+@pytest.mark.parametrize(
+    "error", [httpx.ConnectError("refused"), httpx.ReadTimeout("took more than 2 s")]
+)
+def test_osrm_down_or_slow_is_a_503(client: TestClient, db_session: Session, error: Exception):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error
+
+    _use_osrm(handler)
+
+    response = _risk(client)
+
+    assert response.status_code == 503
+    assert "no está disponible" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"from": "-79.6", "to": TO, "hour": 8},
+        {"from": "abc,def", "to": TO, "hour": 8},
+        {"from": "-79.6,-2.0,1", "to": TO, "hour": 8},
+        {"from": "nan,nan", "to": TO, "hour": 8},
+        {"from": FROM, "to": "-74.0,-2.0", "hour": 8},  # east of Ecuador
+        {"from": FROM, "to": "-79.5,2.0", "hour": 8},  # north of Ecuador
+        {"from": "-2.0,-79.6", "to": TO, "hour": 8},  # lat,lon swapped
+        {"from": FROM, "to": TO, "hour": 24},
+        {"from": FROM, "to": TO, "hour": -1},
+        {"from": FROM, "to": TO, "hour": "noon"},
+        {"from": FROM, "to": TO},
+        {"to": TO, "hour": 8},
+    ],
+)
+def test_invalid_coordinates_or_hour_are_a_422(client: TestClient, params: dict):
+    seen = _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    assert client.get("/api/routes/risk", params=params).status_code == 422
+    assert seen == []
+
+
+def test_galapagos_is_inside_the_accepted_box(client: TestClient, db_session: Session):
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    response = client.get(
+        "/api/routes/risk", params={"from": "-90.31,-0.74", "to": "-90.35,-0.69", "hour": 8}
+    )
+
+    assert response.status_code == 200
+
+
+# --- the service without HTTP ---------------------------------------------------
+
+
+def test_exposure_is_computable_without_http_in_one_spatial_query(db_session: Session):
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(100))
+    db_session.commit()
+    context = load_national_context(db_session)
+    route = parse_route(_road(HIGHWAY_SPEED_MPS))
+
+    statements: list[str] = []
+    engine = db_session.get_bind()
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        exposure = compute_route_exposure(db_session, route, context)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+
+    assert len(statements) == 1
+    assert exposure.weighted_total == pytest.approx(1.0)
+    assert len(exposure.exposures) == 24
+    duration_h = route.duration_s / 3600
+    # Departing at 12h, the trip spans 12h for `duration_h` of an hour.
+    assert exposure.exposures[12] == pytest.approx(exposure.share[12] * duration_h)
+
+
+def test_national_context_with_no_incidents_is_uniform(db_session: Session):
+    context = load_national_context(db_session)
+
+    assert context.data_cut is None
+    assert context.national_share == pytest.approx([1 / 24] * 24)
