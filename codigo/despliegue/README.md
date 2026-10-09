@@ -285,7 +285,7 @@ HTTP dentro de Docker. Además, se une a la red `caddy_net` como
 límites de memoria (el VPS no tiene swap).
 
 1. **DNS en GoDaddy:** registro `A`, nombre `reporteec`, valor
-   `158.23.163.230`.
+   la IP pública del VPS (la misma del dominio principal).
 2. **`.env`** en `codigo/despliegue/`, con `DOMAIN=:80` y
    `CORS_ORIGINS=https://reporteec.playhubb.site`. La contraseña debe ser
    hexadecimal, porque va dentro de una URL.
