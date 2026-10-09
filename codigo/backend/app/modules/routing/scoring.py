@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from datetime import datetime, time
 from enum import StrEnum
 
 HOURS_PER_DAY = 24
@@ -41,6 +42,15 @@ def recency_weight(age_days: float) -> float:
     out) is clamped to 0 so no case ever weighs more than 1.
     """
     return 0.5 ** (max(age_days, 0.0) / HALF_LIFE_DAYS)
+
+
+def has_recorded_hour(local_time: datetime) -> bool:
+    """False for exactly 00:00:00 local: the sources store a missing hour as midnight.
+
+    Such a case still counts (in totals, W_total and blackspots) but tells
+    nothing about the hour of day, so it never feeds an hourly curve.
+    """
+    return local_time.time() != time(0, 0)
 
 
 def _check_day_curve(values: Sequence[float]) -> None:

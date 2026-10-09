@@ -24,7 +24,11 @@ class Coordinates(BaseModel):
 
 
 class RouteGeometry(BaseModel):
-    """GeoJSON LineString of the route, [lon, lat] pairs in WGS84."""
+    """GeoJSON LineString of the route for drawing, [lon, lat] pairs in WGS84.
+
+    Simplified with Douglas-Peucker at 20 m (first and last points kept); every
+    number in the response is computed on OSRM's full geometry.
+    """
 
     type: Literal["LineString"] = "LineString"
     coordinates: list[tuple[float, float]]
@@ -36,7 +40,16 @@ class RouteCases(BaseModel):
         description="Unweighted count per incident type; every type is always present."
     )
     weighted_total: float = Field(
-        description="Sum of recency weights (a case one year before the data cut weighs 0.5)."
+        description=(
+            "Sum of recency weights of every case, with or without a recorded hour "
+            "(a case one year before the data cut weighs 0.5)."
+        )
+    )
+    without_hour: int = Field(
+        description=(
+            "Cases with no recorded hour (stored as 00:00:00 local): counted in totals, "
+            "exposure and blackspots, left out of every hourly curve."
+        )
     )
 
 
@@ -49,7 +62,10 @@ class HourRisk(BaseModel):
         )
     )
     weighted_cases: float = Field(
-        description="Recency-weighted cases on the route at this local hour (before smoothing)."
+        description=(
+            "Recency-weighted cases on the route at this local hour (before smoothing); "
+            "cases without a recorded hour are not in any hour."
+        )
     )
     exposure: float = Field(
         description=(
@@ -74,7 +90,10 @@ class Blackspot(BaseModel):
     cases: int = Field(description="Unweighted case count in the piece.")
     by_type: dict[IncidentTypeKey, int]
     peak_hours: list[int] = Field(
-        description="Up to 3 local hours with the most weighted cases in the piece, busiest first."
+        description=(
+            "Up to 3 local hours with the most weighted cases in the piece, busiest first; "
+            "cases without a recorded hour are left out."
+        )
     )
     first_date: date = Field(description="Earliest case in the piece (local date).")
     last_date: date = Field(description="Latest case in the piece (local date).")
@@ -88,18 +107,21 @@ class RouteRiskResponse(BaseModel):
     duration_min: float = Field(description="OSRM driving time in minutes.")
     cases: RouteCases
     selected: HourRisk = Field(description="Risk for the requested departure `hour`.")
-    best_hour: int = Field(
+    best_hour: int | None = Field(
         ge=0,
         le=23,
         description=(
             "Departure hour with the lowest exposure; hours within 5% of it count as tied "
-            "and the earliest is reported."
+            "and the earliest is reported. Null when the route has no case at all."
         ),
     )
     hourly: list[HourRisk] = Field(description="All 24 departure hours, 0 to 23.")
     blackspots: list[Blackspot] = Field(description="At most 5, heaviest first.")
     low_data: bool = Field(
-        description="True when the route's weighted cases are below the shrinkage constant K=20."
+        description=(
+            "True when the route's weighted cases with a recorded hour are below the "
+            "shrinkage constant K=20, so the hourly curve leans on the national one."
+        )
     )
     data_cut: date | None = Field(
         description="Local date of the latest case used; recency weights are measured from it."

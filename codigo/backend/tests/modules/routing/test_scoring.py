@@ -14,15 +14,18 @@ The tiny fixture used throughout (`_RAW`): weighted cases 4.0 at 00h and
 """
 
 import math
+from datetime import datetime
 
 import pytest
 
+from app.core.time import GUAYAQUIL
 from app.modules.routing.scoring import (
     Band,
     band_for,
     best_departure_hour,
     exposure_for_departure,
     exposures_by_departure_hour,
+    has_recorded_hour,
     normalize,
     peak_hours,
     recency_weight,
@@ -201,3 +204,17 @@ def test_peak_hours_are_the_three_heaviest_hours_with_cases():
 
     assert peak_hours(by_hour) == [19, 22, 2]
     assert peak_hours([0.0] * 23 + [1.0]) == [23]
+
+
+@pytest.mark.parametrize(
+    ("local", "recorded"),
+    [
+        (datetime(2025, 6, 1, 0, 0, 0, tzinfo=GUAYAQUIL), False),
+        (datetime(2025, 6, 1, 0, 0, 1, tzinfo=GUAYAQUIL), True),
+        (datetime(2025, 6, 1, 0, 30, tzinfo=GUAYAQUIL), True),
+        (datetime(2025, 6, 1, 23, 59, tzinfo=GUAYAQUIL), True),
+        (datetime(2025, 6, 1, 12, 0, tzinfo=GUAYAQUIL), True),
+    ],
+)
+def test_exactly_midnight_local_means_no_recorded_hour(local: datetime, recorded: bool):
+    assert has_recorded_hour(local) is recorded

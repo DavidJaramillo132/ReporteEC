@@ -3,19 +3,22 @@
 Pipeline for one origin/destination pair (`analyze_route`):
 
 1. `load_national_context` -- the data cut (latest `occurred_at` among the
-   incidents routes use) and the national 24-hour curve. Cached in-process
-   for `NATIONAL_CONTEXT_TTL_S`.
+   incidents routes use), a data version, and the national 24-hour curve.
+   Cached in-process for `NATIONAL_CONTEXT_TTL_S`.
 2. `fetch_route_cases` -- ONE SQL statement intersects the incidents with the
-   route's buffered chunks (`app.modules.routing.geometry`). The `&&` against
+   route's 1 km pieces (`app.modules.routing.geometry`). The `&&` against
    `ST_Expand` lets the GiST index on `incidents.geom` pick candidates; the
-   exact `ST_DWithin` on geography (meters) then applies the 1,000 m highway
-   / 200 m urban buffer.
+   exact `ST_DWithin` on geography (meters) then applies each piece's
+   1,000 m highway / 200 m urban buffer.
 3. `compute_route_exposure` -- recency weights, the hourly curve, shrinkage
    and exposure for every departure hour (pure math in
    `app.modules.routing.scoring`). Callable without HTTP: it takes an
    `OsrmRoute` and a session, so the reference-distribution job can call it
    for every canton pair.
-4. `find_blackspots` -- 1 km pieces with the most weighted cases.
+4. `find_blackspots` -- the same 1 km pieces, ranked by weighted cases.
+
+Everything is computed on the full OSRM geometry; only the line returned
+for drawing is simplified (Douglas-Peucker, 20 m).
 
 The 0-100 score is a percentile of exposure against a stored reference
 distribution that does not exist yet: every response is built with a
@@ -25,24 +28,32 @@ Incidents used (V2 global constraints): types homicidio/sicariato/femicidio,
 `location_precision` exacta or aproximada (canton-level points are a
 canton's ST_PointOnSurface, not a place on a road), and drawn on the map
 (`map_incidents`: active, not located, 2019 onwards). Hours are local time.
+A case at exactly 00:00:00 local has no recorded hour (the sources store a
+missing hour as midnight): it counts everywhere except in hourly curves.
 """
 
 from __future__ import annotations
 
-import math
 import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.time import GUAYAQUIL
 from app.modules.incidents.models import IncidentType, LocationPrecision
-from app.modules.routing.geometry import LonLat, RouteChunk, build_chunks, point_at_distance
+from app.modules.routing.geometry import (
+    LonLat,
+    RoutePiece,
+    build_pieces,
+    point_at_distance,
+    simplify_line,
+)
 from app.modules.routing.osrm import OsrmClient, OsrmRoute
 from app.modules.routing.schemas import (
     Blackspot,
@@ -58,6 +69,7 @@ from app.modules.routing.scoring import (
     band_for,
     best_departure_hour,
     exposures_by_departure_hour,
+    has_recorded_hour,
     normalize,
     peak_hours,
     recency_weight,
@@ -68,8 +80,8 @@ from app.modules.routing.scoring import (
 
 ROUTE_INCIDENT_TYPES = (IncidentType.HOMICIDIO, IncidentType.SICARIATO, IncidentType.FEMICIDIO)
 ROUTE_LOCATION_PRECISIONS = (LocationPrecision.EXACTA, LocationPrecision.APROXIMADA)
-PIECE_LENGTH_M = 1000.0
 COORDINATE_DECIMALS = 4  # ~11 m: map clicks a few meters apart share a cache entry
+MAX_SNAP_DISTANCE_M = 2000.0
 NATIONAL_CONTEXT_TTL_S = 600.0
 # A cached analysis keeps the whole parsed OSRM route: measured ~0.07 MB for
 # Guayaquil-Babahoyo (73 km) and ~1.1 MB for Loja-Quito (642 km, 12,800
@@ -100,14 +112,43 @@ def no_reference_score(exposure: float) -> int | None:
     return None
 
 
+InvalidRouteReason = Literal["origin_far_from_road", "destination_far_from_road", "same_place"]
+
+
+class InvalidRoute(Exception):
+    """The request routes, but not usefully: the API answers 422 with `reason`'s message."""
+
+    def __init__(self, reason: InvalidRouteReason) -> None:
+        super().__init__(reason)
+        self.reason: InvalidRouteReason = reason
+
+
+def validate_route(route: OsrmRoute) -> None:
+    """Reject a route whose ends OSRM had to snap > 2 km, or that goes nowhere.
+
+    OSRM snaps any point to the nearest road without a limit (a click in the
+    ocean still routes, from the coast). Origin and destination that snap to
+    the same place, or a 0 m route, are the same place.
+    """
+    origin, destination = route.waypoints
+    if origin.distance_m > MAX_SNAP_DISTANCE_M:
+        raise InvalidRoute("origin_far_from_road")
+    if destination.distance_m > MAX_SNAP_DISTANCE_M:
+        raise InvalidRoute("destination_far_from_road")
+    if origin.location == destination.location or route.distance_m <= 0:
+        raise InvalidRoute("same_place")
+
+
 # ---------------------------------------------------------------------------
-# National context: data cut and the national hourly curve.
+# National context: data cut, data version and the national hourly curve.
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class NationalContext:
     data_cut: datetime | None
+    data_version: tuple[object, ...]
+    """Changes whenever the eligible incidents do (count, id sum, last update, cut)."""
     national_share: tuple[float, ...]
 
 
@@ -119,22 +160,36 @@ _ELIGIBLE_FROM = """
       AND i.location_precision = ANY(CAST(:precisions AS text[]))
 """
 
+# One row per hour with a recorded hour, or a single row with a NULL hour
+# when there is none: the stats row always comes back.
 _NATIONAL_SQL = text(
     f"""
-    WITH eligible AS (SELECT i.occurred_at {_ELIGIBLE_FROM}),
-    cut AS (SELECT max(occurred_at) AS data_cut FROM eligible)
-    -- double precision throughout: EXTRACT returns numeric, and a numeric
-    -- power() over every incident in the country is ~10x slower.
-    SELECT
-        EXTRACT(HOUR FROM e.occurred_at AT TIME ZONE 'America/Guayaquil')::integer AS hour,
-        sum(power(
-            CAST(0.5 AS double precision),
-            CAST(EXTRACT(EPOCH FROM (cut.data_cut - e.occurred_at)) AS double precision)
-                / (86400.0 * 365.25)
-        )) AS weight,
-        cut.data_cut
-    FROM eligible AS e CROSS JOIN cut
-    GROUP BY 1, cut.data_cut
+    WITH eligible AS (SELECT i.id, i.occurred_at, i.updated_at {_ELIGIBLE_FROM}),
+    stats AS (
+        SELECT
+            max(occurred_at) AS data_cut,
+            count(*) AS incident_count,
+            coalesce(sum(id), 0) AS id_sum,
+            max(updated_at) AS last_update
+        FROM eligible
+    ),
+    hourly AS (
+        -- double precision throughout: EXTRACT returns numeric, and a numeric
+        -- power() over every incident in the country is ~5x slower.
+        SELECT
+            EXTRACT(HOUR FROM e.occurred_at AT TIME ZONE 'America/Guayaquil')::integer AS hour,
+            sum(power(
+                CAST(0.5 AS double precision),
+                CAST(EXTRACT(EPOCH FROM (s.data_cut - e.occurred_at)) AS double precision)
+                    / (86400.0 * 365.25)
+            )) AS weight
+        FROM eligible AS e CROSS JOIN stats AS s
+        -- 00:00:00 local is a missing hour, not midnight.
+        WHERE CAST(e.occurred_at AT TIME ZONE 'America/Guayaquil' AS time) <> TIME '00:00:00'
+        GROUP BY 1
+    )
+    SELECT s.data_cut, s.incident_count, s.id_sum, s.last_update, h.hour, h.weight
+    FROM stats AS s LEFT JOIN hourly AS h ON true
     """
 )
 
@@ -147,20 +202,22 @@ def _filter_params() -> dict[str, list[str]]:
 
 
 def load_national_context(session: Session) -> NationalContext:
-    """Data cut and national share, over every incident routes use, nationwide.
+    """Data cut, data version and national share, over every incident routes use.
 
     The national curve gets the same treatment as a route's curve (recency
-    weights from the same cut, circular smoothing) and is normalized to sum 1;
-    with no incidents at all it is uniform.
+    weights from the same cut, no-hour cases left out, circular smoothing)
+    and is normalized to sum 1; with no hourly data at all it is uniform.
     """
     rows = session.execute(_NATIONAL_SQL, _filter_params()).all()
     weights = [0.0] * HOURS_PER_DAY
-    data_cut = None
-    for hour, weight, cut in rows:
-        weights[hour] = float(weight)
-        data_cut = cut
+    for row in rows:
+        if row.hour is not None:
+            weights[row.hour] = float(row.weight)
+    first = rows[0]
     return NationalContext(
-        data_cut=data_cut, national_share=tuple(normalize(smooth_circular(weights)))
+        data_cut=first.data_cut,
+        data_version=(first.data_cut, first.incident_count, int(first.id_sum), first.last_update),
+        national_share=tuple(normalize(smooth_circular(weights))),
     )
 
 
@@ -198,25 +255,18 @@ def get_national_context(session: Session) -> NationalContext:
 
 _ROUTE_CASES_SQL = text(
     f"""
-    WITH chunks AS (
-        SELECT ST_GeomFromText(c.wkt, 4326) AS geom, c.start_m, c.length_m, c.buffer_m
-        FROM unnest(
-            CAST(:wkts AS text[]),
-            CAST(:starts AS double precision[]),
-            CAST(:lengths AS double precision[]),
-            CAST(:buffers AS double precision[])
-        ) AS c(wkt, start_m, length_m, buffer_m)
+    WITH pieces AS (
+        SELECT p.ordinal - 1 AS piece, ST_GeomFromText(p.wkt, 4326) AS geom, p.buffer_m
+        FROM unnest(CAST(:wkts AS text[]), CAST(:buffers AS double precision[]))
+            WITH ORDINALITY AS p(wkt, buffer_m, ordinal)
     ),
     eligible AS (SELECT i.id, i.type, i.occurred_at, m.geom {_ELIGIBLE_FROM})
-    SELECT DISTINCT ON (e.id)
-        e.type,
-        e.occurred_at,
-        c.start_m + ST_LineLocatePoint(c.geom, e.geom) * c.length_m AS position_m
-    FROM chunks AS c
+    SELECT DISTINCT ON (e.id) e.type, e.occurred_at, p.piece
+    FROM pieces AS p
     JOIN eligible AS e
-      ON e.geom && ST_Expand(c.geom, c.buffer_m / {_METERS_PER_DEGREE_LOWER_BOUND})
-     AND ST_DWithin(e.geom::geography, c.geom::geography, c.buffer_m)
-    ORDER BY e.id, ST_Distance(e.geom::geography, c.geom::geography)
+      ON e.geom && ST_Expand(p.geom, p.buffer_m / {_METERS_PER_DEGREE_LOWER_BOUND})
+     AND ST_DWithin(e.geom::geography, p.geom::geography, p.buffer_m)
+    ORDER BY e.id, ST_Distance(e.geom::geography, p.geom::geography)
     """
 )
 
@@ -225,27 +275,25 @@ _ROUTE_CASES_SQL = text(
 class RouteCase:
     type: str
     occurred_at: datetime
-    position_m: float
-    """Meters from the origin along the route (projection on the nearest chunk)."""
+    piece: int
+    """Index of the nearest 1 km piece whose buffer contains the case."""
 
 
-def fetch_route_cases(session: Session, chunks: Sequence[RouteChunk]) -> list[RouteCase]:
-    """Every eligible incident within its nearest chunk's buffer, in one round-trip."""
-    if not chunks:
+def fetch_route_cases(session: Session, pieces: Sequence[RoutePiece]) -> list[RouteCase]:
+    """Every eligible incident within its nearest piece's buffer, in one round-trip."""
+    if not pieces:
         return []
     rows = session.execute(
         _ROUTE_CASES_SQL,
         {
-            "wkts": [chunk.wkt() for chunk in chunks],
-            "starts": [chunk.start_m for chunk in chunks],
-            "lengths": [chunk.length_m for chunk in chunks],
-            "buffers": [chunk.buffer_m for chunk in chunks],
+            "wkts": [piece.wkt() for piece in pieces],
+            "buffers": [piece.buffer_m for piece in pieces],
             **_filter_params(),
         },
     ).all()
     return [
-        RouteCase(type=str(kind), occurred_at=occurred_at, position_m=float(position))
-        for kind, occurred_at, position in rows
+        RouteCase(type=str(kind), occurred_at=occurred_at, piece=int(piece))
+        for kind, occurred_at, piece in rows
     ]
 
 
@@ -259,16 +307,23 @@ class WeightedCase:
     type: str
     local_time: datetime
     weight: float
-    position_m: float
+    piece: int
+
+    @property
+    def has_hour(self) -> bool:
+        return has_recorded_hour(self.local_time)
 
 
 @dataclass(frozen=True, slots=True)
 class RouteExposure:
     route: OsrmRoute
+    pieces: tuple[RoutePiece, ...]
     cases: tuple[WeightedCase, ...]
     weighted_by_hour: tuple[float, ...]
+    """raw[h]: recency weights of the cases with a recorded hour, by local hour."""
     share: tuple[float, ...]
     weighted_total: float
+    """W_total: recency weights of every case, with or without a recorded hour."""
     exposures: tuple[float, ...]
     data_cut: datetime | None
 
@@ -278,7 +333,8 @@ class RouteExposure:
 
     @property
     def low_data(self) -> bool:
-        return self.weighted_total < SHRINKAGE_K
+        """Σraw < K: the hourly curve leans mostly on the national one."""
+        return sum(self.weighted_by_hour) < SHRINKAGE_K
 
 
 def weigh_cases(cases: Sequence[RouteCase], data_cut: datetime | None) -> list[WeightedCase]:
@@ -291,10 +347,18 @@ def weigh_cases(cases: Sequence[RouteCase], data_cut: datetime | None) -> list[W
                 type=case.type,
                 local_time=case.occurred_at.astimezone(GUAYAQUIL),
                 weight=recency_weight(age_days),
-                position_m=case.position_m,
+                piece=case.piece,
             )
         )
     return weighted
+
+
+def _weight_by_hour(cases: Sequence[WeightedCase]) -> list[float]:
+    by_hour = [0.0] * HOURS_PER_DAY
+    for case in cases:
+        if case.has_hour:
+            by_hour[case.local_time.hour] += case.weight
+    return by_hour
 
 
 def compute_route_exposure(
@@ -304,19 +368,19 @@ def compute_route_exposure(
 
     No HTTP involved: the caller routes with OSRM; this runs the one spatial
     query and the pure math. `context` defaults to the cached national one.
+    exposure(H) = W_total x Σ share over the hours the trip spans from H.
     """
     context = context or get_national_context(session)
-    chunks = build_chunks(route.coordinates, route.segment_distances_m, route.segment_speeds_mps)
-    cases = weigh_cases(fetch_route_cases(session, chunks), context.data_cut)
+    pieces = build_pieces(route.coordinates, route.segment_distances_m, route.segment_speeds_mps)
+    cases = weigh_cases(fetch_route_cases(session, pieces), context.data_cut)
 
-    weighted_by_hour = [0.0] * HOURS_PER_DAY
-    for case in cases:
-        weighted_by_hour[case.local_time.hour] += case.weight
-    weighted_total = sum(weighted_by_hour)
+    weighted_by_hour = _weight_by_hour(cases)
+    weighted_total = sum(case.weight for case in cases)
     share = shrink_toward(smooth_circular(weighted_by_hour), context.national_share)
     exposures = exposures_by_departure_hour(share, weighted_total, route.duration_s / 60.0)
     return RouteExposure(
         route=route,
+        pieces=tuple(pieces),
         cases=tuple(cases),
         weighted_by_hour=tuple(weighted_by_hour),
         share=tuple(share),
@@ -334,37 +398,30 @@ def _count_by_type(cases: Sequence[WeightedCase]) -> dict[str, int]:
 
 
 def find_blackspots(exposure: RouteExposure) -> list[Blackspot]:
-    """Cut the route into consecutive 1 km pieces and report the blackspot ones."""
+    """Report the blackspot pieces among the route's 1 km pieces."""
     route = exposure.route
-    length_m = sum(route.segment_distances_m)
-    piece_count = max(1, math.ceil(length_m / PIECE_LENGTH_M))
-    pieces: list[list[WeightedCase]] = [[] for _ in range(piece_count)]
+    cases_by_piece: list[list[WeightedCase]] = [[] for _ in exposure.pieces]
     for case in exposure.cases:
-        index = int(max(case.position_m, 0.0) // PIECE_LENGTH_M)
-        pieces[min(index, piece_count - 1)].append(case)
+        cases_by_piece[case.piece].append(case)
 
     blackspots = []
-    for index in select_blackspot_pieces([sum(c.weight for c in piece) for piece in pieces]):
-        piece = pieces[index]
-        start_m = index * PIECE_LENGTH_M
-        end_m = min(start_m + PIECE_LENGTH_M, length_m)
+    for index in select_blackspot_pieces([sum(c.weight for c in cs) for cs in cases_by_piece]):
+        piece, cases = exposure.pieces[index], cases_by_piece[index]
+        end_m = piece.start_m + piece.length_m
         lon, lat = point_at_distance(
-            route.coordinates, route.segment_distances_m, (start_m + end_m) / 2
+            route.coordinates, route.segment_distances_m, piece.start_m + piece.length_m / 2
         )
-        by_hour = [0.0] * HOURS_PER_DAY
-        for case in piece:
-            by_hour[case.local_time.hour] += case.weight
-        dates = [case.local_time.date() for case in piece]
+        dates = [case.local_time.date() for case in cases]
         blackspots.append(
             Blackspot(
-                km_from=round(start_m / 1000, 3),
+                km_from=round(piece.start_m / 1000, 3),
                 km_to=round(end_m / 1000, 3),
                 lon=lon,
                 lat=lat,
-                weighted_cases=round(sum(c.weight for c in piece), 4),
-                cases=len(piece),
-                by_type=_count_by_type(piece),
-                peak_hours=peak_hours(by_hour),
+                weighted_cases=round(sum(c.weight for c in cases), 4),
+                cases=len(cases),
+                by_type=_count_by_type(cases),
+                peak_hours=peak_hours(_weight_by_hour(cases)),
                 first_date=min(dates),
                 last_date=max(dates),
             )
@@ -379,8 +436,10 @@ class RouteAnalysis:
     origin: LonLat
     destination: LonLat
     exposure: RouteExposure
+    display_coordinates: tuple[LonLat, ...]
     blackspots: tuple[Blackspot, ...]
-    best_hour: int
+    best_hour: int | None
+    """None when the route has no case at all: every hour ties at 0."""
 
 
 def analyze_route(
@@ -395,8 +454,11 @@ def analyze_route(
         origin=origin,
         destination=destination,
         exposure=exposure,
+        display_coordinates=tuple(simplify_line(route.coordinates)),
         blackspots=tuple(find_blackspots(exposure)),
-        best_hour=best_departure_hour(exposure.exposures),
+        best_hour=(
+            best_departure_hour(exposure.exposures) if exposure.weighted_total > 0 else None
+        ),
     )
 
 
@@ -423,13 +485,14 @@ def build_response(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> Rou
     return RouteRiskResponse(
         origin=Coordinates(lon=analysis.origin[0], lat=analysis.origin[1]),
         destination=Coordinates(lon=analysis.destination[0], lat=analysis.destination[1]),
-        geometry=RouteGeometry(coordinates=list(route.coordinates)),
+        geometry=RouteGeometry(coordinates=list(analysis.display_coordinates)),
         distance_km=round(route.distance_m / 1000, 2),
         duration_min=round(route.duration_s / 60, 1),
         cases=RouteCases(
             total=len(exposure.cases),
             by_type=_count_by_type(exposure.cases),
             weighted_total=round(exposure.weighted_total, 4),
+            without_hour=sum(1 for case in exposure.cases if not case.has_hour),
         ),
         selected=hourly[hour],
         best_hour=analysis.best_hour,
@@ -496,15 +559,20 @@ def route_risk(
 
     Coordinates are rounded to `COORDINATE_DECIMALS` before routing, so a
     cached and a fresh answer are identical. The cache key includes the data
-    cut: new data invalidates old entries once the national context refreshes.
-    Raises `RouteNotFound` / `OsrmUnavailable` from the OSRM client.
+    version, so any change to the eligible incidents misses the old entries
+    once the national context refreshes (at most `NATIONAL_CONTEXT_TTL_S`).
+    Raises `InvalidRoute`, and `RouteNotFound` / `OsrmUnavailable` from the
+    OSRM client.
     """
     origin, destination = round_coordinates(origin), round_coordinates(destination)
+    if origin == destination:
+        raise InvalidRoute("same_place")
     context = get_national_context(session)
-    key = (origin, destination, context.data_cut)
+    key = (origin, destination, context.data_version)
     analysis = _route_cache.get(key)
     if analysis is None:
         route = client.route(origin, destination)
+        validate_route(route)
         analysis = analyze_route(session, route, origin, destination, context)
         _route_cache.put(key, analysis)
     return build_response(analysis, hour, score_fn)

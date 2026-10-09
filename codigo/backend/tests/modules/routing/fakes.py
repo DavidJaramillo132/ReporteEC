@@ -43,9 +43,15 @@ def meters_to_lat_degrees(meters: float) -> float:
 
 
 def straight_route_payload(
-    coords: Sequence[tuple[float, float]], speeds_mps: Sequence[float]
+    coords: Sequence[tuple[float, float]],
+    speeds_mps: Sequence[float],
+    *,
+    snap_distances_m: tuple[float, float] = (0.0, 0.0),
 ) -> dict:
-    """An OSRM-shaped `Ok` payload for the polyline `coords`, one speed per segment."""
+    """An OSRM-shaped `Ok` payload for the polyline `coords`, one speed per segment.
+
+    The waypoints are the first and last vertices, snapped `snap_distances_m` away.
+    """
     distances = [haversine_m(a, b) for a, b in zip(coords, coords[1:], strict=False)]
     durations = [d / s if s else 0.0 for d, s in zip(distances, speeds_mps, strict=True)]
     return {
@@ -65,6 +71,10 @@ def straight_route_payload(
                     }
                 ],
             }
+        ],
+        "waypoints": [
+            {"location": list(coords[0]), "distance": snap_distances_m[0], "name": ""},
+            {"location": list(coords[-1]), "distance": snap_distances_m[1], "name": ""},
         ],
     }
 
