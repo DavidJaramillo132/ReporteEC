@@ -126,6 +126,11 @@ const shortDate = new Intl.DateTimeFormat('es-EC', { day: '2-digit', month: 'sho
 export const formatLongDate = (iso: string) => longDate.format(new Date(`${iso}T00:00:00Z`))
 export const formatShortDate = (iso: string) => shortDate.format(new Date(`${iso}T00:00:00Z`)).replace('.', '')
 
+const compactDate = new Intl.DateTimeFormat('es-EC', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+
+/** «31 ago 2026»: the data cut where the long form does not fit (the masthead between md and lg). */
+export const formatCompactDate = (iso: string) => compactDate.format(new Date(`${iso}T00:00:00Z`)).replaceAll('.', '')
+
 /** Canton and province names arrive in capitals; show them in title case. */
 export function placeName(name: string) {
   const lower = new Set(['de', 'del', 'la', 'las', 'los', 'y'])

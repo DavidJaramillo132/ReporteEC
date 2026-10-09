@@ -3,11 +3,13 @@ import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { LocateButton, LocateNotice, MapNotice } from '../../components/LocateButton'
 import { useLocate } from '../../components/useLocate'
 import type { Blackspot, LonLatPoint } from '../../lib/api'
+import { TILES_URL } from '../../lib/api'
 import { ECUADOR_BOUNDS } from '../../lib/basemap'
 import { SELLO } from '../../lib/charts'
 import { createGazetteMap, watchBasemap } from '../../lib/gazetteMap'
 import { INK, PAPER } from '../../lib/marks'
 import { blackspotLabel } from '../../lib/routeRisk'
+import { corridorFilter } from './corridor'
 
 interface RouteMapProps {
   from: LonLatPoint | null
@@ -118,6 +120,28 @@ export function RouteMap({ from, to, line, blackspots, picking, onPick, focus, c
     watchBasemap(map, setBaseFailed)
 
     map.once('style.load', () => {
+      // Faint context: the registered cases near the route, from the same
+      // tiles the map page draws. Hidden until a route exists; its filter
+      // (type + distance to the line) is set with each new route. Added
+      // first, so it stays under the route line and every mark.
+      map.addSource('incidents', {
+        type: 'vector',
+        tiles: [`${TILES_URL}/map_incidents/{z}/{x}/{y}`],
+        minzoom: 0,
+        maxzoom: 14,
+      })
+      map.addLayer({
+        id: 'route-incidents',
+        type: 'circle',
+        source: 'incidents',
+        'source-layer': 'map_incidents',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-color': INK,
+          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0.22, 12, 0.35],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 1.6, 10, 2.6, 14, 4],
+        },
+      })
       map.addSource('route', { type: 'geojson', data: EMPTY_LINE })
       map.addLayer({
         id: 'route-case',
@@ -154,7 +178,12 @@ export function RouteMap({ from, to, line, blackspots, picking, onPick, focus, c
     const map = mapRef.current
     if (!map || !ready) return
     ;(map.getSource('route') as GeoJSONSource | undefined)?.setData(lineFeature(line))
-    if (!line || line.length < 2) return
+    if (!line || line.length < 2) {
+      map.setLayoutProperty('route-incidents', 'visibility', 'none')
+      return
+    }
+    map.setFilter('route-incidents', corridorFilter(line))
+    map.setLayoutProperty('route-incidents', 'visibility', 'visible')
     const bounds = line.reduce((b, coord) => b.extend(coord), new LngLatBounds(line[0], line[0]))
     map.fitBounds(bounds, { padding: fitPadding(), maxZoom: 14, duration: moveDuration() })
   }, [line, ready])
@@ -214,6 +243,14 @@ export function RouteMap({ from, to, line, blackspots, picking, onPick, focus, c
       <LocateButton state={location} onClick={triggerLocate} />
       <LocateNotice state={location} />
       {baseFailed && <MapNotice>No se pudo cargar el mapa base. La ruta se muestra igual.</MapNotice>}
+      {hasLine && (
+        <p className="absolute bottom-2 left-2 z-10 flex max-w-[calc(100%-7rem)] items-center gap-1.5 border border-ink bg-sheet px-2 py-1 text-[12px] text-ink-2">
+          <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" className="shrink-0">
+            <circle cx="4" cy="4" r="3" fill={INK} fillOpacity={0.35} />
+          </svg>
+          Casos registrados a 1 km o menos de la ruta
+        </p>
+      )}
       {children}
     </div>
   )

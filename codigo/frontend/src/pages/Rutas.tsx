@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { LonLatPoint } from '../lib/api'
 import { replaceQuery } from '../lib/router'
 import {
@@ -53,6 +53,7 @@ export function Rutas() {
   const [attempt, setAttempt] = useState(0)
   const [focus, setFocus] = useState<{ lon: number; lat: number; seq: number } | null>(null)
   const hourId = useId()
+  const mapPlateRef = useRef<HTMLDivElement>(null)
 
   const result = useRouteRisk(from?.point ?? null, to?.point ?? null, hour, attempt)
   const data = result.status === 'ready' ? result.data : null
@@ -146,7 +147,7 @@ export function Rutas() {
         </div>
       </section>
 
-      <div className="relative h-[55svh] min-h-[320px] border-b border-ink lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-auto lg:min-h-0 lg:border-b-0">
+      <div ref={mapPlateRef} className="relative h-[55svh] min-h-[320px] scroll-mt-2 border-b border-ink lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-auto lg:min-h-0 lg:border-b-0">
         <RouteMap
           from={from?.point ?? null}
           to={to?.point ?? null}
@@ -156,9 +157,13 @@ export function Rutas() {
           onPick={handlePick}
           focus={focus}
         >
+          {/* Always mounted, empty until armed: a live region inserted already filled is often not announced. */}
+          <p role="status" className="sr-only">
+            {picking ? `Toca el mapa para marcar el ${picking === 'origin' ? 'origen' : 'destino'}. Esc cancela.` : ''}
+          </p>
           {picking && (
             <div className="ink-in absolute top-3 left-3 z-10 flex max-w-[calc(100%-1.5rem-140px)] flex-wrap items-center gap-x-3 gap-y-1 border border-ink bg-sheet px-3 py-1.5 text-[13px]">
-              <span role="status">Toca el mapa para marcar el {picking === 'origin' ? 'origen' : 'destino'}.</span>
+              <span aria-hidden="true">Toca el mapa para marcar el {picking === 'origin' ? 'origen' : 'destino'}.</span>
               <button type="button" onClick={() => setPicking(null)} className="underline hover:no-underline">
                 Cancelar (Esc)
               </button>
@@ -222,7 +227,14 @@ export function Rutas() {
             onHour={setHour}
             onFocusBlackspot={(index) => {
               const spot = data.blackspots[index]
-              if (spot) setFocus((current) => ({ lon: spot.lon, lat: spot.lat, seq: (current?.seq ?? 0) + 1 }))
+              if (!spot) return
+              // Below lg the map sits above the result, off screen: bring it into view first, then pan.
+              const plate = mapPlateRef.current
+              if (plate && !window.matchMedia('(min-width: 1024px)').matches) {
+                const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                plate.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+              }
+              setFocus((current) => ({ lon: spot.lon, lat: spot.lat, seq: (current?.seq ?? 0) + 1 }))
             }}
           />
         )}

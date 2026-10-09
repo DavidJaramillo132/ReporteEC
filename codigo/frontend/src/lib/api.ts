@@ -85,9 +85,8 @@ async function fetchJson<T>(
 }
 
 /**
- * A non-2xx response. `detail` is FastAPI's error message when the body
- * carries one: a plain string for an HTTPException (the backend writes them
- * in Spanish for the reader), or the first validation message otherwise.
+ * A non-2xx response. `detail` is the message of a FastAPI HTTPException,
+ * which the backend writes in Spanish for the reader; null otherwise.
  */
 export class ApiError extends Error {
   readonly status: number
@@ -109,16 +108,15 @@ async function readDetail(response: Response): Promise<string | null> {
   }
 }
 
-/** FastAPI's `{"detail": "..."}` or `{"detail": [{"msg": "..."}]}` -> the message, else null. */
+/**
+ * FastAPI's `{"detail": "..."}` -> the message. A list-shaped detail is
+ * pydantic's request validation, written in English for developers: it
+ * yields null, so the caller shows its own Spanish message instead.
+ */
 export function detailMessage(body: unknown): string | null {
   if (!body || typeof body !== 'object' || !('detail' in body)) return null
   const detail = (body as { detail: unknown }).detail
-  if (typeof detail === 'string') return detail.trim() || null
-  if (Array.isArray(detail)) {
-    const first = detail[0] as { msg?: unknown } | undefined
-    return typeof first?.msg === 'string' ? first.msg : null
-  }
-  return null
+  return typeof detail === 'string' ? detail.trim() || null : null
 }
 
 export function getMeta(signal?: AbortSignal): Promise<MetaResponse> {

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { RouteName } from '../lib/router'
 import { Link } from '../lib/router'
-import { formatLongDate } from '../lib/registry'
+import { formatCompactDate, formatLongDate } from '../lib/registry'
 
 interface MastheadProps {
   cutDate: string | null
@@ -16,25 +16,25 @@ const NAV: { to: string; label: string; route: RouteName }[] = [
   { to: '/fuentes', label: 'Fuentes', route: 'fuentes' },
 ]
 
-/** A single ~56px bar on the sello field: nameplate, section nav, data cut, "Reportar". Below `md:`, the nav/cut/"Reportar" collapse into a disclosure menu (see the plan); the inline data cut waits for `lg:`, where five sections leave room for it. */
+/** A single ~56px bar on the sello field: nameplate, section nav, data cut, "Reportar". Below `md:`, the nav/cut/"Reportar" collapse into a disclosure menu (see the plan); between `md:` and `lg:` the data cut reads in its compact form («31 ago 2026»). */
 export function Masthead({ cutDate, route }: MastheadProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuId = useId()
 
   return (
     <header className="double-rule relative z-30 bg-sello text-paper">
-      <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
+      <div className="flex h-14 items-center gap-3 px-4 lg:gap-4 lg:px-6">
         <Link to="/" className="nameplate shrink-0 text-[22px] sm:text-[26px]">
           ReporteEC
         </Link>
 
-        <nav aria-label="Secciones" className="hidden min-w-0 items-center gap-1 md:flex">
+        <nav aria-label="Secciones" className="hidden min-w-0 items-center gap-0.5 md:flex lg:gap-1">
           {NAV.map((item) => (
             <Link
               key={item.to}
               to={item.to}
               aria-current={route === item.route ? 'page' : undefined}
-              className={`flex h-8 items-center px-2.5 text-[14px] font-medium transition-colors duration-150 ${
+              className={`flex h-8 items-center px-1.5 text-[14px] lg:px-2.5 font-medium transition-colors duration-150 ${
                 route === item.route ? 'bg-paper text-sello' : 'text-paper/85 hover:bg-sello-soft/25 hover:text-paper'
               }`}
             >
@@ -43,10 +43,12 @@ export function Masthead({ cutDate, route }: MastheadProps) {
           ))}
         </nav>
 
-        <div className="ml-auto hidden shrink-0 items-center gap-4 md:flex">
-          <p className="hidden text-[12.5px] text-paper/85 lg:block">
+        <div className="ml-auto hidden shrink-0 items-center gap-3 md:flex lg:gap-4">
+          <p className="text-[12px] whitespace-nowrap text-paper/85 lg:text-[12.5px]">
             <span className="label text-paper/65">Corte </span>
-            {cutDate ? formatLongDate(cutDate) : '…'}
+            {/* Compact between md and lg, where five sections leave less room. */}
+            <span className="lg:hidden">{cutDate ? formatCompactDate(cutDate) : '…'}</span>
+            <span className="hidden lg:inline">{cutDate ? formatLongDate(cutDate) : '…'}</span>
           </p>
           <ReportNotice />
         </div>

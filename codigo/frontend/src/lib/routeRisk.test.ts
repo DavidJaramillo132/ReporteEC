@@ -251,10 +251,12 @@ describe('errors', () => {
     expect(routeError(null, null).kind).toBe('failed')
   })
 
-  it("reads FastAPI's detail in both shapes", () => {
+  it("reads FastAPI's string detail and drops the English list shape", () => {
     expect(detailMessage({ detail: 'El origen y el destino son el mismo lugar.' })).toBe('El origen y el destino son el mismo lugar.')
-    expect(detailMessage({ detail: [{ msg: 'Input should be less than or equal to 23' }] })).toBe(
-      'Input should be less than or equal to 23',
+    // pydantic's list-shaped validation detail is English: never shown to the reader.
+    expect(detailMessage({ detail: [{ msg: 'Input should be less than or equal to 23' }] })).toBeNull()
+    expect(routeError(422, detailMessage({ detail: [{ msg: 'Input should be…' }] })).message).toBe(
+      'Revisa el origen, el destino y la hora.',
     )
     expect(detailMessage({})).toBeNull()
     expect(detailMessage(null)).toBeNull()

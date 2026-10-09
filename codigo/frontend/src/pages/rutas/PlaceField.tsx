@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { LonLatPoint, Place } from '../../lib/api'
 import { placeName } from '../../lib/registry'
-import { nextActiveIndex, placeLabel } from '../../lib/routeRisk'
+import { nextActiveIndex, placeLabel, roundPoint } from '../../lib/routeRisk'
 import { EndpointMark } from './EndpointMark'
 import { MIN_QUERY, usePlaceSearch } from './usePlaceSearch'
 
@@ -49,11 +49,15 @@ export function PlaceField({ role, value, onChoose, picking, onTogglePicking }: 
   // Searches follow the typed text even while the list is closed, so arrows can reopen it on results.
   const search = usePlaceSearch(draft ?? '')
   const places = search.status === 'ready' ? search.places : []
+  // The search is "open" while the reader edits; the listbox itself is shown (and aria-expanded true)
+  // only when it has options -- loading, too-short and no-result states live in the status line.
   const listShown = open && draft !== null && draft.trim().length > 0
+  const popupShown = listShown && places.length > 0
   const activeIndex = active < places.length ? active : -1
 
   const choose = (place: Place) => {
-    onChoose({ point: { lon: place.lon, lat: place.lat }, label: placeLabel(place) })
+    // Rounded like a shared link's ends, so both send the same request (and hit the API's cache).
+    onChoose({ point: roundPoint({ lon: place.lon, lat: place.lat }), label: placeLabel(place) })
     setDraft(null)
     setOpen(false)
     setActive(-1)
@@ -66,20 +70,20 @@ export function PlaceField({ role, value, onChoose, picking, onTogglePicking }: 
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      // Nothing typed (the field shows the chosen end): there is nothing to search, so nothing opens.
+      // With typed text, the arrows reopen the list on that text's last results.
+      if (draft === null) return
       event.preventDefault()
-      if (!open) {
-        setOpen(true)
-        if (draft === null) setDraft(text)
-      }
+      if (!open) setOpen(true)
       setActive((current) => nextActiveIndex(current < places.length ? current : -1, places.length, event.key))
-    } else if ((event.key === 'Home' || event.key === 'End') && listShown && activeIndex >= 0) {
+    } else if ((event.key === 'Home' || event.key === 'End') && popupShown && activeIndex >= 0) {
       event.preventDefault()
       setActive((current) => nextActiveIndex(current, places.length, event.key))
     } else if (event.key === 'Enter') {
-      if (listShown && activeIndex >= 0) {
+      if (popupShown && activeIndex >= 0) {
         event.preventDefault()
         choose(places[activeIndex])
-      } else if (listShown && places.length === 1) {
+      } else if (popupShown && places.length === 1) {
         event.preventDefault()
         choose(places[0])
       }
@@ -127,7 +131,9 @@ export function PlaceField({ role, value, onChoose, picking, onTogglePicking }: 
             <path d="M6 0.5v3M6 8.5v3M0.5 6h3M8.5 6h3" stroke="currentColor" strokeWidth="1.4" />
             <rect x="4" y="4" width="4" height="4" fill="currentColor" />
           </svg>
-          {picking ? 'Toca el mapa…' : 'Elegir en el mapa'}
+          Elegir en el mapa
+          {/* One stable name per field; aria-pressed carries the armed state. */}
+          <span className="sr-only"> ({copy.label.toLowerCase()})</span>
         </button>
       </div>
       <input
@@ -135,9 +141,9 @@ export function PlaceField({ role, value, onChoose, picking, onTogglePicking }: 
         type="text"
         role="combobox"
         aria-autocomplete="list"
-        aria-expanded={listShown}
+        aria-expanded={popupShown}
         aria-controls={listId}
-        aria-activedescendant={listShown && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
+        aria-activedescendant={popupShown && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         aria-describedby={statusId}
         autoComplete="off"
         spellCheck={false}
@@ -160,7 +166,7 @@ export function PlaceField({ role, value, onChoose, picking, onTogglePicking }: 
         id={listId}
         role="listbox"
         aria-label={`Cantones para ${copy.label.toLowerCase()}`}
-        hidden={!listShown || places.length === 0}
+        hidden={!popupShown}
         className="absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-y-auto border border-ink bg-sheet shadow-[0_6px_18px_-8px_rgba(21,33,44,0.35)]"
       >
         {places.map((place, index) => (

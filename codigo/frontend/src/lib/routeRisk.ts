@@ -250,7 +250,7 @@ export function blackspotLabel(spot: Blackspot): string {
 export const ROUTE_MESSAGES = {
   notFound: 'No encontramos una ruta por carretera entre esos dos puntos.',
   unavailable: 'El cálculo de rutas no está disponible en este momento.',
-  invalid: 'No se pudo calcular la ruta con esos puntos. Revisa el origen y el destino.',
+  invalid: 'Revisa el origen, el destino y la hora.',
   failed: 'No se pudo calcular la ruta.',
 } as const
 
@@ -258,8 +258,10 @@ export type RouteErrorKind = 'invalid' | 'not-found' | 'unavailable' | 'failed'
 
 /**
  * What to tell the reader for a failed request. A 422 carries the server's
- * own Spanish message (a point far from a road, the same place twice...);
- * a 404 too, when present. A 503 always reads the same calm sentence.
+ * own Spanish message (a point far from a road, the same place twice...)
+ * when it is an HTTPException; a validation 422 has none (see
+ * detailMessage) and reads the generic sentence. A 404 uses the server's
+ * message when present. A 503 always reads the same calm sentence.
  */
 export function routeError(status: number | null, detail: string | null): { kind: RouteErrorKind; message: string } {
   if (status === 422) return { kind: 'invalid', message: detail ?? ROUTE_MESSAGES.invalid }

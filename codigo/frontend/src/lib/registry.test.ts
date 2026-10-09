@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { entryNumber, formatCount, placeName } from './registry'
+import { entryNumber, formatCompactDate, formatCount, placeName } from './registry'
 
 describe('entryNumber', () => {
   it('pads the database id to 5 digits', () => {
@@ -16,5 +16,12 @@ describe('formatCount', () => {
 describe('placeName', () => {
   it('title-cases a name while keeping connector words lowercase', () => {
     expect(placeName('SANTO DOMINGO DE LOS TSACHILAS')).toBe('Santo Domingo de los Tsachilas')
+  })
+})
+
+describe('formatCompactDate', () => {
+  it('reads day, short month and year without dots', () => {
+    expect(formatCompactDate('2026-08-31')).toBe('31 ago 2026')
+    expect(formatCompactDate('2026-01-05')).not.toContain('.')
   })
 })

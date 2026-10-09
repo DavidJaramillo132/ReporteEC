@@ -168,11 +168,16 @@ function Fact({ term, value, note }: { term: string; value: string; note?: strin
 /** The band for the chosen hour: shape + label + score, and where the score sits on the 0-100 scale. */
 function SemaforoReading({ band, score, hour }: { band: BandInfo; score: number; hour: number }) {
   return (
-    <div className="border border-ink bg-sheet p-4" role="group" aria-label={`Nivel para salir a las ${hourLabel(hour)}`}>
+    <div
+      className="border border-ink bg-sheet p-4"
+      role="group"
+      aria-label={`Nivel para salir a las ${hourLabel(hour)}: ${band.label}, ${score} de 100`}
+    >
       <p className="label text-ink-3">Saliendo a las {hourLabel(hour)}</p>
       <div className="mt-2 flex items-center gap-3">
         <BandIcon shape={band.shape} color={band.color} size={36} />
-        <p className="nameplate text-[34px]">{band.label}</p>
+        {/* A large figure at normal width, like Estadísticas' Resumen: the condensed axis is for the nameplate and labels only. */}
+        <p className="text-[30px] leading-none font-semibold">{band.label}</p>
         <p className="ml-auto text-right">
           <span className="text-[26px] font-semibold tabular-nums">{score}</span>
           <span className="text-[13px] text-ink-2"> de 100</span>
