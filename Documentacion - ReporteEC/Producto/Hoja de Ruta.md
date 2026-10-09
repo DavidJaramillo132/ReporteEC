@@ -1,6 +1,6 @@
 ---
 tags: [producto, hoja-de-ruta, versiones]
-actualizado: 2026-10-03
+actualizado: 2026-10-09
 ---
 
 # Hoja de Ruta
@@ -19,7 +19,7 @@ Fase 0 ──► V1 Observatorio Histórico ──► V2 Rutas e Inteligencia Ho
 
 | Versión | Qué resuelve | Documento |
 |---|---|---|
-| **Fase 0 + V1** | Mapa público con datos oficiales desde 2019, semáforo cantonal de extorsión/vacunas a negocios, estadísticas, metodología y licencia. **Publicada (2026-10-03)** en https://reporteec.playhubb.site; en cierre: faltan la licencia del código, el worker diario y las pruebas manuales | [[V1 - Mapa Histórico]] |
+| **Fase 0 + V1** | Mapa público con datos oficiales desde 2019, semáforo cantonal de extorsión/vacunas a negocios, estadísticas, metodología y licencia. **Publicada (2026-10-03)** en https://reporteec.playhubb.site; en cierre: faltan el worker diario y la prueba de la PWA en el teléfono | [[V1 - Mapa Histórico]] |
 | **V2** | Navegación e inteligencia de riesgo en rutas por franja horaria (origen $\rightarrow$ destino), tramos críticos y API B2B de logística | [[V2 - Rutas e Inteligencia Horaria]] |
 | **V3** | Reportes ciudadanos verificados, moderación, vista «Actualidad», notificaciones Web Push por zona y noticias de la Policía | [[V3 - Tiempo Real y Comunidad]] |
 | **V4** | Canales de Telegram colaboradores, ingesta automatizada con IA, geocodificación y monitoreo de fuentes | [[V4 - Red Colaborativa e IA]] |
@@ -58,7 +58,7 @@ evitar y **una lista para probarla uno mismo** antes de darla por terminada.
 | Población por cantón (INEC) | Estadísticas de la V1 | **Resuelto:** cargada y usada en las tasas |
 | Año de inicio de los siniestros del INEC | Año de inicio del mapa | **Resuelto:** 2019 (el archivo 2014–2020 cubre 2019 y 2020) |
 | Licencia exacta de `datosabiertos.gob.ec` | Página de licencia de la V1 | **Revisado:** sin texto de licencia explícito; se cita bajo las condiciones generales del portal |
-| Licencia del código de la plataforma | V1 | **Por definir** (la página de fuentes lo indica; no hay `LICENSE`) |
+| Licencia del código de la plataforma | V1 | **Resuelto (2026-10-09):** GNU AGPL v3, archivo `LICENSE` en la raíz del repositorio |
 | Worker diario en el VPS | V1 | **Bloqueado:** CKAN responde 403 al VPS; la actualización es manual con `codigo/scripts/actualizar_datos.sh` |
 | Regla para fusionar duplicados | V3 | Por definir |
 | Límite de reportes por hora y número de votos | V3 | Por definir |

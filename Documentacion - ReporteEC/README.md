@@ -1,6 +1,6 @@
 ---
 tags: [reporteec, indice]
-actualizado: 2026-10-03
+actualizado: 2026-10-09
 ---
 
 # ReporteEC
@@ -11,10 +11,10 @@ evaluación de riesgo en rutas por horario, e indicadores de extorsión comercia
 registro con un nivel de confianza que declara de dónde salió la información.
 
 > [!info] Estado del proyecto
-> **V1 publicada** en https://reporteec.playhubb.site (2026-10-03), en cierre: faltan la
-> licencia del código, el worker diario (CKAN bloquea el VPS, por ahora la actualización es
-> manual) y las pruebas manuales. Detalle en [[V1 - Mapa Histórico]] y [[Hoja de Ruta]].
-> Stack: PostGIS + Martin + FastAPI. Las versiones V2 a V4 siguen en diseño.
+> **V1 publicada** en https://reporteec.playhubb.site (2026-10-03), en cierre: faltan el
+> worker diario (CKAN bloquea el VPS, por ahora la actualización es
+> manual) y la prueba de la PWA en el teléfono. Detalle en [[V1 - Mapa Histórico]] y [[Hoja de Ruta]].
+> Código bajo licencia GNU AGPL v3. Stack: PostGIS + Martin + FastAPI. Las versiones V2 a V4 siguen en diseño.
 
 ## Mapa de la documentación
 

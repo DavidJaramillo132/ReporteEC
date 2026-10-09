@@ -1,6 +1,6 @@
 ---
 tags: [version, v1, mapa-historico]
-actualizado: 2026-10-03
+actualizado: 2026-10-09
 estado: publicada, en cierre
 ---
 # V1 — Mapa Histórico
@@ -16,14 +16,13 @@ Visión general de las versiones en [[Hoja de Ruta]].
 > [!success] Estado actual (2026-10-03)
 > La V1 está **publicada** en https://reporteec.playhubb.site (HTTPS), con
 > los datos oficiales cargados y verificados contra los archivos de origen.
+> La licencia del código ya está decidida: GNU AGPL v3 (`LICENSE`).
 > Para darla por cerrada falta:
 >
-> 1. **Licencia del código:** sigue «por definir»; la página de fuentes lo
->    dice y no hay archivo `LICENSE`.
-> 2. **Worker diario:** `datosabiertos.gob.ec` responde 403 a la IP del VPS,
+> 1. **Worker diario:** `datosabiertos.gob.ec` responde 403 a la IP del VPS,
 >    así que el worker no corre en producción. Por ahora los datos se
 >    actualizan a mano con `codigo/scripts/actualizar_datos.sh`.
-> 3. **Pruebas manuales:** las casillas sin marcar de la lista de abajo.
+> 2. **Pruebas manuales:** solo falta instalar la PWA en Android y en iPhone.
 
 ---
 
@@ -132,7 +131,7 @@ información. Debe explicar:
   condiciones generales del portal
 - Límites de provincias y cantones: geoBoundaries (CC BY 4.0). Mapa base:
   OpenStreetMap (ODbL)
-- Licencia de la propia plataforma y de su código: **por definir** (pendiente)
+- Licencia de la propia plataforma y de su código: **GNU AGPL v3** (`LICENSE`, decidido 2026-10-09). Cubre solo el código; los datos conservan la licencia de cada fuente
 - **Aviso de responsabilidad:** la información proviene de terceros y se
   muestra con su nivel de confianza; ReporteEC no afirma que los hechos
   ocurrieron
@@ -209,7 +208,10 @@ Lista para revisar a mano antes de dar la V1 por terminada.
 - [x] Homicidios, desaparecidas y detenidos aparecen desde 2019
 - [x] El total de homicidios de un año coincide con el total del archivo
   oficial de ese año
-- [ ] Ningún punto cae fuera de Ecuador
+- [x] Ningún punto cae fuera de Ecuador *(2026-10-09: 0 de 654.226 puntos fuera
+  del territorio, Galápagos incluido. Hay 4.021 fuera de los polígonos cantonales:
+  zonas no delimitadas o junto a la costa, a 5 km como mucho, y 44 detenciones en
+  el mar frente a Esmeraldas y Manabí, que parecen operativos marítimos)*
 - [x] Correr la ingesta dos veces no duplica registros
 - [x] Una persona desaparecida con fecha de localización no aparece en el mapa
 
@@ -222,7 +224,10 @@ Lista para revisar a mano antes de dar la V1 por terminada.
   de su nivel de confianza
 - [x] Tocar un punto muestra tipo, fecha, lugar, fuente y enlace
 - [x] Cambiar de año no cambia el color de los marcadores
-- [ ] El mapa carga rápido con todos los años activados
+- [x] El mapa carga rápido con todos los años activados *(2026-10-09, 2019–2026:
+  datos completos en 1,8 s con buena conexión y 8,6 s en 4G lento (1,6 Mbps); el
+  mapa aparece a los 3 s. Igual que con un solo año, porque las teselas traen todos
+  los años y el filtro es local. Acercar hasta ver puntos: unos 2,5 s. Sin errores)*
 
 ### Filtros y estadísticas
 

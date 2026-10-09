@@ -1,6 +1,6 @@
 ---
 tags: [desarrollo, guia, pasos, implementacion, hoja-tecnica]
-actualizado: 2026-10-03
+actualizado: 2026-10-09
 ---
 
 # Guía de Desarrollo e Implementación Técnica
@@ -85,8 +85,8 @@ FASE 4: V4 — Red Colaborativa e Inteligencia Artificial
 ## 4. FASE 1: V1 — Observatorio Histórico y Riesgo Comercial
 
 Detalle completo en [[V1 - Mapa Histórico]]. **Publicada el 2026-10-03** en
-https://reporteec.playhubb.site; está en cierre (licencia del código, worker
-diario y pruebas manuales).
+https://reporteec.playhubb.site; está en cierre (worker
+diario y la prueba de la PWA en el teléfono).
 
 1. **Carga de Geometrías DPA:**
    - Cargar `cantones_ecuador_simplificado.geojson` en la tabla `cantons` (carga con `python -m app.ingestion cantons --file …`).
