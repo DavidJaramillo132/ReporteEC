@@ -64,8 +64,8 @@ describe('yearsSummary', () => {
 })
 
 describe('monthsSummary', () => {
-  it('says "Todos" when every published month is on', () => {
-    expect(monthsSummary([1, 2, 3, 4, 5, 6, 7, 8], 8)).toBe('Todos')
+  it('says "Todos" only when all twelve months are published and on', () => {
+    expect(monthsSummary([1, 2, 3, 4, 5, 6, 7, 8], 8)).toBe('Ene–Ago')
     expect(monthsSummary([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 12)).toBe('Todos')
   })
 

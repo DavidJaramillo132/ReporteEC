@@ -44,8 +44,9 @@ export function yearsSummary(years: number[], availableYears: number[]): string 
 export function monthsSummary(months: number[], lastMonth: number): string {
   const sorted = [...new Set(months)].sort((a, b) => a - b)
   if (sorted.length === 0) return 'Ninguno'
-  const published = Array.from({ length: lastMonth }, (_, i) => i + 1)
-  if (published.length > 0 && published.every((m) => sorted.includes(m))) return 'Todos'
+  // «Todos» only when the whole year is published and selected; a partial
+  // year (e.g. the data cut) names its range so the reader sees it is partial.
+  if (lastMonth === 12 && sorted.length === 12) return 'Todos'
   if (sorted.length === 1) {
     const name = formatMonths(sorted)
     return name.charAt(0).toUpperCase() + name.slice(1)
