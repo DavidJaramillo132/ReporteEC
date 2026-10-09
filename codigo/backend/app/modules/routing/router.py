@@ -21,8 +21,9 @@ from app.modules.routing.service import (
     InvalidRoute,
     InvalidRouteReason,
     ScoreFn,
-    no_reference_score,
+    get_national_context,
     route_risk,
+    score_fn_for,
 )
 
 router = APIRouter(prefix="/routes", tags=["routes"])
@@ -54,9 +55,12 @@ def get_osrm_client() -> OsrmClient:
     return OsrmClient(osrm_url())
 
 
-def get_score_fn() -> ScoreFn:
-    """FastAPI dependency: exposure -> 0-100 score. No reference distribution yet."""
-    return no_reference_score
+def get_score_fn(session: Session = Depends(get_session)) -> ScoreFn:
+    """FastAPI dependency: exposure -> 0-100 score from the newest stored reference.
+
+    Without a reference row every score is None (`score_available: false`).
+    """
+    return score_fn_for(get_national_context(session))
 
 
 def parse_point(raw: str, name: str) -> LonLat:

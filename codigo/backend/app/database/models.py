@@ -4,6 +4,7 @@ from app.database.base import Base
 from app.ingestion.models import PipelineRun
 from app.modules.detentions.models import Detention
 from app.modules.incidents.models import Incident
+from app.modules.routing.models import RouteRiskReference
 from app.modules.sources.models import Source
 from app.modules.territory.models import AdminUnit, Canton, CantonIndicator, CantonPopulation
 
@@ -16,5 +17,6 @@ __all__ = [
     "Detention",
     "Incident",
     "PipelineRun",
+    "RouteRiskReference",
     "Source",
 ]

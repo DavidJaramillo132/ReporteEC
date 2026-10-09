@@ -2,8 +2,10 @@
 
 Commands: homicidios, desaparecidas, detenidos, all (runs the three in
 order), download (CKAN files only, no database), cantons, population,
-extorsion, siniestros. --offline loads the MDI files already on disk
-instead of fetching CKAN, which blocks the production VPS. Without --file,
+extorsion, siniestros, route-reference (the exposure distribution behind the
+route risk 0-100 score; needs OSRM, see app.modules.routing.reference).
+--offline loads the MDI files already on disk instead of fetching CKAN, which blocks
+the production VPS. Without --file,
 homicidios/desaparecidas/detenidos fetch the current CKAN resources for the
 dataset, download any missing ones into /data/raw/mdi/ and load each;
 cantons/population/extorsion/siniestros always take an explicit --file (none
@@ -34,6 +36,7 @@ from app.ingestion.jobs import (
     run_extorsion,
     run_homicidios,
     run_population,
+    run_route_reference,
     run_siniestros,
 )
 
@@ -126,6 +129,11 @@ def main(argv: list[str] | None = None) -> None:
     _add_file_option(siniestros, required=True)
     _add_force_option(siniestros)
 
+    subparsers.add_parser(
+        "route-reference",
+        help="Build the route risk reference distribution (about 1,300 OSRM calls)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "homicidios":
@@ -149,6 +157,8 @@ def main(argv: list[str] | None = None) -> None:
         run_extorsion(args.files, force=args.force)
     elif args.command == "siniestros":
         run_siniestros(args.files, force=args.force)
+    elif args.command == "route-reference":
+        run_route_reference()
 
 
 if __name__ == "__main__":

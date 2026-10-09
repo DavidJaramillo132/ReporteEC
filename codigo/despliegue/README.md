@@ -335,7 +335,8 @@ codigo/scripts/actualizar_datos.sh
 
 El script descarga desde CKAN, sube los archivos con `rsync` y los carga en
 producción con `ingestion all --offline`. Los archivos ya cargados se
-saltan. Los datos del servidor se leen de `~/.config/reporteec/deploy.conf`,
+saltan. Después recalcula la escala de riesgo de rutas (paso 4, ver la
+sección 15). Los datos del servidor se leen de `~/.config/reporteec/deploy.conf`,
 que está fuera del repositorio:
 
 ```bash
@@ -380,6 +381,31 @@ Para comprobar que responde (debe devolver `"code":"Ok"`):
 docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env \
   exec osrm wget -qO- 'http://127.0.0.1:5000/route/v1/driving/-79.8862,-2.1894;-79.5340,-1.8022?overview=false'
 ```
+
+**Escala del puntaje (0–100).** El puntaje de una ruta es un percentil: compara
+su exposición con la de unas 1.300 rutas de referencia entre cantones del
+continente (cada cantón con sus 5 más cercanos, más 200 pares largos con
+semilla fija; Galápagos queda fuera). La escala se guarda en la tabla
+`route_risk_reference`, se conserva el historial y la API lee la más reciente
+(se refresca en unos 10 minutos, sin reiniciar). Hasta que exista una, la API
+responde sin puntaje (`score: null`, `score_available: false`): nunca inventa
+uno.
+
+Se recalcula con el trabajo `route-reference`, que llama a OSRM unas 1.300
+veces, una tras otra (unos minutos). `actualizar_datos.sh` lo ejecuta como
+último paso, después de cargar los datos, dentro del contenedor `worker`
+(que comparte la red de Docker con `osrm`). Necesita que los datos de OSRM
+estén subidos y que el servicio `osrm` esté corriendo. Si no, el script lo
+avisa en español y termina bien: la carga de datos ya hecha no se pierde.
+También puedes lanzarlo a mano en el servidor:
+
+```bash
+cd projects/ReporteEC/codigo/despliegue
+docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env \
+  run --rm worker python -m app.ingestion route-reference
+```
+
+Repítelo cada vez que cambien los datos de incidentes o el mapa de OSRM.
 
 **Actualización.** Las calles cambian poco: repite la preparación cada
 unos meses (Geofabrik actualiza el archivo a diario). La imagen de OSRM está

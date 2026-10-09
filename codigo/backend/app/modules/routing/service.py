@@ -21,8 +21,13 @@ Everything is computed on the full OSRM geometry; only the line returned
 for drawing is simplified (Douglas-Peucker, 20 m).
 
 The 0-100 score is a percentile of exposure against a stored reference
-distribution that does not exist yet: every response is built with a
-`ScoreFn`, and `no_reference_score` (always None) is the only one today.
+distribution (`route_risk_reference`, built by `app.modules.routing.reference`).
+The newest row rides in the cached `NationalContext`, so it is read at most
+once per refresh. Every response is built with a `ScoreFn`:
+`score_fn_for(context)` maps exposure through the reference, and
+`no_reference_score` (always None, so `score_available: false`) is used when
+no row exists. Scores are applied per request, after the route cache, so a
+new reference never leaves a cached response with an old score.
 
 Incidents used (V2 global constraints): types homicidio/sicariato/femicidio,
 `location_precision` exacta or aproximada (canton-level points are a
@@ -34,6 +39,7 @@ missing hour as midnight): it counts everywhere except in hourly curves.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import OrderedDict
@@ -42,7 +48,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.time import GUAYAQUIL
@@ -54,6 +60,7 @@ from app.modules.routing.geometry import (
     point_at_distance,
     simplify_line,
 )
+from app.modules.routing.models import RouteRiskReference
 from app.modules.routing.osrm import OsrmClient, OsrmRoute
 from app.modules.routing.schemas import (
     Blackspot,
@@ -64,6 +71,7 @@ from app.modules.routing.schemas import (
     RouteRiskResponse,
 )
 from app.modules.routing.scoring import (
+    BREAKPOINT_COUNT,
     HOURS_PER_DAY,
     SHRINKAGE_K,
     band_for,
@@ -73,10 +81,13 @@ from app.modules.routing.scoring import (
     normalize,
     peak_hours,
     recency_weight,
+    score_from_breakpoints,
     select_blackspot_pieces,
     shrink_toward,
     smooth_circular,
 )
+
+logger = logging.getLogger(__name__)
 
 ROUTE_INCIDENT_TYPES = (IncidentType.HOMICIDIO, IncidentType.SICARIATO, IncidentType.FEMICIDIO)
 ROUTE_LOCATION_PRECISIONS = (LocationPrecision.EXACTA, LocationPrecision.APROXIMADA)
@@ -108,8 +119,14 @@ ScoreFn = Callable[[float], int | None]
 
 
 def no_reference_score(exposure: float) -> int | None:
-    """No reference distribution of exposures is stored yet: no score."""
+    """No reference distribution of exposures is stored: no score, never a made-up one."""
     return None
+
+
+def reference_score_fn(breakpoints: Sequence[float]) -> ScoreFn:
+    """Exposure -> whole 0-100 score against 101 percentile breakpoints."""
+    frozen = tuple(breakpoints)
+    return lambda exposure: score_from_breakpoints(frozen, exposure)
 
 
 InvalidRouteReason = Literal["origin_far_from_road", "destination_far_from_road", "same_place"]
@@ -145,11 +162,21 @@ def validate_route(route: OsrmRoute) -> None:
 
 
 @dataclass(frozen=True, slots=True)
+class ReferenceInfo:
+    """The newest stored reference distribution (one `route_risk_reference` row)."""
+
+    id: int
+    breakpoints: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class NationalContext:
     data_cut: datetime | None
     data_version: tuple[object, ...]
     """Changes whenever the eligible incidents do (count, id sum, last update, cut)."""
     national_share: tuple[float, ...]
+    reference: ReferenceInfo | None = None
+    """None until `route-reference` has run: scores are then unavailable."""
 
 
 # FROM/WHERE of "an incident routes use"; each query selects its own columns.
@@ -201,6 +228,28 @@ def _filter_params() -> dict[str, list[str]]:
     }
 
 
+def load_latest_reference(session: Session) -> ReferenceInfo | None:
+    """The newest reference row, or None if there is none (or it is malformed)."""
+    row = session.execute(
+        select(RouteRiskReference.id, RouteRiskReference.breakpoints)
+        .order_by(RouteRiskReference.created_at.desc(), RouteRiskReference.id.desc())
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    if len(row.breakpoints) != BREAKPOINT_COUNT:
+        logger.warning("route_risk_reference %s is malformed; scores unavailable", row.id)
+        return None
+    return ReferenceInfo(id=row.id, breakpoints=tuple(float(v) for v in row.breakpoints))
+
+
+def score_fn_for(context: NationalContext) -> ScoreFn:
+    """The score function of the context's reference, or `no_reference_score`."""
+    if context.reference is None:
+        return no_reference_score
+    return reference_score_fn(context.reference.breakpoints)
+
+
 def load_national_context(session: Session) -> NationalContext:
     """Data cut, data version and national share, over every incident routes use.
 
@@ -218,6 +267,7 @@ def load_national_context(session: Session) -> NationalContext:
         data_cut=first.data_cut,
         data_version=(first.data_cut, first.incident_count, int(first.id_sum), first.last_update),
         national_share=tuple(normalize(smooth_circular(weights))),
+        reference=load_latest_reference(session),
     )
 
 
@@ -553,7 +603,7 @@ def route_risk(
     origin: LonLat,
     destination: LonLat,
     hour: int,
-    score_fn: ScoreFn = no_reference_score,
+    score_fn: ScoreFn | None = None,
 ) -> RouteRiskResponse:
     """Route `origin` -> `destination` and score it for departure `hour`.
 
@@ -561,6 +611,9 @@ def route_risk(
     cached and a fresh answer are identical. The cache key includes the data
     version, so any change to the eligible incidents misses the old entries
     once the national context refreshes (at most `NATIONAL_CONTEXT_TTL_S`).
+    The cached analysis holds exposures only; `score_fn` (default: the
+    context's stored reference) is applied on every call, so a new reference
+    row takes effect at the next context refresh without touching this cache.
     Raises `InvalidRoute`, and `RouteNotFound` / `OsrmUnavailable` from the
     OSRM client.
     """
@@ -575,4 +628,4 @@ def route_risk(
         validate_route(route)
         analysis = analyze_route(session, route, origin, destination, context)
         _route_cache.put(key, analysis)
-    return build_response(analysis, hour, score_fn)
+    return build_response(analysis, hour, score_fn or score_fn_for(context))

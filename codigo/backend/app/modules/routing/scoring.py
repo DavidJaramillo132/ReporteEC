@@ -19,6 +19,7 @@ constraints, verbatim:
 
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Sequence
 from datetime import datetime, time
@@ -202,3 +203,60 @@ def peak_hours(weight_by_hour: Sequence[float], count: int = PEAK_HOURS) -> list
         key=lambda hour: (-weight_by_hour[hour], hour),
     )
     return ranked[:count]
+
+
+# ---------------------------------------------------------------------------
+# The 0-100 scale: percentile of exposure against a reference distribution.
+# ---------------------------------------------------------------------------
+
+BREAKPOINT_COUNT = 101  # percentiles 0..100
+
+
+def percentile_breakpoints(exposures: Sequence[float]) -> list[float]:
+    """The 101 percentiles (0..100) of `exposures`, linearly interpolated.
+
+    Same convention as numpy's default: percentile p sits at sorted position
+    `p / 100 * (n - 1)`. The result is non-decreasing. With heavy ties (for
+    example many routes with exposure exactly 0) many breakpoints are equal.
+    """
+    if not exposures:
+        raise ValueError("cannot build breakpoints from an empty sample")
+    ordered = sorted(exposures)
+    last = len(ordered) - 1
+    points = []
+    for p in range(BREAKPOINT_COUNT):
+        position = p / 100 * last
+        low = int(math.floor(position))
+        high = min(low + 1, last)
+        points.append(ordered[low] + (ordered[high] - ordered[low]) * (position - low))
+    return points
+
+
+def score_from_breakpoints(breakpoints: Sequence[float], exposure: float) -> int:
+    """Whole 0-100 score of `exposure` against 101 percentile breakpoints.
+
+    Method: p = the largest integer with `breakpoints[p] <= exposure` (the
+    percentile the exposure reaches; with ties it is the top of the tie).
+    Between breakpoints p and p + 1 the score is interpolated linearly and
+    rounded half up to a whole number. Clamped to 0-100: below the lowest
+    reference exposure is 0, at or above the highest is 100.
+
+    Exposure <= 0 is always 0: a route with no registered case nearby is the
+    lowest band even when more than a quarter of the reference routes also
+    have none (then breakpoints 0..k are all 0 and the tie rule alone would
+    give such a route a score of k). Monotone: a higher exposure never
+    scores lower.
+    """
+    if len(breakpoints) != BREAKPOINT_COUNT:
+        raise ValueError(f"expected {BREAKPOINT_COUNT} breakpoints, got {len(breakpoints)}")
+    if not exposure > 0:  # also NaN
+        return 0
+    p = bisect.bisect_right(breakpoints, exposure) - 1
+    if p < 0:
+        return 0
+    if p >= BREAKPOINT_COUNT - 1:
+        return 100
+    low, high = breakpoints[p], breakpoints[p + 1]
+    # bisect_right guarantees high > exposure >= low, so high > low.
+    fractional = p + (exposure - low) / (high - low)
+    return max(0, min(100, math.floor(fractional + 0.5)))

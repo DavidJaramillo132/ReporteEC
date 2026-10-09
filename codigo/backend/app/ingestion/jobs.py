@@ -240,3 +240,23 @@ def run_siniestros(files: list[Path], *, force: bool = False) -> None:
                 session, INEC_SOURCE_SLUG, path, inec_siniestros.parse, force=force
             )
             _print_indicator_summary(path, run)
+
+
+def run_route_reference() -> None:
+    """Build the reference distribution behind the route risk 0-100 score."""
+    # Imported here: the other jobs never need the routing stack.
+    from app.core.config import osrm_url
+    from app.modules.routing.osrm import OsrmClient
+    from app.modules.routing.reference import ReferenceBuildError
+    from app.modules.routing.reference import run_route_reference as build
+
+    # One INFO line per OSRM call would bury the summary (about 1,300 calls).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    # Offline work on long routes: a larger deadline than the API's 2 s.
+    client = OsrmClient(osrm_url(), timeout_s=15.0)
+    try:
+        with Session(get_engine()) as session:
+            build(session, client)
+    except ReferenceBuildError as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1) from exc
