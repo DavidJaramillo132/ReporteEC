@@ -22,9 +22,10 @@ for drawing is simplified (Douglas-Peucker, 20 m).
 
 The 0-100 score is a percentile of exposure against a stored reference
 distribution (`route_risk_reference`, built by `app.modules.routing.reference`).
-The newest row rides in the cached `NationalContext`, so it is read at most
-once per refresh. Every response is built with a `ScoreFn`:
-`score_fn_for(context)` maps exposure through the reference, and
+The newest row is tracked by id (`get_reference`): one cheap indexed query per
+request, breakpoints reloaded only when a newer row appears. Every response is built
+with a `ScoreFn`:
+`score_fn_for(session)` maps exposure through the reference, and
 `no_reference_score` (always None, so `score_available: false`) is used when
 no row exists. Scores are applied per request, after the route cache, so a
 new reference never leaves a cached response with an old score.
@@ -175,8 +176,6 @@ class NationalContext:
     data_version: tuple[object, ...]
     """Changes whenever the eligible incidents do (count, id sum, last update, cut)."""
     national_share: tuple[float, ...]
-    reference: ReferenceInfo | None = None
-    """None until `route-reference` has run: scores are then unavailable."""
 
 
 # FROM/WHERE of "an incident routes use"; each query selects its own columns.
@@ -228,26 +227,62 @@ def _filter_params() -> dict[str, list[str]]:
     }
 
 
-def load_latest_reference(session: Session) -> ReferenceInfo | None:
-    """The newest reference row, or None if there is none (or it is malformed)."""
-    row = session.execute(
-        select(RouteRiskReference.id, RouteRiskReference.breakpoints)
-        .order_by(RouteRiskReference.created_at.desc(), RouteRiskReference.id.desc())
-        .limit(1)
-    ).first()
-    if row is None:
+def _load_reference(session: Session, reference_id: int) -> ReferenceInfo | None:
+    breakpoints = session.execute(
+        select(RouteRiskReference.breakpoints).where(RouteRiskReference.id == reference_id)
+    ).scalar_one_or_none()
+    if breakpoints is None:
         return None
-    if len(row.breakpoints) != BREAKPOINT_COUNT:
-        logger.warning("route_risk_reference %s is malformed; scores unavailable", row.id)
+    if len(breakpoints) != BREAKPOINT_COUNT:
+        logger.warning("route_risk_reference %s is malformed; scores unavailable", reference_id)
         return None
-    return ReferenceInfo(id=row.id, breakpoints=tuple(float(v) for v in row.breakpoints))
+    return ReferenceInfo(id=reference_id, breakpoints=tuple(float(v) for v in breakpoints))
 
 
-def score_fn_for(context: NationalContext) -> ScoreFn:
-    """The score function of the context's reference, or `no_reference_score`."""
-    if context.reference is None:
+class _ReferenceCache:
+    """The newest reference row, re-read only when a newer id appears.
+
+    Each call costs one indexed `SELECT id ... ORDER BY id DESC LIMIT 1`; the
+    101 breakpoints are loaded only when that id differs from the cached one.
+    The job runs in another process, so this is how a new row takes effect on
+    the very next request, without waiting for the national context's TTL.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._value: tuple[int | None, ReferenceInfo | None] | None = None
+
+    def get(self, session: Session) -> ReferenceInfo | None:
+        newest = session.execute(
+            select(RouteRiskReference.id).order_by(RouteRiskReference.id.desc()).limit(1)
+        ).scalar_one_or_none()
+        with self._lock:
+            if self._value is not None and self._value[0] == newest:
+                return self._value[1]
+        loaded = None if newest is None else _load_reference(session, newest)
+        with self._lock:
+            self._value = (newest, loaded)
+        return loaded
+
+    def clear(self) -> None:
+        with self._lock:
+            self._value = None
+
+
+_reference_cache = _ReferenceCache()
+
+
+def get_reference(session: Session) -> ReferenceInfo | None:
+    """The newest stored reference (None if there is none or it is malformed)."""
+    return _reference_cache.get(session)
+
+
+def score_fn_for(session: Session) -> ScoreFn:
+    """The score function of the newest reference, or `no_reference_score`."""
+    reference = get_reference(session)
+    if reference is None:
         return no_reference_score
-    return reference_score_fn(context.reference.breakpoints)
+    return reference_score_fn(reference.breakpoints)
 
 
 def load_national_context(session: Session) -> NationalContext:
@@ -267,7 +302,6 @@ def load_national_context(session: Session) -> NationalContext:
         data_cut=first.data_cut,
         data_version=(first.data_cut, first.incident_count, int(first.id_sum), first.last_update),
         national_share=tuple(normalize(smooth_circular(weights))),
-        reference=load_latest_reference(session),
     )
 
 
@@ -590,6 +624,7 @@ _route_cache = _LruCache(ROUTE_CACHE_SIZE)
 def clear_caches() -> None:
     """Forget the national context and every cached route (tests, data reloads)."""
     _national_cache.clear()
+    _reference_cache.clear()
     _route_cache.clear()
 
 
@@ -612,8 +647,8 @@ def route_risk(
     version, so any change to the eligible incidents misses the old entries
     once the national context refreshes (at most `NATIONAL_CONTEXT_TTL_S`).
     The cached analysis holds exposures only; `score_fn` (default: the
-    context's stored reference) is applied on every call, so a new reference
-    row takes effect at the next context refresh without touching this cache.
+    newest stored reference) is applied on every call, so a new reference row
+    takes effect on the next request without touching this cache.
     Raises `InvalidRoute`, and `RouteNotFound` / `OsrmUnavailable` from the
     OSRM client.
     """
@@ -628,4 +663,4 @@ def route_risk(
         validate_route(route)
         analysis = analyze_route(session, route, origin, destination, context)
         _route_cache.put(key, analysis)
-    return build_response(analysis, hour, score_fn or score_fn_for(context))
+    return build_response(analysis, hour, score_fn or score_fn_for(session))

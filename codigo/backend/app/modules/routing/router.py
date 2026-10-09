@@ -21,7 +21,6 @@ from app.modules.routing.service import (
     InvalidRoute,
     InvalidRouteReason,
     ScoreFn,
-    get_national_context,
     route_risk,
     score_fn_for,
 )
@@ -60,7 +59,7 @@ def get_score_fn(session: Session = Depends(get_session)) -> ScoreFn:
 
     Without a reference row every score is None (`score_available: false`).
     """
-    return score_fn_for(get_national_context(session))
+    return score_fn_for(session)
 
 
 def parse_point(raw: str, name: str) -> LonLat:

@@ -383,15 +383,15 @@ docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env \
 ```
 
 **Escala del puntaje (0–100).** El puntaje de una ruta es un percentil: compara
-su exposición con la de unas 1.300 rutas de referencia entre cantones del
+su exposición con la de unas 800 a 1.000 rutas de referencia (cifra aproximada; el trabajo imprime la exacta) entre cantones del
 continente (cada cantón con sus 5 más cercanos, más 200 pares largos con
 semilla fija; Galápagos queda fuera). La escala se guarda en la tabla
 `route_risk_reference`, se conserva el historial y la API lee la más reciente
-(se refresca en unos 10 minutos, sin reiniciar). Hasta que exista una, la API
+(la API la detecta en la siguiente consulta, sin reiniciar). Hasta que exista una, la API
 responde sin puntaje (`score: null`, `score_available: false`): nunca inventa
 uno.
 
-Se recalcula con el trabajo `route-reference`, que llama a OSRM unas 1.300
+Se recalcula con el trabajo `route-reference`, que llama a OSRM unas 800 a 1.000
 veces, una tras otra (unos minutos). `actualizar_datos.sh` lo ejecuta como
 último paso, después de cargar los datos, dentro del contenedor `worker`
 (que comparte la red de Docker con `osrm`). Necesita que los datos de OSRM

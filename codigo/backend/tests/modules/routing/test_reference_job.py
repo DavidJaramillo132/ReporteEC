@@ -22,7 +22,7 @@ from app.modules.routing.reference import (
 )
 from app.modules.routing.router import get_osrm_client
 from app.modules.routing.scoring import band_for, score_from_breakpoints
-from app.modules.routing.service import _national_cache, load_national_context
+from app.modules.routing.service import get_reference, load_national_context
 from app.modules.territory.models import Canton
 from tests.factories import make_incident, make_source
 from tests.modules.routing.fakes import (
@@ -280,7 +280,6 @@ def test_a_new_reference_changes_scores_without_rerouting(client: TestClient, db
     # cached route analysis holds exposures only, so no OSRM call is repeated.
     _add_reference(db_session, [1000.0] * 101)  # old: everything scores 0
     _add_reference(db_session, [0.0] * 101)  # new: any positive exposure scores 100
-    _national_cache.clear()
     body = _get(client)
 
     assert len(seen) == 1
@@ -289,18 +288,30 @@ def test_a_new_reference_changes_scores_without_rerouting(client: TestClient, db
     assert body["selected"]["band"] == "critico"
 
 
-def test_a_stale_context_keeps_its_reference_until_it_refreshes(
+def test_a_row_written_after_a_request_is_used_by_the_next_one(
     client: TestClient, db_session: Session
 ):
     _seed_incidents(db_session)
     _use_road()
-    _get(client)  # caches a context with no reference
+    assert _get(client)["selected"]["score"] is None  # context and "no reference" cached
 
     _add_reference(db_session, [0.0] * 101)
+    assert _get(client)["selected"]["score"] == 100  # no clear_caches(), no TTL wait
 
-    assert _get(client)["selected"]["score"] is None  # within the context's TTL
-    _national_cache.clear()
-    assert _get(client)["selected"]["score"] == 100
+    _add_reference(db_session, [1000.0] * 101)
+    assert _get(client)["selected"]["score"] == 0
+
+
+def test_breakpoints_are_reloaded_only_when_the_newest_id_changes(db_session: Session):
+    row = _add_reference(db_session, [0.0] * 101)
+    assert get_reference(db_session).id == row.id
+    # Same id, edited in place: the cached copy is kept (rows are immutable by design).
+    row.breakpoints = [5.0] * 101
+    db_session.commit()
+    assert get_reference(db_session).breakpoints[0] == 0.0
+    newer = _add_reference(db_session, [7.0] * 101)
+    assert get_reference(db_session).id == newer.id
+    assert get_reference(db_session).breakpoints[0] == 7.0
 
 
 def test_a_malformed_reference_is_ignored(client: TestClient, db_session: Session):

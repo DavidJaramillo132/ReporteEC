@@ -14,6 +14,11 @@ Sample (mainland only; Galápagos, province "20", is excluded):
 - plus `LONG_PAIRS` random pairs at least `LONG_PAIR_MIN_KM` apart, drawn
   with a fixed seed so a rerun on the same cantons picks the same pairs.
 
+Size (approximate, derived from the rule, not measured on real data): about
+218 mainland cantons x 5 nearest = 1,090 directed picks; mutual neighbours
+merge, leaving roughly 600-800 unordered pairs, plus 200 long pairs: about
+800-1,000 routes (hard bounds 745-1,290). The job prints the exact number.
+
 Pairs OSRM cannot route, or that fail `validate_route` (an end snapped
 > 2 km, same place), are skipped and counted.
 """

@@ -250,7 +250,7 @@ def run_route_reference() -> None:
     from app.modules.routing.reference import ReferenceBuildError
     from app.modules.routing.reference import run_route_reference as build
 
-    # One INFO line per OSRM call would bury the summary (about 1,300 calls).
+    # One INFO line per OSRM call would bury the summary (roughly 800-1,000 calls).
     logging.getLogger("httpx").setLevel(logging.WARNING)
     # Offline work on long routes: a larger deadline than the API's 2 s.
     client = OsrmClient(osrm_url(), timeout_s=15.0)

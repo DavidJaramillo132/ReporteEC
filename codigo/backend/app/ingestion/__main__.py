@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> None:
 
     subparsers.add_parser(
         "route-reference",
-        help="Build the route risk reference distribution (about 1,300 OSRM calls)",
+        help="Build the route risk reference distribution (roughly 800-1,000 OSRM calls)",
     )
 
     args = parser.parse_args(argv)

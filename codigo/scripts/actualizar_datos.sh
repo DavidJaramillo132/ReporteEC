@@ -11,8 +11,9 @@
 #   3. load them there with `ingestion all --offline`. Files loaded
 #      before are skipped by their hash, so running this often is cheap;
 #   4. rebuild the route-risk reference distribution (`ingestion
-#      route-reference`, about 1,300 routes through the `osrm` service). If
-#      OSRM is not set up on the server yet, this step only warns: the data
+#      route-reference`, roughly 800-1,000 routes through the `osrm` service). If
+#      OSRM is not set up on the server yet, this step only warns (exit 0); any
+#      other failure of this step exits non-zero. Either way the data
 #      refresh of step 3 is already done and stays.
 #
 # Server details live outside the repo (the repo is public), in
@@ -51,20 +52,35 @@ echo "3/4 Cargando en la base de producción (los ya cargados se saltan)…"
 
 COMPOSE="docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env"
 echo "4/4 Recalculando la escala de riesgo de rutas (necesita OSRM; tarda unos minutos)…"
-if ! "${SSH[@]}" "$REPORTEEC_SSH_HOST" "cd $REMOTE_DIR/codigo/despliegue && \
+set +e
+"${SSH[@]}" "$REPORTEEC_SSH_HOST" "cd $REMOTE_DIR/codigo/despliegue && \
 	if [ ! -f ../data/osrm/ecuador-latest.osrm.mldgr ]; then \
 		echo 'Faltan los datos de OSRM en el servidor.' >&2; exit 10; fi && \
 	if ! $COMPOSE ps --status running --services | grep -qx osrm; then \
 		echo 'El servicio osrm no está corriendo en el servidor.' >&2; exit 11; fi && \
-	$COMPOSE run --rm worker python -m app.ingestion route-reference"; then
+	$COMPOSE run --rm worker python -m app.ingestion route-reference"
+STATUS=$?
+set -e
+case "$STATUS" in
+0) ;;
+10 | 11)
 	cat >&2 <<'MSG'
-Aviso: no se pudo recalcular la escala de riesgo de rutas. Los datos del
-paso 3 ya quedaron cargados. Si OSRM aún no está instalado en el servidor,
-sigue la sección 15 del README de despliegue (preparar_osrm.sh --subir y
-levantar el servicio osrm) y vuelve a ejecutar este script. Mientras no haya
-escala, las rutas se muestran sin puntaje (nunca un puntaje inventado).
+Aviso: no se recalculó la escala de riesgo de rutas porque OSRM no está listo
+en el servidor. Los datos del paso 3 ya quedaron cargados. Sube los datos con
+preparar_osrm.sh --subir, levanta el servicio osrm (sección 15 del README de
+despliegue) y vuelve a ejecutar este script. Mientras no haya escala, las
+rutas se muestran sin puntaje (nunca un puntaje inventado).
 MSG
-	exit 0
-fi
+	;;
+*)
+	cat >&2 <<MSG
+Error: la actualización de datos (paso 3) terminó bien, pero falló el cálculo
+de la escala de riesgo de rutas (código de salida $STATUS). Revisa el mensaje
+de arriba y vuelve a ejecutar el script. Se sigue usando la escala anterior,
+si existe.
+MSG
+	exit 1
+	;;
+esac
 
 echo "Listo."
