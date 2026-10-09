@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { LonLatPoint, Place } from '../../lib/api'
 import { placeName } from '../../lib/registry'
-import { nextActiveIndex, placeLabel, roundPoint } from '../../lib/routeRisk'
+import { nextActiveIndex, placeLabel, placeTitle, roundPoint } from '../../lib/routeRisk'
 import { EndpointMark } from './EndpointMark'
 import { MIN_QUERY, usePlaceSearch } from './usePlaceSearch'
 
@@ -183,7 +183,7 @@ export function PlaceField({ role, value, onChoose, picking, onTogglePicking }: 
               index === activeIndex ? 'bg-sello text-paper' : 'text-ink'
             }`}
           >
-            <span className="truncate">{placeName(place.name)}</span>
+            <span className="truncate">{placeTitle(place)}</span>
             {place.province_name && (
               <span className={`shrink-0 text-[12.5px] ${index === activeIndex ? 'text-paper/80' : 'text-ink-3'}`}>
                 {placeName(place.province_name)}

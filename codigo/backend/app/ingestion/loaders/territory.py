@@ -24,6 +24,12 @@ never silently dropped.
 Canton rows are matched to a DPA code the same way, against `admin_units`
 filtered to that sheet's own province.
 
+`canton-seats [--file <csv>]` sets each canton's cabecera cantonal (seat
+town) from the committed `app/ingestion/data/canton_seats.csv`, generated
+offline from OpenStreetMap by `codigo/scripts/generar_cabeceras.py`. It only
+updates `cantons.seat_name`/`seat_geom`, so it runs after `cantons`, and a
+later `cantons` reload keeps the seats (its upsert never touches them).
+
 `validate_coverage` cross-checks both tables against every canton_code seen
 in `incidents`/`detentions` and reports any gap, so a DPA change shows up as
 a printed mismatch instead of a canton with no boundary or no population.
@@ -31,6 +37,7 @@ a printed mismatch instead of a canton with no boundary or no population.
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 import unicodedata
@@ -41,7 +48,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from sqlalchemy import func as sa_func
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -262,6 +269,61 @@ def load_cantons(session: Session, path: str | Path) -> CantonLoadSummary:
         session.execute(statement)
 
     return CantonLoadSummary(matched=len(values), unmatched_shapes=unmatched)
+
+
+# ---------------------------------------------------------------------------
+# canton-seats [--file <csv>]
+# ---------------------------------------------------------------------------
+
+DEFAULT_CANTON_SEATS_FILE = Path(__file__).resolve().parent.parent / "data" / "canton_seats.csv"
+FALLBACK_METHOD = "fallback"
+
+
+@dataclass(slots=True)
+class CantonSeatLoadSummary:
+    seats: int = 0
+    """Cantons given a seat point."""
+    fallbacks: int = 0
+    """Cantons with no seat in the file: their seat is cleared (ST_PointOnSurface is used)."""
+    unknown_codes: list[str] = field(default_factory=list)
+    """Codes in the file with no `cantons` row (not loaded yet, or a DPA change)."""
+
+
+def _seat_rows(path: Path) -> Iterator[dict[str, str]]:
+    """The CSV's rows; lines starting with `#` (the ODbL attribution) are skipped."""
+    with path.open(encoding="utf-8", newline="") as handle:
+        yield from csv.DictReader(line for line in handle if not line.startswith("#"))
+
+
+def load_canton_seats(
+    session: Session, path: str | Path = DEFAULT_CANTON_SEATS_FILE
+) -> CantonSeatLoadSummary:
+    """Set every listed canton's seat (name and point) from `canton_seats.csv`.
+
+    Columns: canton_code, seat_name, lon, lat, osm_id, method. A `fallback`
+    row (no OSM place found) clears the canton's seat, so the places search
+    and the route reference fall back to ST_PointOnSurface. Plain UPDATEs of
+    the same values: running it twice leaves the table exactly the same.
+    """
+    known = set(session.scalars(select(Canton.code)))
+    summary = CantonSeatLoadSummary()
+    for row in _seat_rows(Path(path)):
+        code = row["canton_code"].strip()
+        if code not in known:
+            summary.unknown_codes.append(code)
+            continue
+        if row["method"].strip() == FALLBACK_METHOD or not row["lon"].strip():
+            values: dict[str, object] = {"seat_name": None, "seat_geom": None}
+            summary.fallbacks += 1
+        else:
+            lon, lat = float(row["lon"]), float(row["lat"])
+            values = {
+                "seat_name": row["seat_name"].strip(),
+                "seat_geom": sa_func.ST_SetSRID(sa_func.ST_MakePoint(lon, lat), 4326),
+            }
+            summary.seats += 1
+        session.execute(update(Canton).where(Canton.code == code).values(**values))
+    return summary
 
 
 # ---------------------------------------------------------------------------

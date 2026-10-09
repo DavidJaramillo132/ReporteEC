@@ -18,6 +18,7 @@ import {
   parseRouteSearch,
   peakHoursLabel,
   placeLabel,
+  placeTitle,
   pointLabel,
   riskForHour,
   roundCoord,
@@ -270,6 +271,15 @@ describe('endpoint labels', () => {
   it('names a canton with its province, in title case', () => {
     expect(placeLabel({ name: 'DURÁN', province_name: 'GUAYAS' })).toBe('Durán, Guayas')
     expect(placeLabel({ name: 'SANTO DOMINGO', province_name: null })).toBe('Santo Domingo')
+  })
+
+  it('adds the cabecera when it has another name than the canton', () => {
+    expect(placeLabel({ name: 'Pastaza', province_name: 'Pastaza', seat_name: 'Puyo' })).toBe('Pastaza (Puyo), Pastaza')
+    expect(placeTitle({ name: 'Pablo Sexto', seat_name: 'Pablo VI' })).toBe('Pablo Sexto (Pablo VI)')
+    // Same name (accents and case aside), none, or an older API without the field: just the canton.
+    expect(placeLabel({ name: 'DURÁN', province_name: 'GUAYAS', seat_name: 'Duran' })).toBe('Durán, Guayas')
+    expect(placeLabel({ name: 'Durán', province_name: 'Guayas', seat_name: null })).toBe('Durán, Guayas')
+    expect(placeLabel({ name: 'Durán', province_name: 'Guayas' })).toBe('Durán, Guayas')
   })
 
   it('names a map point by its rounded coordinates, latitude first', () => {

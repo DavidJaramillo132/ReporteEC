@@ -353,9 +353,11 @@ export interface Place {
   name: string
   province_code: string | null
   province_name: string | null
-  /** A point inside the canton (ST_PointOnSurface). */
+  /** The canton's cabecera (seat town, OpenStreetMap); a point inside the canton when there is none. */
   lon: number
   lat: number
+  /** The cabecera's name, e.g. «Puyo» for Pastaza; null or absent when none is loaded. */
+  seat_name?: string | null
 }
 
 export interface PlacesSearchResponse {

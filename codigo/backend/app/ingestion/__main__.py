@@ -1,9 +1,11 @@
 """CLI entry point: `python -m app.ingestion <command> [--file PATH ...]`.
 
 Commands: homicidios, desaparecidas, detenidos, all (runs the three in
-order), download (CKAN files only, no database), cantons, population,
-extorsion, siniestros, route-reference (the exposure distribution behind the
-route risk 0-100 score; needs OSRM, see app.modules.routing.reference).
+order), download (CKAN files only, no database), cantons, canton-seats (each
+canton's cabecera from the committed OpenStreetMap CSV; run after cantons),
+population, extorsion, siniestros, route-reference (the exposure distribution
+behind the route risk 0-100 score; needs OSRM, see
+app.modules.routing.reference).
 --offline loads the MDI files already on disk instead of fetching CKAN, which blocks
 the production VPS. Without --file,
 homicidios/desaparecidas/detenidos fetch the current CKAN resources for the
@@ -30,6 +32,7 @@ from pathlib import Path
 from app.ingestion.jobs import (
     DEFAULT_RAW_DIR,
     download_all,
+    run_canton_seats,
     run_cantons,
     run_desaparecidas,
     run_detenidos,
@@ -39,6 +42,7 @@ from app.ingestion.jobs import (
     run_route_reference,
     run_siniestros,
 )
+from app.ingestion.loaders.territory import DEFAULT_CANTON_SEATS_FILE
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -107,6 +111,17 @@ def main(argv: list[str] | None = None) -> None:
     )
     _add_file_option(cantons, required=True)
 
+    canton_seats = subparsers.add_parser(
+        "canton-seats",
+        help="Set each canton's cabecera (seat) point from the OpenStreetMap CSV (after cantons)",
+    )
+    canton_seats.add_argument(
+        "--file",
+        type=Path,
+        default=DEFAULT_CANTON_SEATS_FILE,
+        help="Seats CSV (default: the committed app/ingestion/data/canton_seats.csv)",
+    )
+
     population = subparsers.add_parser(
         "population", help="Load the INEC cantonal population projection"
     )
@@ -151,6 +166,8 @@ def main(argv: list[str] | None = None) -> None:
             print(path)
     elif args.command == "cantons":
         run_cantons(args.files)
+    elif args.command == "canton-seats":
+        run_canton_seats(args.file)
     elif args.command == "population":
         run_population(args.files)
     elif args.command == "extorsion":

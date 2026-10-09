@@ -18,6 +18,7 @@ from app.modules.routing.reference import (
     CantonPoint,
     ReferenceBuildError,
     compute_reference,
+    load_canton_points,
     run_route_reference,
 )
 from app.modules.routing.router import get_osrm_client
@@ -192,6 +193,27 @@ def test_cli_wires_route_reference(monkeypatch: pytest.MonkeyPatch):
     cli.main(["route-reference"])
 
     assert called == [True]
+
+
+def test_the_sample_routes_from_canton_seats_when_they_are_loaded(db_session: Session):
+    _seed_cantons(db_session)
+    _seed_incidents(db_session, lat=-1.985)
+    seat = (-79.5987, -1.9993)  # a corner of canton 0101, far from its PointOnSurface
+    canton = db_session.get(Canton, "0101")
+    canton.seat_name = "Cabecera 0101"
+    canton.seat_geom = f"SRID=4326;POINT({seat[0]} {seat[1]})"
+    db_session.commit()
+
+    points = {point.code: point.point for point in load_canton_points(db_session)}
+    calls: list[str] = []
+    run_route_reference(db_session, _osrm_for_cantons(calls))
+
+    assert points["0101"] == pytest.approx(seat)
+    # No seat: still a point inside the canton's square.
+    lon, lat = points["0102"]
+    assert -79.50 < lon < -79.50 + SIZE and -2.0 < lat < -2.0 + SIZE
+    from_0101 = [call for call in calls if f"{seat[0]},{seat[1]}" in call]
+    assert len(from_0101) == 4  # 0101 pairs with each of the other 4 mainland cantons
 
 
 # --- the API with and without a reference --------------------------------------

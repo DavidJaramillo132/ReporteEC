@@ -28,6 +28,7 @@ from app.modules.territory.models import (
     Canton,
     CantonIndicator,
     CantonPopulation,
+    canton_route_point,
 )
 
 # A zero-valued canton/year never enters the rate distribution (see
@@ -253,24 +254,31 @@ class Place:
     province_name: str | None
     lon: float
     lat: float
+    seat_name: str | None = None
 
 
 def search_places(session: Session, query: str, limit: int = PLACES_LIMIT) -> list[Place]:
-    """Cantons whose name contains `query`, accent- and case-insensitive.
+    """Cantons whose name, or whose cabecera's name, contains `query`.
 
-    Names that start with the query rank before names that only contain it;
-    alphabetical within each group. `strpos` instead of LIKE: no wildcard to
-    escape in user input.
+    Accent- and case-insensitive. Names that start with the query rank before
+    names that only contain it; alphabetical within each group. `strpos`
+    instead of LIKE: no wildcard to escape in user input. The point is the
+    canton's cabecera (OpenStreetMap) when loaded, else ST_PointOnSurface;
+    see `canton_route_point`.
     """
     needle = normalize_place_query(query)
     plain_name = func.translate(func.lower(Canton.name), _ACCENTED, _PLAIN)
-    position = func.strpos(plain_name, needle)
-    point = func.ST_PointOnSurface(Canton.geom)
+    plain_seat = func.translate(func.lower(func.coalesce(Canton.seat_name, "")), _ACCENTED, _PLAIN)
+    name_position = func.strpos(plain_name, needle)
+    seat_position = func.strpos(plain_seat, needle)
+    starts_with = (name_position == 1) | (seat_position == 1)
+    point = canton_route_point()
     province = aliased(AdminUnit)
     rows = session.execute(
         select(
             Canton.code,
             Canton.name,
+            Canton.seat_name,
             Canton.province_code,
             province.name.label("province_name"),
             func.ST_X(point).label("lon"),
@@ -280,8 +288,8 @@ def search_places(session: Session, query: str, limit: int = PLACES_LIMIT) -> li
             province,
             (province.code == Canton.province_code) & (province.level == AdminUnitLevel.PROVINCE),
         )
-        .where(position > 0)
-        .order_by(case((position == 1, 0), else_=1), plain_name, Canton.code)
+        .where((name_position > 0) | (seat_position > 0))
+        .order_by(case((starts_with, 0), else_=1), plain_name, Canton.code)
         .limit(limit)
     ).all()
     return [
@@ -292,6 +300,7 @@ def search_places(session: Session, query: str, limit: int = PLACES_LIMIT) -> li
             province_name=row.province_name,
             lon=row.lon,
             lat=row.lat,
+            seat_name=row.seat_name,
         )
         for row in rows
     ]

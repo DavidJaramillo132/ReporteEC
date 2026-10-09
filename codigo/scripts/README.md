@@ -9,6 +9,7 @@ que funcionan sin instalar `openpyxl` ni `pandas`.
 | `leer_xlsx.py` | `python3 leer_xlsx.py <archivo> [hoja] [filas]` — vuelca celdas |
 | `cobertura_geo.py` | `SHEET=1 python3 cobertura_geo.py <archivo>` — mide relleno de columnas geográficas |
 | `validar_coordenadas.py` | `python3 validar_coordenadas.py <archivo> <colLat> <colLon> <nombre>` — valida contra el bounding box de Ecuador |
+| `generar_cabeceras.py` | Genera `backend/app/ingestion/data/canton_seats.csv` (la cabecera de cada cantón, desde OpenStreetMap) y verifica cada una contra OSRM. Necesita `osmium` y `psycopg` (vía `uv run --with`); el comando completo está en su encabezado |
 | `scraper_policia.py` | `python3 scraper_policia.py [--hours N \| --since ISO]` — prototipo: noticias de la Policía vía API de WordPress, en JSON por línea |
 
 Hallazgos documentados en `../../Documentacion - ReporteEC/Datos/Calidad de Datos.md`.

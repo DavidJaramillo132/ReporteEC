@@ -68,8 +68,17 @@ class PlaceOut(BaseModel):
     name: str = Field(description="Canton name, e.g. «Durán».")
     province_code: str | None
     province_name: str | None
-    lon: float = Field(description="A point inside the canton (ST_PointOnSurface), WGS84.")
+    lon: float = Field(
+        description=(
+            "The canton's cabecera (seat town, from OpenStreetMap), WGS84; a point inside "
+            "the canton (ST_PointOnSurface) when no seat is loaded."
+        )
+    )
     lat: float
+    seat_name: str | None = Field(
+        default=None,
+        description="Name of the cabecera the point is on, e.g. «Puyo» for Pastaza; null if none.",
+    )
 
 
 class PlacesSearchResponse(BaseModel):

@@ -92,6 +92,36 @@ def test_returns_code_province_and_a_point_inside_the_canton(client: TestClient,
     # Guayaquil is the 4th seeded square: lon -79.6..-79.56, lat -2.2..-2.16.
     assert -79.6 < place["lon"] < -79.56
     assert -2.2 < place["lat"] < -2.16
+    assert place["seat_name"] is None  # no seat loaded: the point is the fallback
+
+
+def _set_seat(session: Session, code: str, name: str, lon: float, lat: float) -> None:
+    canton = session.get(Canton, code)
+    canton.seat_name = name
+    canton.seat_geom = f"SRID=4326;POINT({lon} {lat})"
+    session.commit()
+
+
+def test_returns_the_cabecera_point_and_name_when_loaded(
+    client: TestClient, db_session: Session, cantons
+):
+    _set_seat(db_session, "0901", "Guayaquil", -79.5962, -2.1958)
+
+    (place,) = client.get("/api/places/search", params={"q": "Guayaquil"}).json()["places"]
+    (other,) = client.get("/api/places/search", params={"q": "Babahoyo"}).json()["places"]
+
+    assert (place["lon"], place["lat"]) == pytest.approx((-79.5962, -2.1958))
+    assert place["seat_name"] == "Guayaquil"
+    assert other["seat_name"] is None  # Babahoyo has no seat: point inside its square
+    assert -79.5 < other["lon"] < -79.46
+
+
+def test_the_cabecera_name_finds_its_canton(client: TestClient, db_session: Session, cantons):
+    _set_seat(db_session, "1205", "San Camilo", -79.88, -2.18)
+
+    (place,) = client.get("/api/places/search", params={"q": "camilo"}).json()["places"]
+
+    assert (place["name"], place["seat_name"]) == ("Quevedo", "San Camilo")
 
 
 def test_prefix_matches_rank_before_contains_matches(client: TestClient, db_session: Session):

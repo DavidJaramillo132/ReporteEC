@@ -326,9 +326,28 @@ export function nextActiveIndex(current: number, count: number, key: string): nu
   }
 }
 
-/** «Durán, Guayas»: the canton in title case, then its province. */
-export function placeLabel(place: Pick<Place, 'name' | 'province_name'>): string {
-  return place.province_name ? `${placeName(place.name)}, ${placeName(place.province_name)}` : placeName(place.name)
+const foldName = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .trim()
+
+/**
+ * «Pastaza (Puyo)»: the canton in title case, and its cabecera when it has
+ * another name. The cabecera comes from OpenStreetMap already cased
+ * («Pablo VI»), so it is shown as is.
+ */
+export function placeTitle(place: Pick<Place, 'name' | 'seat_name'>): string {
+  const name = placeName(place.name)
+  const seat = place.seat_name?.trim()
+  return seat && foldName(seat) !== foldName(name) ? `${name} (${seat})` : name
+}
+
+/** «Pastaza (Puyo), Pastaza»: the canton (and its cabecera, if named differently), then its province. */
+export function placeLabel(place: Pick<Place, 'name' | 'province_name' | 'seat_name'>): string {
+  const title = placeTitle(place)
+  return place.province_name ? `${title}, ${placeName(place.province_name)}` : title
 }
 
 /** «Punto en el mapa (-2.18942, -79.88621)»: latitude first, as people read coordinates. */

@@ -30,7 +30,12 @@ from app.ingestion.adapters.mdi_detenidos import normalize_row as normalize_dete
 from app.ingestion.adapters.mdi_homicidios import normalize_row as normalize_homicidios
 from app.ingestion.loaders.incidents import DETENTION_TARGET, INCIDENT_TARGET, LoadTarget, load_file
 from app.ingestion.loaders.indicators import load_indicator_file
-from app.ingestion.loaders.territory import load_cantons, load_population, validate_coverage
+from app.ingestion.loaders.territory import (
+    load_canton_seats,
+    load_cantons,
+    load_population,
+    validate_coverage,
+)
 from app.ingestion.sources.ckan import (
     DESAPARECIDAS_PACKAGE_ID,
     DETENIDOS_PACKAGE_ID,
@@ -192,6 +197,19 @@ def run_cantons(files: list[Path]) -> None:
             for name in summary.unmatched_shapes:
                 print(f"  unmatched shape (no admin_units canton by that name): {name}")
             _print_coverage(session)
+
+
+def run_canton_seats(path: Path) -> None:
+    """Load each canton's cabecera (seat) point; see `load_canton_seats`."""
+    with Session(get_engine()) as session:
+        summary = load_canton_seats(session, path)
+        session.commit()
+    print(
+        f"{path.name}: seats={summary.seats} fallbacks={summary.fallbacks} "
+        f"unknown_codes={len(summary.unknown_codes)}"
+    )
+    for code in summary.unknown_codes:
+        print(f"  canton_code with no cantons row (load cantons first?): {code}")
 
 
 def run_population(files: list[Path]) -> None:

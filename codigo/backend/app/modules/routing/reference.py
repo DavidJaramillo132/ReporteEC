@@ -10,7 +10,8 @@ service reads the newest row).
 Sample (mainland only; Galápagos, province "20", is excluded):
 
 - every canton to its `NEAREST_PER_CANTON` nearest cantons by distance
-  between canton points (ST_PointOnSurface), unordered pairs deduplicated;
+  between canton points (the cabecera from `canton-seats`, else
+  ST_PointOnSurface), unordered pairs deduplicated;
 - plus `LONG_PAIRS` random pairs at least `LONG_PAIR_MIN_KM` apart, drawn
   with a fixed seed so a rerun on the same cantons picks the same pairs.
 
@@ -47,7 +48,7 @@ from app.modules.routing.service import (
     load_national_context,
     validate_route,
 )
-from app.modules.territory.models import Canton
+from app.modules.territory.models import Canton, canton_route_point
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +93,12 @@ def distance_km(a: CantonPoint, b: CantonPoint) -> float:
 
 
 def load_canton_points(session: Session) -> list[CantonPoint]:
-    """Every canton's ST_PointOnSurface (same expression as the places search)."""
-    point = func.ST_PointOnSurface(Canton.geom)
+    """Every canton's route point: its cabecera, else ST_PointOnSurface.
+
+    The same `canton_route_point` the places search returns, so the scale is
+    built from the very points a reader picks from the list.
+    """
+    point = canton_route_point()
     rows = session.execute(
         select(Canton.code, Canton.province_code, func.ST_X(point), func.ST_Y(point)).order_by(
             Canton.code

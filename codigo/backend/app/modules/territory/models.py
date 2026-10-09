@@ -24,6 +24,7 @@ canton indicators) can run independently of the others' load order.
 
 from enum import StrEnum
 
+from geoalchemy2 import Geometry
 from sqlalchemy import (
     BigInteger,
     ForeignKey,
@@ -32,6 +33,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -68,6 +70,24 @@ class Canton(Base):
     # can fall outside its own boundary (e.g. a C-shaped canton), which would
     # place a coordinate-less incident in a neighboring canton.
     centroid: Mapped[str] = mapped_column(Point)
+    # The cabecera cantonal (the canton's seat town) from OpenStreetMap,
+    # loaded by `python -m app.ingestion canton-seats`. It is where a route
+    # to or from the canton starts or ends: a polygon's ST_PointOnSurface can
+    # sit far from the city and from any road. NULL until loaded, or when no
+    # OSM place was found; `canton_route_point` then falls back to ST_PointOnSurface.
+    seat_name: Mapped[str | None] = mapped_column(String(128))
+    seat_geom: Mapped[str | None] = mapped_column(
+        Geometry(geometry_type="POINT", srid=4326, spatial_index=False)
+    )
+
+
+def canton_route_point():
+    """SQL expression: the canton's seat, else a point inside its polygon.
+
+    The one definition shared by the places search and the route reference
+    sample, so both pick the same point for a canton.
+    """
+    return func.coalesce(Canton.seat_geom, func.ST_PointOnSurface(Canton.geom))
 
 
 class CantonPopulation(Base):
