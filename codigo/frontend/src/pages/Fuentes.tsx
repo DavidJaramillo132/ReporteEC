@@ -210,7 +210,19 @@ export function Fuentes({ meta }: FuentesProps) {
             concreto. Las cifras de extorsión requieren consultar las condiciones de uso del propio OECO antes de
             reutilizarlas. Los límites de provincias y cantones (geoBoundaries) tienen licencia CC BY 4.0.
           </p>
-          <p>Licencia del código de esta plataforma: por definir.</p>
+          <p>
+            El código de esta plataforma se publica bajo la{' '}
+            <a
+              href="https://github.com/DavidJaramillo132/ReporteEC/blob/main/LICENSE"
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:no-underline"
+            >
+              licencia GNU AGPL v3
+            </a>
+            : puedes usarlo y modificarlo, pero si lo ofreces como sitio web debes publicar tus cambios con la
+            misma licencia. Cubre solo el código; los datos conservan la licencia de cada fuente.
+          </p>
         </Section>
 
         <Section id="aviso-de-responsabilidad" title="Aviso de responsabilidad">
