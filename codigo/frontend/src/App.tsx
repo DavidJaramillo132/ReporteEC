@@ -16,6 +16,7 @@ import { Fuentes } from './pages/Fuentes'
 import { Mapa } from './pages/Mapa'
 import { Metodologia } from './pages/Metodologia'
 import { NoEncontrada } from './pages/NoEncontrada'
+import { Rutas } from './pages/Rutas'
 
 const SAVED = loadSavedView()
 
@@ -164,6 +165,7 @@ export default function App() {
           onShowIntro={() => setIntroOpen(true)}
         />
       )}
+      {route === 'rutas' && <Rutas />}
       {route === 'estadisticas' && filters && (
         <Estadisticas filters={filters} onUpdate={update} onChangeYears={changeYears} meta={meta} adminUnits={adminUnits} lastMonth={lastMonth} />
       )}

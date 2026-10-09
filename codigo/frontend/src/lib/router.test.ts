@@ -4,6 +4,7 @@ import { matchRoute } from './router'
 describe('matchRoute', () => {
   it('matches every static route', () => {
     expect(matchRoute('/')).toBe('mapa')
+    expect(matchRoute('/rutas')).toBe('rutas')
     expect(matchRoute('/estadisticas')).toBe('estadisticas')
     expect(matchRoute('/metodologia')).toBe('metodologia')
     expect(matchRoute('/fuentes')).toBe('fuentes')
@@ -12,11 +13,13 @@ describe('matchRoute', () => {
   it('ignores a trailing slash on a non-root route', () => {
     expect(matchRoute('/estadisticas/')).toBe('estadisticas')
     expect(matchRoute('/fuentes/')).toBe('fuentes')
+    expect(matchRoute('/rutas/')).toBe('rutas')
   })
 
   it('falls back to no-encontrada for an unknown path', () => {
     expect(matchRoute('/no-existe')).toBe('no-encontrada')
     expect(matchRoute('/mapa')).toBe('no-encontrada')
+    expect(matchRoute('/ruta')).toBe('no-encontrada')
     expect(matchRoute('')).toBe('no-encontrada')
   })
 })

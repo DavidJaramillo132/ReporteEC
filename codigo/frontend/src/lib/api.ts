@@ -80,8 +80,45 @@ async function fetchJson<T>(
     if (value !== null && value !== undefined && value !== '') url.searchParams.set(key, String(value))
   }
   const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error(`${url.pathname} respondió ${response.status}`)
+  if (!response.ok) throw new ApiError(`${url.pathname} respondió ${response.status}`, response.status, await readDetail(response))
   return (await response.json()) as T
+}
+
+/**
+ * A non-2xx response. `detail` is FastAPI's error message when the body
+ * carries one: a plain string for an HTTPException (the backend writes them
+ * in Spanish for the reader), or the first validation message otherwise.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly detail: string | null
+
+  constructor(message: string, status: number, detail: string | null) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
+async function readDetail(response: Response): Promise<string | null> {
+  try {
+    return detailMessage(await response.json())
+  } catch {
+    return null
+  }
+}
+
+/** FastAPI's `{"detail": "..."}` or `{"detail": [{"msg": "..."}]}` -> the message, else null. */
+export function detailMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || !('detail' in body)) return null
+  const detail = (body as { detail: unknown }).detail
+  if (typeof detail === 'string') return detail.trim() || null
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: unknown } | undefined
+    return typeof first?.msg === 'string' ? first.msg : null
+  }
+  return null
 }
 
 export function getMeta(signal?: AbortSignal): Promise<MetaResponse> {
@@ -234,4 +271,102 @@ export function getCantonIndicatorsSummary(
   signal?: AbortSignal,
 ): Promise<CantonIndicatorsSummaryResponse> {
   return fetchJson<CantonIndicatorsSummaryResponse>('/cantons/indicators/summary', { indicator }, signal)
+}
+
+// ---- routes: risk by departure hour (V2) ------------------------------------
+
+/** The three incident types the route score counts (see the backend's routing module). */
+export type RouteIncidentType = 'homicidio' | 'sicariato' | 'femicidio'
+
+/** Semáforo band key, stable across the API (see routing/scoring.py's Band). */
+export type RouteBand = 'seguro' | 'precaucion' | 'riesgo_alto' | 'critico'
+
+export interface LonLatPoint {
+  lon: number
+  lat: number
+}
+
+export interface RouteCases {
+  total: number
+  by_type: Record<RouteIncidentType, number>
+  weighted_total: number
+  without_hour: number
+}
+
+/** One departure hour (local time). `score`/`band` are null while `score_available` is false. */
+export interface HourRisk {
+  hour: number
+  share: number
+  weighted_cases: number
+  exposure: number
+  score: number | null
+  score_available: boolean
+  band: RouteBand | null
+  band_label: string | null
+}
+
+export interface Blackspot {
+  km_from: number
+  km_to: number
+  lon: number
+  lat: number
+  weighted_cases: number
+  cases: number
+  by_type: Record<RouteIncidentType, number>
+  /** Up to 3 local hours, busiest first. */
+  peak_hours: number[]
+  first_date: string
+  last_date: string
+}
+
+export interface RouteRiskResponse {
+  origin: LonLatPoint
+  destination: LonLatPoint
+  /** A simplified display LineString, [lon, lat] pairs. */
+  geometry: { type: 'LineString'; coordinates: [number, number][] }
+  distance_km: number
+  duration_min: number
+  cases: RouteCases
+  selected: HourRisk
+  best_hour: number | null
+  /** All 24 departure hours, 0 to 23. */
+  hourly: HourRisk[]
+  blackspots: Blackspot[]
+  low_data: boolean
+  data_cut: string | null
+  notes: string[]
+}
+
+const lonLatParam = (point: LonLatPoint) => `${point.lon},${point.lat}`
+
+/** GET /api/routes/risk. Errors arrive as ApiError: 422 (with a Spanish detail), 404 no route, 503 routing down. */
+export function getRouteRisk(
+  from: LonLatPoint,
+  to: LonLatPoint,
+  hour: number,
+  signal?: AbortSignal,
+): Promise<RouteRiskResponse> {
+  return fetchJson<RouteRiskResponse>('/routes/risk', { from: lonLatParam(from), to: lonLatParam(to), hour }, signal)
+}
+
+export interface Place {
+  code: string
+  /** Canton name, as stored (capitals). */
+  name: string
+  province_code: string | null
+  province_name: string | null
+  /** A point inside the canton (ST_PointOnSurface). */
+  lon: number
+  lat: number
+}
+
+export interface PlacesSearchResponse {
+  query: string
+  /** At most 10. */
+  places: Place[]
+}
+
+/** GET /api/places/search: cantons by accent-insensitive name; `q` needs at least 2 letters. */
+export function searchPlaces(q: string, signal?: AbortSignal): Promise<PlacesSearchResponse> {
+  return fetchJson<PlacesSearchResponse>('/places/search', { q }, signal)
 }

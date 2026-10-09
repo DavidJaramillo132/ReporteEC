@@ -60,6 +60,21 @@
   --color-canton-siniestros-3: #3e6f98;
   --color-canton-siniestros-4: #1d4a73;
   --color-canton-sin-datos: #9aa3ab;
+
+  /*
+   * Route semáforo (Rutas page only) -- a scoped exception to the Two-Hue
+   * Rule, see DESIGN.md. These are STATE, not series: always drawn with the
+   * band's shape and its text label, never color alone. Validated with the
+   * dataviz palette validator against paper and sheet (precaución sits below
+   * 3:1 on purpose; the label carries it). Values mirror BANDS in
+   * lib/routeRisk.ts, which references these variables by name -- hence
+   * in this `static` block (like the canton ramp above): Tailwind would drop
+   * variables no utility class uses otherwise.
+   */
+  --color-semaforo-seguro: #208b67;
+  --color-semaforo-precaucion: #d9a520;
+  --color-semaforo-riesgo-alto: #c8582a;
+  --color-semaforo-critico: #8f2430;
 }
 
 @layer base {

@@ -10,12 +10,13 @@ interface MastheadProps {
 
 const NAV: { to: string; label: string; route: RouteName }[] = [
   { to: '/', label: 'Mapa', route: 'mapa' },
+  { to: '/rutas', label: 'Rutas', route: 'rutas' },
   { to: '/estadisticas', label: 'Estadísticas', route: 'estadisticas' },
   { to: '/metodologia', label: 'Metodología', route: 'metodologia' },
   { to: '/fuentes', label: 'Fuentes', route: 'fuentes' },
 ]
 
-/** A single ~56px bar on the sello field: nameplate, section nav, data cut, "Reportar". Below `sm:`, the nav/cut/"Reportar" collapse into a disclosure menu (see the plan). */
+/** A single ~56px bar on the sello field: nameplate, section nav, data cut, "Reportar". Below `md:`, the nav/cut/"Reportar" collapse into a disclosure menu (see the plan); the inline data cut waits for `lg:`, where five sections leave room for it. */
 export function Masthead({ cutDate, route }: MastheadProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuId = useId()
@@ -27,7 +28,7 @@ export function Masthead({ cutDate, route }: MastheadProps) {
           ReporteEC
         </Link>
 
-        <nav aria-label="Secciones" className="hidden min-w-0 items-center gap-1 sm:flex">
+        <nav aria-label="Secciones" className="hidden min-w-0 items-center gap-1 md:flex">
           {NAV.map((item) => (
             <Link
               key={item.to}
@@ -42,8 +43,8 @@ export function Masthead({ cutDate, route }: MastheadProps) {
           ))}
         </nav>
 
-        <div className="ml-auto hidden shrink-0 items-center gap-4 sm:flex">
-          <p className="text-[12.5px] text-paper/85">
+        <div className="ml-auto hidden shrink-0 items-center gap-4 md:flex">
+          <p className="hidden text-[12.5px] text-paper/85 lg:block">
             <span className="label text-paper/65">Corte </span>
             {cutDate ? formatLongDate(cutDate) : '…'}
           </p>
@@ -55,14 +56,14 @@ export function Masthead({ cutDate, route }: MastheadProps) {
           aria-expanded={menuOpen}
           aria-controls={menuId}
           onClick={() => setMenuOpen((v) => !v)}
-          className="ml-auto flex h-8 items-center gap-1.5 border border-paper/50 px-2.5 text-[13px] font-medium sm:hidden"
+          className="ml-auto flex h-8 items-center gap-1.5 border border-paper/50 px-2.5 text-[13px] font-medium md:hidden"
         >
           Menú
         </button>
       </div>
 
       {menuOpen && (
-        <div id={menuId} className="space-y-3 border-t border-paper/30 px-4 py-3 sm:hidden">
+        <div id={menuId} className="space-y-3 border-t border-paper/30 px-4 py-3 md:hidden">
           <nav aria-label="Secciones" className="flex flex-col">
             {NAV.map((item) => (
               <Link
@@ -109,13 +110,13 @@ function ReportNotice() {
   }, [open])
 
   return (
-    <div ref={root} className="relative flex w-full items-center sm:w-auto">
+    <div ref={root} className="relative flex w-full items-center md:w-auto">
       <button
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className={`flex h-8 w-full items-center justify-between gap-2 border px-2.5 text-[13px] font-medium transition-colors duration-150 sm:w-auto ${
+        className={`flex h-8 w-full items-center justify-between gap-2 border px-2.5 text-[13px] font-medium transition-colors duration-150 md:w-auto ${
           open ? 'border-paper bg-paper text-sello' : 'border-paper/50 text-paper hover:bg-paper/10'
         }`}
       >

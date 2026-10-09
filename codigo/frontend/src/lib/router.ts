@@ -1,5 +1,5 @@
 /**
- * A minimal History-API router: four static routes plus a 404, no external
+ * A minimal History-API router: five static routes plus a 404, no external
  * dependency. There is no path-param matching -- the whole app only ever
  * needs exact paths (see the plan at
  * .claude/plans/virtual-meandering-balloon.md) -- so `matchRoute` is a plain
@@ -8,7 +8,7 @@
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react'
 import { createElement, useSyncExternalStore } from 'react'
 
-export type RouteName = 'mapa' | 'estadisticas' | 'metodologia' | 'fuentes' | 'no-encontrada'
+export type RouteName = 'mapa' | 'rutas' | 'estadisticas' | 'metodologia' | 'fuentes' | 'no-encontrada'
 
 interface RouteDef {
   path: string
@@ -17,12 +17,13 @@ interface RouteDef {
 
 const ROUTES: RouteDef[] = [
   { path: '/', name: 'mapa' },
+  { path: '/rutas', name: 'rutas' },
   { path: '/estadisticas', name: 'estadisticas' },
   { path: '/metodologia', name: 'metodologia' },
   { path: '/fuentes', name: 'fuentes' },
 ]
 
-/** Only `/` and `/estadisticas` read filters from the query string (see urlState.ts). */
+/** Only `/` and `/estadisticas` read filters from the query string (see urlState.ts); `/rutas` keeps its own (routeRisk.ts). */
 export const FILTERED_ROUTES: RouteName[] = ['mapa', 'estadisticas']
 
 /** A trailing slash never changes which route matches, except the root itself. */

@@ -16,6 +16,10 @@ colors:
   sicariato: "#6d1f3b"
   femicidio: "#8a55bd"
   desaparecida: "#1d6f78"
+  semaforo-seguro: "#208b67"
+  semaforo-precaucion: "#d9a520"
+  semaforo-riesgo-alto: "#c8582a"
+  semaforo-critico: "#8f2430"
 typography:
   nameplate:
     fontFamily: "Archivo Variable, Archivo, system-ui, sans-serif"
@@ -123,6 +127,8 @@ Grouped as one role rather than tiered, because the four are co-equal, not a hie
 
 **Scoped exception: canton choropleths (decided 2026-09-26).** The canton layers are data fields, not marks or interface state. Siniestros uses a lightness ramp of `sello` and adds no hue. The extortion semáforo uses one warm-red family in four lightness steps, and fill opacity rises with the class as a cue that does not depend on color. On the map, both appear only while their canton layer is switched on, and each has its own legend. Off the map, the same two ramps are reused only by the Extorsión and Siniestros sections of Estadísticas, for those same indicators (see Chart color jobs below); nothing else may reuse the extortion ramp.
 
+**Scoped exception: the route semáforo (Rutas, decided 2026-10-09).** The Rutas page shows how many violent deaths were registered near a route at a departure hour as one of four bands, and those bands are *state*, not series. They get four tokens of their own, used only on `/rutas`, and nowhere else may reuse them: `--color-semaforo-seguro` `#208b67`, `--color-semaforo-precaucion` `#d9a520`, `--color-semaforo-riesgo-alto` `#c8582a`, `--color-semaforo-critico` `#8f2430` (`@theme static` in `index.css`, mirrored by `BANDS` in `lib/routeRisk.ts`). A band is never color alone: it always travels with its text label («Seguro», «Precaución», «Riesgo alto», «Crítico») and its own shape (square with a check, triangle with «!», diamond with «!», octagon with «×»), and the label text stays in ink, never the band color. The four were run through the dataviz palette validator against paper `#edf0ee` and sheet `#f8f9f7`: lightness band, chroma floor, color-vision separation (adjacent and all pairs, worst ΔE 9.2 protan) and normal-vision floor all pass; precaución sits at 1.96:1 against paper, below 3:1 by design — the label and shape carry it. The product has no dark theme, so there are no dark steps. When no score exists yet the page shows no band at all («Puntaje no disponible todavía»), never a stand-in color. The route line itself is `sello`, and the 24-hour chart follows the chart rules below (selected hour `#1d4a73`, the other hours `#7fa1bf`), not the semáforo.
+
 **Chart color jobs (Estadísticas, decided 2026-10-03).** Charts add no hue; each color does one job, taken from the tokens above:
 - **Incident type** → the four type inks, always together with the type's `Mark` (shape) and its name: in the legend, next to each bar, in the tooltip, and on the newest group's column caps. Two inks fail the dataviz validator's lightness/chroma checks (sicariato too dark, desaparecida low chroma) while passing color-vision separation, so the mark and the direct label are mandatory, never optional.
 - **Year** (ordinal) → a lightness ramp of `sello`, `#7fa1bf` (oldest selected) to `#1d4a73` (newest). A year's shade depends on its rank in the selection, so every chart on one page passes the same selected years.
@@ -151,7 +157,7 @@ Grouped as one role rather than tiered, because the four are co-equal, not a hie
 
 The page is a masthead-over-plate composition. The map is full-width on every breakpoint now: there is no second column. Below `lg` the map plate is a `70svh` plate (min 340px); at `lg+` it fills the remaining height below the masthead, filter strip and time rule (`lg:flex-1`).
 
-Structure, top to bottom: a single ~56px masthead bar (`h-14`) on a `sello` field — the nameplate, section nav (Mapa · Estadísticas · Metodología · Fuentes) with `aria-current="page"`, a compact data-cut readout and the "Reportar" notice, collapsing below `sm:` into a nameplate-plus-disclosure-menu — a horizontally-scrollable filter strip (province/canton selects, incident-type toggles, and on the map page only, the canton-layer switch and detentions toggle), the map plate with its floating overlays (the legend bottom-left; "Mi ubicación," transient notices and the case card top-right/top-left/anchored), and the time rule (year ribbon over a month ribbon) below the plate. `/estadisticas`, `/metodologia` and `/fuentes` are separate routed pages (see `lib/router.ts`), each with its own `<title>`; the two reading pages (Metodología, Fuentes) use a centered ~68ch column with a small table-of-contents box linking to `id`-anchored sections.
+Structure, top to bottom: a single ~56px masthead bar (`h-14`) on a `sello` field — the nameplate, section nav (Mapa · Rutas · Estadísticas · Metodología · Fuentes) with `aria-current="page"`, a compact data-cut readout (from `lg:`) and the "Reportar" notice, collapsing below `md:` into a nameplate-plus-disclosure-menu — a horizontally-scrollable filter strip (province/canton selects, incident-type toggles, and on the map page only, the canton-layer switch and detentions toggle), the map plate with its floating overlays (the legend bottom-left; "Mi ubicación," transient notices and the case card top-right/top-left/anchored), and the time rule (year ribbon over a month ribbon) below the plate. `/rutas`, `/estadisticas`, `/metodologia` and `/fuentes` are separate routed pages (see `lib/router.ts`), each with its own `<title>`; the two reading pages (Metodología, Fuentes) use a centered ~68ch column with a small table-of-contents box linking to `id`-anchored sections.
 
 No custom spacing scale is defined — container padding uses Tailwind's default steps directly (`px-4` on mobile widening to `px-5`/`px-6` at `lg:`), and 1px ink borders are the layout's only structural separator.
 
@@ -179,7 +185,7 @@ Borders come in three weights: a 1px ink rule frames every ordinary control and 
 ## Components
 
 ### Masthead
-A single ~56px bar (`h-14`, `.double-rule` beneath it), entirely on the `sello` field: the nameplate at the left (a `Link` to `/`), inline section nav in the middle (Mapa · Estadísticas · Metodología · Fuentes; the active route inverts to `bg-paper`/`text-sello`, the rest sit at `text-paper/85`), and the compact data-cut readout plus the "Reportar" entry point at the right. Below `sm:` the nav, data cut and "Reportar" collapse behind a "Menú" disclosure button; open, they stack in a panel under the bar. "Reportar" itself is a bordered `text-paper` chip at rest (a `sello` field has no room left for the old ink-hatch texture) inverting to `bg-paper`/`text-sello` once opened, revealing the same `.ink-in`-animated popover stating plainly it arrives in a future version. The long subtitle and the separate "Fuente" line are gone; the masthead's only job now is orientation and navigation.
+A single ~56px bar (`h-14`, `.double-rule` beneath it), entirely on the `sello` field: the nameplate at the left (a `Link` to `/`), inline section nav in the middle (Mapa · Rutas · Estadísticas · Metodología · Fuentes; the active route inverts to `bg-paper`/`text-sello`, the rest sit at `text-paper/85`), and the compact data-cut readout plus the "Reportar" entry point at the right. Below `md:` the nav, data cut and "Reportar" collapse behind a "Menú" disclosure button (five sections no longer fit beside the cut at `sm:`), and between `md:` and `lg:` the inline data cut is left out to make room; open, they stack in a panel under the bar. "Reportar" itself is a bordered `text-paper` chip at rest (a `sello` field has no room left for the old ink-hatch texture) inverting to `bg-paper`/`text-sello` once opened, revealing the same `.ink-in`-animated popover stating plainly it arrives in a future version. The long subtitle and the separate "Fuente" line are gone; the masthead's only job now is orientation and navigation.
 
 ### Filter Strip
 A single non-wrapping row of bordered controls, all 32px tall. On narrow screens the row scrolls horizontally.
@@ -212,6 +218,13 @@ No registry column and no case list: clicking a mark opens `IncidentCard` instea
 ### Reading Pages (Methodology, Sources)
 `Metodologia` and `Fuentes` (`src/pages/`) are standalone routed pages now, not panel tabs — same `Section` pattern and unchanged prose, laid out for reading: a centered ~68ch column, a bordered "En esta página" table of contents linking to `id`-anchored `<h2>`s (`scroll-mt-*` keeps a jumped-to heading clear of nothing above it, since there is no longer a sticky masthead over the content), and each page sets its own `document.title`. The Methodology page's "Color y marca" section explains the current rule directly: hue and shape say the incident type; the mark's fill/outline style says how much confidence backs it (`Mark rellena` = oficial, `rellena con borde discontinuo` = verificado, `rayada` = reportado, `vacía con borde discontinuo` = en revisión), pulled live from `CONFIDENCE[c].style`.
 
+### Rutas
+A routed page (`src/pages/Rutas.tsx`, its parts in `src/pages/rutas/`): risk of a driving route by departure hour. At `lg:` a ~420px left column holds the route form over the result, and the map fills the rest; below `lg:` they stack — form, map plate (`55svh`, min 320px), result — so nothing scrolls sideways at 390px.
+
+- **Form:** two ARIA comboboxes (Origen «A», Destino «B»; canton search, 250 ms debounce, arrows/Home/End/Enter/Esc), each with an «Elegir en el mapa» toggle that arms the next map click (it inverts to `sello` while armed; Esc or «Cancelar» disarms), a square swap button, and a «Hora de salida» select in the filter-strip frame. State lives in the URL (`?desde=lon,lat&hasta=lon,lat&hora=H`).
+- **Map:** the shared gazette map (`lib/gazetteMap.ts`, also used by `IncidentMap`) with the route in `sello` over a sheet casing, the ends as square «A» (sheet) and «B» (ink) marks, and the blackspots as small numbered squares matching their cards. A new route fits the view.
+- **Result:** the semáforo reading in a sheet box (shape + label + «NN de 100», a hatched 0–100 scale with the band filled), the figures as a `dl`, a low-data notice on `paper-deep`, the 24-hour `ColumnChart`, the numbered blackspot cards, and the «Qué mide y qué no» note linking to `/metodologia#riesgo-en-rutas`. Loading is hatched skeleton bars; errors sit in a bordered sheet box with the server's Spanish message.
+
 ### Estadísticas
 A routed page (`src/pages/Estadisticas.tsx`, its sections in `src/pages/estadisticas/`) reusing the map page's own `FilterStrip` (without its map-only controls) and `TimeRule` at the top, synced to the URL; any set of years can be selected. Below them:
 
@@ -230,7 +243,7 @@ Bars and columns follow the Square Corner Rule: square at every corner, so a len
 ## Do's and Don'ts
 
 ### Do:
-- **Do** spend hue on exactly two things: `sello` (`#1d4a73`) for interface state, and the four type inks (`#b23b2a` homicidio, `#6d1f3b` sicariato, `#8a55bd` femicidio, `#1d6f78` desaparecida) for incident type. Nothing else introduces a third hue.
+- **Do** spend hue on exactly two things: `sello` (`#1d4a73`) for interface state, and the four type inks (`#b23b2a` homicidio, `#6d1f3b` sicariato, `#8a55bd` femicidio, `#1d6f78` desaparecida) for incident type. Nothing else introduces a third hue — the scoped exceptions above (canton choropleths, the route semáforo) are the only ones, each confined to its own place.
 - **Do** draw confidence as mark style — solid, dashed, hatched, or empty fill/outline via `CONFIDENCE_STYLE` — never as a color.
 - **Do** reinforce type with shape as well as hue: disc, disc + outer ring, disc + paper core, or open ring with no disc.
 - **Do** express control state (active, selected, pressed) with `sello` inversion (`bg-sello`/`text-paper`) or hatching, never a decorative color change; the map legend's absent-confidence indicator (55% opacity) is the one deliberate exception, meaning "not present in this view," not "unavailable."
