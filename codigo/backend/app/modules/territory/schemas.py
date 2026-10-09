@@ -59,3 +59,21 @@ class AdminUnitOut(BaseModel):
 class AdminUnitsResponse(BaseModel):
     provinces: list[AdminUnitOut]
     cantons: list[AdminUnitOut]
+
+
+class PlaceOut(BaseModel):
+    """A canton to pick as a route origin or destination."""
+
+    code: str = Field(description="DPA canton code, e.g. 0901.")
+    name: str = Field(description="Canton name, e.g. «Durán».")
+    province_code: str | None
+    province_name: str | None
+    lon: float = Field(description="A point inside the canton (ST_PointOnSurface), WGS84.")
+    lat: float
+
+
+class PlacesSearchResponse(BaseModel):
+    query: str
+    places: list[PlaceOut] = Field(
+        description="At most 10; names starting with the query first, then names containing it."
+    )

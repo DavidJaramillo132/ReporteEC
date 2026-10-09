@@ -13,14 +13,22 @@ equivalent to one with `value=0` (see `_ZERO_CLASS_BY_INDICATOR` below) --
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func, select
+from sqlalchemy.orm import Session, aliased
 
-from app.modules.territory.models import Canton, CantonIndicator, CantonPopulation
+from app.modules.territory.models import (
+    AdminUnit,
+    AdminUnitLevel,
+    Canton,
+    CantonIndicator,
+    CantonPopulation,
+)
 
 # A zero-valued canton/year never enters the rate distribution (see
 # `get_canton_indicators`) and gets this label instead of a quartile class --
@@ -215,3 +223,75 @@ def get_indicator_summary(session: Session, indicator: str) -> list[IndicatorYea
             )
         )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Place search (GET /api/places/search): cantons by accent-insensitive name.
+# ---------------------------------------------------------------------------
+
+PLACES_LIMIT = 10
+# Lowercase accented letters Spanish names use, and their plain forms. The
+# database lowercases first, so this covers uppercase too; no `unaccent`
+# extension needed.
+_ACCENTED = "áàäâãéèëêíìïîóòöôõúùüûñç"
+_PLAIN = "aaaaaeeeeiiiiooooouuuunc"
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def normalize_place_query(raw: str) -> str:
+    """Lowercase, accents stripped (ñ -> n, as in the database), whitespace collapsed."""
+    decomposed = unicodedata.normalize("NFKD", raw)
+    plain = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return _WHITESPACE_RE.sub(" ", plain).strip().lower()
+
+
+@dataclass(frozen=True, slots=True)
+class Place:
+    code: str
+    name: str
+    province_code: str | None
+    province_name: str | None
+    lon: float
+    lat: float
+
+
+def search_places(session: Session, query: str, limit: int = PLACES_LIMIT) -> list[Place]:
+    """Cantons whose name contains `query`, accent- and case-insensitive.
+
+    Names that start with the query rank before names that only contain it;
+    alphabetical within each group. `strpos` instead of LIKE: no wildcard to
+    escape in user input.
+    """
+    needle = normalize_place_query(query)
+    plain_name = func.translate(func.lower(Canton.name), _ACCENTED, _PLAIN)
+    position = func.strpos(plain_name, needle)
+    point = func.ST_PointOnSurface(Canton.geom)
+    province = aliased(AdminUnit)
+    rows = session.execute(
+        select(
+            Canton.code,
+            Canton.name,
+            Canton.province_code,
+            province.name.label("province_name"),
+            func.ST_X(point).label("lon"),
+            func.ST_Y(point).label("lat"),
+        )
+        .outerjoin(
+            province,
+            (province.code == Canton.province_code) & (province.level == AdminUnitLevel.PROVINCE),
+        )
+        .where(position > 0)
+        .order_by(case((position == 1, 0), else_=1), plain_name, Canton.code)
+        .limit(limit)
+    ).all()
+    return [
+        Place(
+            code=row.code,
+            name=row.name,
+            province_code=row.province_code,
+            province_name=row.province_name,
+            lon=row.lon,
+            lat=row.lat,
+        )
+        for row in rows
+    ]
