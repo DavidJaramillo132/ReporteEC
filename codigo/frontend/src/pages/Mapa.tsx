@@ -3,7 +3,6 @@ import { IncidentCard } from '../components/IncidentCard'
 import { FilterStrip } from '../components/FilterStrip'
 import { type MapView, IncidentMap, MARKS_ZOOM, type ViewBounds } from '../components/IncidentMap'
 import { MapLegend } from '../components/MapLegend'
-import { TimeRule } from '../components/TimeRule'
 import type { AdminUnitsResponse, CantonIndicatorsResponse, IncidentDetail, MetaResponse, StatsRow } from '../lib/api'
 import { getCantonIndicators, getIncident, getStats } from '../lib/api'
 import { indicatorForLayer, noDataMessage } from '../lib/cantonChoropleth'
@@ -200,6 +199,14 @@ export function Mapa({
               types: filters.types.includes(type) ? filters.types.filter((t) => t !== type) : [...filters.types, type],
             })
           }
+          time={{
+            years: filters.years,
+            months: filters.months,
+            availableYears: meta?.years ?? [],
+            lastMonth,
+            onYears: onChangeYears,
+            onMonths: (months) => onUpdate({ months }),
+          }}
           mapControls={{
             detentions: filters.detentions,
             cantonLayer: filters.cantonLayer,
@@ -210,7 +217,7 @@ export function Mapa({
       )}
 
       <div className="flex flex-1 flex-col lg:min-h-0">
-        <div ref={mapWrapperRef} className="relative h-[70svh] min-h-[340px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
+        <div ref={mapWrapperRef} className="relative min-h-[max(340px,70svh)] flex-1 lg:min-h-0">
           <IncidentMap
             filters={activeFilters}
             showDetentions={activeFilters.detentions}
@@ -298,17 +305,6 @@ export function Mapa({
             </div>
           )}
         </div>
-
-        {filters && (
-          <TimeRule
-            years={filters.years}
-            months={filters.months}
-            availableYears={meta?.years ?? []}
-            lastMonth={lastMonth}
-            onYears={onChangeYears}
-            onMonths={(months) => onUpdate({ months })}
-          />
-        )}
       </div>
     </>
   )

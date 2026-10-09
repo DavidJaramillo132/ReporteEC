@@ -102,7 +102,7 @@ ReporteEC still reads as a page from Ecuador's official register, not a security
 Paper and ink still carry the whole interface; color is now spent on exactly two, separate jobs — one accent for interaction, four inks for incident type.
 
 ### Primary — Stamp Blue
-- **Stamp Blue** (`#1d4a73`): the interface's one accent. Fills the masthead's top field (`bg-sello`, `text-paper`) and every active/selected/pressed state: the active section tab, the open "Reportar" popover, active type-filter chips, the active detentions toggle, active year/month cells in the Time Rule, the selected registry row, the "Mi ubicación" button once following, and every `hover:bg-sello` button (Cerrar, Reintentar, Mostrar más). It is also the density-heatmap hue, `::selection`, and the `:focus-visible` outline color.
+- **Stamp Blue** (`#1d4a73`): the interface's one accent. Fills the masthead's top field (`bg-sello`, `text-paper`) and every active/selected/pressed state: the active section tab, the open "Reportar" popover, active type-filter chips, the active detentions toggle, the selected registry row, the "Mi ubicación" button once following, and every `hover:bg-sello` button (Cerrar, Reintentar, Mostrar más). It is also the density-heatmap hue, `::selection`, and the `:focus-visible` outline color.
 - **Stamp Blue, Soft** (`#d3dfe8`): the one tint of the accent, used only as the hover fill for the "Mi ubicación" button while it is off (`hover:bg-sello-soft`) and as the 14–45%-mixed wash/border of the MapLibre user-location accuracy circle.
 
 ### Tertiary — Incident-Type Inks (map only, four co-equal marks)
@@ -155,9 +155,9 @@ Grouped as one role rather than tiered, because the four are co-equal, not a hie
 
 ## Layout
 
-The page is a masthead-over-plate composition. The map is full-width on every breakpoint now: there is no second column. Below `lg` the map plate is a `70svh` plate (min 340px); at `lg+` it fills the remaining height below the masthead, filter strip and time rule (`lg:flex-1`).
+The page is a masthead-over-plate composition. The map is full-width on every breakpoint now: there is no second column. Below `lg` the map plate is at least `70svh` (min 340px) and grows to fill any height left under the masthead and filter strip; at `lg+` it fills exactly that remaining height (`flex-1`).
 
-Structure, top to bottom: a single ~56px masthead bar (`h-14`) on a `sello` field — the nameplate, section nav (Mapa · Rutas · Estadísticas · Metodología · Fuentes) with `aria-current="page"`, a compact data-cut readout and the "Reportar" notice, collapsing below `md:` into a nameplate-plus-disclosure-menu — a horizontally-scrollable filter strip (province/canton selects, incident-type toggles, and on the map page only, the canton-layer switch and detentions toggle), the map plate with its floating overlays (the legend bottom-left; "Mi ubicación," transient notices and the case card top-right/top-left/anchored), and the time rule (year ribbon over a month ribbon) below the plate. `/rutas`, `/estadisticas`, `/metodologia` and `/fuentes` are separate routed pages (see `lib/router.ts`), each with its own `<title>`; the two reading pages (Metodología, Fuentes) use a centered ~68ch column with a small table-of-contents box linking to `id`-anchored sections.
+Structure, top to bottom: a single ~56px masthead bar (`h-14`) on a `sello` field — the nameplate, section nav (Mapa · Rutas · Estadísticas · Metodología · Fuentes) with `aria-current="page"`, a compact data-cut readout and the "Reportar" notice, collapsing below `md:` into a nameplate-plus-disclosure-menu — a horizontally-scrollable filter strip (province/canton selects, year and month dropdowns, incident types, and on the map page only, the canton-layer switch and detentions toggle), then the map plate with its floating overlays (the legend bottom-left; "Mi ubicación," transient notices and the case card top-right/top-left/anchored). Nothing sits below the plate. `/rutas`, `/estadisticas`, `/metodologia` and `/fuentes` are separate routed pages (see `lib/router.ts`), each with its own `<title>`; the two reading pages (Metodología, Fuentes) use a centered ~68ch column with a small table-of-contents box linking to `id`-anchored sections.
 
 No custom spacing scale is defined — container padding uses Tailwind's default steps directly (`px-4` on mobile widening to `px-5`/`px-6` at `lg:`), and 1px ink borders are the layout's only structural separator.
 
@@ -191,16 +191,14 @@ A single ~56px bar (`h-14`, `.double-rule` beneath it), entirely on the `sello` 
 A single non-wrapping row of bordered controls, all 32px tall. On narrow screens the row scrolls horizontally.
 
 - **`PlaceSelect` (province, canton):** a bordered field with a label chip, a native `<select>` and an inline SVG chevron.
-- **Two `Dropdown` disclosures (`components/Dropdown.tsx`), in the same frame:**
-  - Label chip plus a short summary of the choice ("Todos", "3 de 4", "Extorsión + detenciones") and a chevron.
+- **`Dropdown` disclosures (`components/Dropdown.tsx`) for Año, Meses, Tipos and Capas, in the same frame and in that order after the place selects:**
+  - Label chip plus a short summary of the choice ("2026", "2019–2026", "Ene–Ago", "Todos", "3 de 4", "Extorsión + detenciones") and a chevron; Año and Meses reserve a minimum value width so the button does not jump.
   - The panel is `position: fixed` and measured from its button, so the scroller never clips it.
   - The panel closes with Esc (focus returns to the button) or with a click outside.
+- **Año and Meses (`components/TimeFilters.tsx`):** native checkboxes in a four-column grid inside a fieldset. Several years can be checked; the last checked one is disabled (at least one always stays), with "Todos los años" and "Último" shortcuts. A month is available when any selected year has published it; the rest are disabled and hatched, with a "sin datos publicados" note, plus a "Todos los meses" shortcut.
 - **Tipos:** native checkboxes, each with its `Mark` and a tabular count, plus a "Mostrar todos" shortcut.
 - **Capas (map page only):** a radio group for the canton layer and a separate checkbox for detentions, labelled as police activity. The button turns `bg-sello`/`text-paper` while any layer is on, so an extra layer never goes unnoticed.
 - Estadísticas reuses the strip without Capas.
-
-### Time Rule
-Two segmented strips (years, months) inside a single bordered box with internal 1px dividers. Several years can be active at once (at least one always is), with "Todos" and "Último" shortcuts; a month is available when any selected year has published it. Active cells are `bg-sello`/`text-paper` (previously ink); unavailable months/years are hatched, `cursor-not-allowed`, with an explanatory `title`.
 
 ### Map (`IncidentMap` + `basemap.ts` + `marks.ts`)
 A gazette-grey MapLibre basemap: land is `paper-deep` (`#dfe6e3`), water is a cool wash (`#aecbd8`), province borders are dashed ink at 45% opacity, country borders solid ink, roads and place labels in ink tones — unchanged in structure, tokens updated. Below zoom 8.5 (`MARKS_ZOOM`) the map shows a heatmap; above it, individual `Mark` symbols fade in as the heatmap fades out.
@@ -226,7 +224,7 @@ A routed page (`src/pages/Rutas.tsx`, its parts in `src/pages/rutas/`): risk of 
 - **Result:** the semáforo reading in a sheet box (shape + label + «NN de 100», a hatched 0–100 scale with the band filled), the figures as a `dl`, a low-data notice on `paper-deep`, the 24-hour `ColumnChart`, the numbered blackspot cards, and the «Qué mide y qué no» note linking to `/metodologia#riesgo-en-rutas`. Loading is hatched skeleton bars; errors sit in a bordered sheet box with the server's Spanish message.
 
 ### Estadísticas
-A routed page (`src/pages/Estadisticas.tsx`, its sections in `src/pages/estadisticas/`) reusing the map page's own `FilterStrip` (without its map-only controls) and `TimeRule` at the top, synced to the URL; any set of years can be selected. Below them:
+A routed page (`src/pages/Estadisticas.tsx`, its sections in `src/pages/estadisticas/`) reusing the map page's own `FilterStrip` (with Año and Meses, without its map-only Capas) at the top, synced to the URL; any set of years can be selected. Below them:
 
 - **Resumen** (`dl`, no cards): the cases and the rate ×100.000 for the filtered period as large proportional figures (32–40px, the same sans). With one year, the change against the same months of the previous year; with several, the rate is the average per year and a small column chart shows the cases per selected year in the year ramp.
 - A sticky section index (a left rail at `lg:`, a horizontally-scrollable bar below it) linking to five `id`-anchored sections, each with a one-line "what this measures" caption and a "Cómo se calcula" link to the matching `/metodologia#anchor`. At `xl:` a section lays its charts out in two columns.

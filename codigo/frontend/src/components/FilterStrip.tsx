@@ -1,5 +1,6 @@
 import { Dropdown } from './Dropdown'
 import { Mark } from './Mark'
+import { TimeFilters, type TimeFiltersProps } from './TimeFilters'
 import type { AdminUnitOut } from '../lib/api'
 import type { CantonLayer, IncidentType } from '../lib/registry'
 import { layersSummary, typesSummary } from '../lib/filterSummary'
@@ -15,6 +16,8 @@ interface FilterStripProps {
   onProvince: (value: string | null) => void
   onCanton: (value: string | null) => void
   onToggleType: (type: IncidentType) => void
+  /** Year and month selection: the "Año" and "Meses" dropdowns. */
+  time: TimeFiltersProps
   /**
    * The map-only controls below: omitted entirely on the Estadísticas page,
    * which has no layer to switch and nothing for "actividad policial" to
@@ -55,6 +58,8 @@ export function FilterStrip(props: FilterStripProps) {
           onChange={props.onCanton}
         />
       </div>
+
+      <TimeFilters {...props.time} />
 
       <Dropdown label="Tipos" value={typesSummary(types)}>
         <fieldset>

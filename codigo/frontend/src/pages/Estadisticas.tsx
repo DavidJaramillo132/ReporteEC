@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react'
 import { FilterStrip } from '../components/FilterStrip'
-import { TimeRule } from '../components/TimeRule'
 import type { AdminUnitsResponse, MetaResponse } from '../lib/api'
 import { formatPeriodLabel } from '../lib/period'
 import { type Filters, placeName } from '../lib/registry'
@@ -70,14 +69,14 @@ export function Estadisticas({ filters, onUpdate, onChangeYears, meta, adminUnit
         onToggleType={(type) =>
           onUpdate({ types: filters.types.includes(type) ? filters.types.filter((t) => t !== type) : [...filters.types, type] })
         }
-      />
-      <TimeRule
-        years={filters.years}
-        months={filters.months}
-        availableYears={meta?.years ?? []}
-        lastMonth={lastMonth}
-        onYears={onChangeYears}
-        onMonths={(months) => onUpdate({ months })}
+        time={{
+          years: filters.years,
+          months: filters.months,
+          availableYears: meta?.years ?? [],
+          lastMonth,
+          onYears: onChangeYears,
+          onMonths: (months) => onUpdate({ months }),
+        }}
       />
 
       <div className="min-h-0 flex-1 bg-paper lg:overflow-y-auto">

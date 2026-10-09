@@ -9,6 +9,8 @@ interface DropdownProps {
   value: string
   /** Paints the button as active (sello) when the choice adds something to the map. */
   highlighted?: boolean
+  /** Extra classes for the value slot, e.g. a min width so the button does not jump as the summary changes. */
+  valueClassName?: string
   children: ReactNode
 }
 
@@ -17,7 +19,7 @@ interface DropdownProps {
  * The panel is position: fixed, measured from the button, so the filter
  * strip's horizontal scroller on mobile never clips it.
  */
-export function Dropdown({ label, value, highlighted = false, children }: DropdownProps) {
+export function Dropdown({ label, value, highlighted = false, valueClassName = '', children }: DropdownProps) {
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const panelId = useId()
@@ -76,7 +78,7 @@ export function Dropdown({ label, value, highlighted = false, children }: Dropdo
         <span className={`label border-r px-2 leading-[30px] ${highlighted ? 'border-paper/40' : 'border-ink'}`}>
           {label}
         </span>
-        <span className="flex items-center gap-2 pr-2.5 pl-2 whitespace-nowrap">
+        <span className={`flex items-center justify-between gap-2 pr-2.5 pl-2 whitespace-nowrap ${valueClassName}`}>
           {value}
           <svg
             aria-hidden="true"
