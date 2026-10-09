@@ -30,6 +30,13 @@ services:
   worker:
     mem_limit: 1280m
 
+  # Measured locally with the same image and the Ecuador data (MLD): about
+  # 660 MiB resident (docker stats) after the healthcheck passed and a few
+  # route requests. 1024m is roughly 1.5x that. Uses part of the headroom of
+  # the worker above, which is not running in production.
+  osrm:
+    mem_limit: 1024m
+
   caddy:
     container_name: reporteec-web
     ports: !reset []

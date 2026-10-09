@@ -40,3 +40,16 @@ def cors_origins() -> list[str]:
     if not raw:
         return DEFAULT_CORS_ORIGINS
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+DEFAULT_OSRM_URL = "http://osrm:5000"
+
+
+@lru_cache
+def osrm_url() -> str:
+    """Base URL of the OSRM routing service (no trailing slash).
+
+    Docker Compose runs it as the `osrm` service; OSRM_URL points elsewhere,
+    e.g. http://localhost:5000 when the backend runs outside Docker.
+    """
+    return os.environ.get("OSRM_URL", DEFAULT_OSRM_URL).rstrip("/")

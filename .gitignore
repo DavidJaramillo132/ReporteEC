@@ -54,6 +54,9 @@ Documentacion - ReporteEC/.obsidian/workspace-mobile.json
 # raw open-data downloads (re-fetched by the ETL, never versioned)
 codigo/data/raw/
 
+# prepared OSRM routing data (built by codigo/scripts/preparar_osrm.sh)
+codigo/data/osrm/
+
 # python (backend managed with uv)
 .venv/
 __pycache__/

@@ -343,3 +343,57 @@ REPORTEEC_SSH_HOST=usuario@ip
 REPORTEEC_SSH_KEY=/ruta/a/la/llave.pem
 REPORTEEC_REMOTE_DIR=projects/ReporteEC
 ```
+
+## 15. Rutas (OSRM)
+
+El cálculo de riesgo en rutas usa un servidor de rutas propio, OSRM, con el
+mapa de Ecuador de OpenStreetMap (perfil de auto, algoritmo MLD). El servicio
+`osrm` corre solo dentro de la red de Docker (puerto 5000, sin publicar) y el
+backend lo llama en `OSRM_URL` (por defecto `http://osrm:5000`).
+
+La preparación de los datos consume más memoria de la que tiene el VPS, así
+que se hace **en tu máquina** y solo se sube el resultado (unos 900 MB):
+
+```bash
+# Descarga el mapa, lo procesa y deja los archivos en codigo/data/osrm/
+codigo/scripts/preparar_osrm.sh
+
+# Lo mismo, y además los envía al servidor con rsync
+codigo/scripts/preparar_osrm.sh --subir
+```
+
+`--subir` lee los datos del servidor de `~/.config/reporteec/deploy.conf`,
+igual que `actualizar_datos.sh` (ver la sección 14).
+
+En el servidor, la primera vez levanta el servicio, y las siguientes veces
+reinícialo para que lea los datos nuevos:
+
+```bash
+cd projects/ReporteEC/codigo/despliegue
+docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env up -d osrm
+docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env restart osrm
+```
+
+Para comprobar que responde (debe devolver `"code":"Ok"`):
+
+```bash
+docker compose -f compose.prod.yml -f compose.behind-proxy.yml --env-file .env \
+  exec osrm wget -qO- 'http://127.0.0.1:5000/route/v1/driving/-79.8862,-2.1894;-79.5340,-1.8022?overview=false'
+```
+
+**Actualización.** Las calles cambian poco: repite la preparación cada
+unos meses (Geofabrik actualiza el archivo a diario). La imagen de OSRM está
+fijada a una versión (`v6.0.0`); si la cambias, vuelve a preparar los datos,
+porque los archivos de una versión mayor no sirven con otra.
+
+**Memoria.** El servicio usa unos 660 MiB en reposo y tiene un límite de
+1024 MB en `compose.behind-proxy.yml`. Ese espacio sale del que tenía el
+`worker`, que no corre en producción.
+
+En desarrollo, el servicio está bajo el perfil `osrm` para que
+`docker compose up` no exija los datos:
+
+```bash
+codigo/scripts/preparar_osrm.sh
+docker compose --profile osrm up -d osrm   # desde codigo/, puerto OSRM_PORT (5000)
+```

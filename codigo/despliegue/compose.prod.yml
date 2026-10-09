@@ -74,6 +74,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Routing engine for the route-risk feature. The data is prepared on the
+  # developer machine and uploaded (see README.md "Rutas (OSRM)"); the port
+  # is only reachable inside the compose network, never published.
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v6.0.0
+    command: ["osrm-routed", "--algorithm", "mld", "/data/ecuador-latest.osrm"]
+    volumes:
+      - ../data/osrm:/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null 'http://127.0.0.1:5000/nearest/v1/driving/-79.8862,-2.1894' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
   caddy:
     build:
       context: ..
