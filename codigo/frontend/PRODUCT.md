@@ -48,7 +48,7 @@ V1 capabilities:
 - Statistics: absolute count and rate per 100,000 inhabitants, always shown together, drawn as charts that each open the same numbers as a table. With several years, a rate divides the cases of those years by the population of those same years (an average rate per year), never by a single year's population.
 - A visible methodological note: the map shows reported cases, not all crime that happens.
 - A dismissible first-visit intro explains what the map shows and does not show; it can be reopened at any time from the map legend.
-- Pages, each with its own URL (`lib/router.ts`, a small History-API router, no routing library): Map (`/`), Statistics (`/estadisticas`), Methodology (`/metodologia`), License and sources (`/fuentes`).
+- Pages, each with its own URL (`lib/router.ts`, a small History-API router, no routing library): Map (`/`), Statistics (`/estadisticas`), Routes (`/rutas`), Methodology (`/metodologia`), License and sources (`/fuentes`).
 - Installable PWA, view-only, with offline-aware caching for the app shell, the API and both map tile sources.
 - **Reporting incidents is V3.** In V1 a visible "Reportar" entry point exists but only explains that it arrives in a future version. It must not pretend to work.
 

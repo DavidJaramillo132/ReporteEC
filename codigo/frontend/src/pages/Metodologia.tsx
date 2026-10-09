@@ -17,6 +17,7 @@ const TOC: TocEntry[] = [
   { id: 'detenciones', title: 'Detenciones: actividad policial' },
   { id: 'por-canton', title: 'Por qué siniestros y extorsión se ven por cantón' },
   { id: 'semaforo-extorsion', title: 'El semáforo de extorsión' },
+  { id: 'riesgo-en-rutas', title: 'Riesgo en rutas' },
   { id: 'desaparecidas', title: 'Personas desaparecidas' },
   { id: 'desde-que-anio', title: 'Desde qué año' },
   { id: 'poblacion-pequena', title: 'Cantones con poca población' },
@@ -175,6 +176,79 @@ export function Metodologia() {
             es una escala fija ni una medida absoluta de peligro: es una comparación relativa entre cantones en el
             mismo período, que puede correrse de un año a otro. Un cantón sin ninguna denuncia en ese período se marca
             aparte, como «sin denuncias», no como el nivel más bajo de la escala.
+          </p>
+        </Section>
+
+        <Section id="riesgo-en-rutas" title="Riesgo en rutas">
+          <p>
+            La página Rutas calcula un puntaje de 0 a 100 para un viaje en auto entre dos puntos, según la hora de
+            salida. El camino lo traza OSRM, un servicio de rutas propio que usa el mapa abierto de OpenStreetMap
+            para Ecuador; el tiempo de viaje es el que ese servicio estima para un auto.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Qué cuenta.</strong> Solo los homicidios, sicariatos y
+            femicidios que se dibujan en el mapa, con coordenada exacta o aproximada. Los casos ubicados únicamente
+            por cantón no cuentan, porque no dicen en qué calle ocurrieron. Cuenta cada caso registrado desde 2019 que
+            esté cerca de la ruta.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Qué tan cerca.</strong> La ruta se corta en tramos de 1
+            kilómetro. En un tramo cuya velocidad media es de 60 km/h o más (carretera) cuentan los casos a menos de
+            1.000 metros; en los demás (ciudad) cuentan los casos a menos de 200 metros. La carretera tiene un margen
+            más ancho porque en ruta abierta la distancia a un caso importa menos que en una calle de ciudad.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Qué tan reciente.</strong> Un caso pesa la mitad por cada año
+            que pasó: uno de hace un año pesa 0,5 y uno de hace dos años, 0,25. La antigüedad se mide desde la fecha
+            de corte de los datos, no desde hoy.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">La curva de 24 horas.</strong> Se suma el peso de los casos de
+            la ruta según la hora local en que ocurrieron. Esa curva se suaviza: cada hora se mezcla con la anterior y
+            la siguiente (un cuarto, la mitad y un cuarto), y las 23:00 son vecinas de las 00:00. Los casos que la
+            fuente registra sin hora no entran en la curva, pero sí cuentan en el total de la ruta. Si la ruta tiene
+            pocos casos, la curva se apoya en la de todo el país: cuanto menos casos, más se parece a la nacional,
+            para que dos o tres casos sueltos no inventen una hora peligrosa.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Del viaje al puntaje.</strong> Para cada hora de salida se
+            toma el peso total de los casos cercanos a la ruta y se reparte según la curva en las horas que dura el
+            viaje, empezando a la hora de salida (la última hora, en proporción a los minutos). Ese número es la
+            exposición. Si la ruta no tiene ningún caso cerca, la exposición es 0 y el puntaje es 0.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Qué significa el 0 a 100.</strong> Es un percentil. Para
+            tener una vara de medir, se calculó la exposición de cerca de 800 a 1.000 rutas entre cantones del
+            continente a las 24 horas de salida: cada cantón con sus 5 vecinos más cercanos, más 200 pares lejanos de
+            100 km o más. El puntaje dice en qué punto de esa lista cae tu ruta. Esa lista se vuelve a calcular cada
+            vez que se actualizan los datos. Las franjas son: 0 a 25 Seguro, 26 a 50 Precaución, 51 a 75 Riesgo alto y
+            más de 75 Crítico.
+          </p>
+          <p>
+            Un ejemplo: «70 de 100 a las 21:00» quiere decir que salir a las 21:00 expone a ese viaje a más muertes
+            violentas registradas que el 70 % de los viajes de referencia entre cantones; cae en «Riesgo alto». No
+            quiere decir que haya 70 % de probabilidad de que algo le pase a alguien. A las 03:00 la misma ruta puede
+            dar un número mucho menor, porque en todo el país las muertes violentas se concentran entre las 19:00 y
+            las 23:00 (entre 2.400 y 3.000 por cada hora del día) y bajan entre las 03:00 y las 05:00 (entre 790 y
+            1.200).
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Mejor hora y puntos críticos.</strong> La mejor hora de salida
+            es la de menor exposición; si varias quedan a menos de 5 % de diferencia, se indica la más temprana. Una
+            ruta sin casos cerca no tiene mejor hora. Un punto crítico es un kilómetro con al menos 3 de peso entre
+            los casos cercanos y, además, dentro del 10 % de kilómetros más cargados de esa ruta; se muestran hasta
+            5.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Lo que no incluye.</strong> El puntaje mide muertes violentas
+            registradas cerca de la ruta: no mide todo el delito ni el riesgo de cada persona que viaja. No incluye
+            robos ni secuestros, porque no existen datos con su ubicación, ni siniestros de tránsito, porque el INEC
+            solo publica el cantón. Si el origen o el destino queda a más de 2 km de una vía, no se calcula la ruta.
+          </p>
+          <p>
+            <strong className="font-semibold text-ink">Aviso sobre el tráfico.</strong> De noche viaja menos gente,
+            y estas cifras no se ajustan según la cantidad de tráfico: una hora con pocos casos puede ser también una
+            hora con pocos viajes. Úsalo como una referencia para decidir con cuidado, no como una garantía.
           </p>
         </Section>
 
