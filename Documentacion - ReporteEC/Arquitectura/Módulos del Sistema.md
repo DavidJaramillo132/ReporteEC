@@ -118,7 +118,7 @@ Un **adaptador por fuente**, todos con la misma interfaz:
 
 ### backend — rutas (`app/modules/routing/`)
 
-Calcula el riesgo de un trayecto por hora de salida. `osrm.py` llama al servicio OSRM; `geometry.py` corta la ruta en tramos de 1 km; `scoring.py` tiene la matemática pura (recencia, curva de 24 horas, exposición, franjas, percentil); `service.py` cruza la ruta con los incidentes en PostGIS y guarda en memoria las rutas recientes; `reference.py` genera la escala de referencia, que se guarda en la tabla `route_risk_reference` con el trabajo `python -m app.ingestion route-reference`. Método completo en [[Riesgos en Rutas por Horario]].
+Calcula el riesgo de un trayecto por hora de salida. `osrm.py` llama al servicio OSRM; `geometry.py` corta la ruta en tramos de 1 km; `scoring.py` tiene la matemática pura (recencia, curva de 24 horas, densidad por km según la hora de salida, franjas, percentil); `service.py` cruza la ruta con los incidentes en PostGIS y guarda en memoria las rutas recientes; `reference.py` genera la escala de referencia, que se guarda en la tabla `route_risk_reference` con el trabajo `python -m app.ingestion route-reference`. Método completo en [[Riesgos en Rutas por Horario]].
 
 ### despliegue — servidor de teselas
 

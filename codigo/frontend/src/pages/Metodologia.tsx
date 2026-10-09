@@ -214,7 +214,8 @@ export function Metodologia() {
           <p>
             <strong className="font-semibold text-ink">Casos por kilómetro.</strong> Se divide el peso total de los
             casos cercanos a la ruta (con y sin hora) entre los kilómetros de la ruta. Es el mismo número a cualquier
-            hora, y se muestra junto al total de casos.
+            hora, y se muestra junto al total de casos. Para el puntaje, en rutas de menos de 10 km se divide entre 10
+            km, para que un solo caso no dispare el puntaje.
           </p>
           <p>
             <strong className="font-semibold text-ink">Del viaje al puntaje.</strong> Para cada hora de salida se
@@ -229,7 +230,8 @@ export function Metodologia() {
             tener una vara de medir, se calculó ese valor por kilómetro para cerca de 800 a 1.000 rutas entre
             cantones del continente a las 24 horas de salida: cada cantón con sus 5 vecinos más cercanos, más 200
             pares lejanos de 100 km o más. El puntaje dice en qué punto de esa lista cae tu ruta. Como todo se mide
-            por kilómetro, una ruta del doble de largo con el doble de casos saca el mismo puntaje. Esa lista se vuelve a calcular cada
+            por kilómetro, una ruta del doble de largo con el doble de casos saca el mismo puntaje, siempre que tenga
+            la misma distribución horaria y el mismo horario de viaje. Esa lista se vuelve a calcular cada
             vez que se actualizan los datos. Las franjas son: 0 a 25 Seguro, 26 a 50 Precaución, 51 a 75 Riesgo alto y
             más de 75 Crítico.
           </p>
