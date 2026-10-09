@@ -1,6 +1,6 @@
 ---
 tags: [producto, rutas, movilidad, inteligencia-horaria, seguridad-vial]
-actualizado: 2026-10-09
+actualizado: 2026-10-10
 ---
 
 # Riesgos en Rutas por Horario
@@ -14,6 +14,8 @@ actualizado: 2026-10-09
 ## 1. El Problema: El Riesgo no es Estático, es Horario
 
 En Ecuador, las muertes violentas registradas dependen del reloj: se concentran entre las 19:00 y las 23:00 y son mínimas entre las 03:00 y las 05:00. Por eso una misma ruta puede tener un puntaje distinto según la hora de salida.
+
+El puntaje mide el **peligro por kilómetro**, no el total del viaje: una ruta larga no sale peor solo por ser larga. El total de casos cerca de la ruta se muestra aparte.
 * Los navegadores convencionales (Google Maps, Waze) optimizan por **tiempo de tráfico y distancia**, pero son ciegos al **riesgo delictivo histórico**.
 
 ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa de inteligencia de seguridad que evalúa la ruta**.
@@ -38,7 +40,7 @@ ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa 
    Curva de 24 horas: hora real de los casos, suavizada
    y apoyada en la curva nacional
                           │
-   Exposición por hora de salida  ──►  Percentil 0 - 100
+   Casos por km × peso de las horas del viaje  ──►  Percentil 0 - 100
                           │
         ┌─────────────────┼─────────────────┐
         ▼                 ▼                 ▼
@@ -51,13 +53,20 @@ ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa 
 2. **Buffer de influencia espacial:** la ruta se corta en tramos de 1 km. Un tramo con velocidad media de 60 km/h o más usa **1.000 metros**; los demás, **200 metros**.
 3. **Recencia:** peso $w_i = 0{,}5^{\,edad_i/365{,}25}$, con la edad (en días) medida desde la fecha de corte de los datos (un caso de hace un año pesa la mitad).
 4. **Curva horaria:** $raw[h]$ es la suma de $w_i$ de los casos de la ruta con hora registrada que ocurrieron a la hora local $h$ (0 a 23); los casos sin hora no entran aquí (en el código, `weighted_by_hour`). Se suaviza de forma circular: $suave[h] = 0{,}25\,raw[h-1] + 0{,}5\,raw[h] + 0{,}25\,raw[h+1]$. Se acerca a la curva nacional según $share[h] = (suave[h] + K \cdot nac[h]) / (\sum_h raw[h] + K)$, con $K = 20$.
-5. **Exposición:** para una salida a la hora $H$, $W$ (la suma de $w_i$ de **todos** los casos de la ruta, con o sin hora) por la suma de la curva sobre las horas que dura el viaje (duración de OSRM), empezando en $H$ y prorrateando la última hora por minutos. Sin casos cerca, exposición 0 y puntaje 0.
-6. **Puntaje 0 a 100:** percentil de esa exposición frente a las exposiciones agrupadas de unas 800 a 1.000 rutas de referencia entre cantones del continente, a las 24 horas de salida (cada cantón con sus 5 más cercanos, más 200 pares de 100 km o más). Se recalcula tras cada actualización de datos. Franjas: 0–25 Seguro, 26–50 Precaución, 51–75 Riesgo alto, más de 75 Crítico.
-7. **Mejor hora:** la de menor exposición; con empates dentro de 5 %, la más temprana. Sin casos, no hay mejor hora.
-8. **Errores:** si el origen o el destino queda a más de 2 km de una vía, la ruta no se calcula.
+5. **Casos por km:** $W / km$, donde $W$ es la suma de $w_i$ de **todos** los casos de la ruta (con o sin hora) y $km$ la distancia de OSRM. Es igual a cualquier hora y se muestra junto al total de casos.
+6. **Valor por hora de salida (densidad):** $densidad(H) = (W / km) \times 24 \times m(H)$. $m(H)$ es el promedio de $share$ sobre las horas que dura el viaje (duración de OSRM), empezando en $H$: cada hora pesa según los minutos que el viaje pasa en ella, y pasada la medianoche sigue en las 00:00. Un viaje de menos de una hora usa solo $share[H]$. Con una curva pareja ($share = 1/24$), $24 \times m(H) = 1$ y la densidad es igual a los casos por km. No depende del largo: el doble de casos en el doble de kilómetros da la misma densidad. Sin casos cerca, densidad 0 y puntaje 0.
+7. **Puntaje 0 a 100:** percentil de esa densidad frente a las densidades agrupadas de unas 800 a 1.000 rutas de referencia entre cantones del continente, a las 24 horas de salida (cada cantón con sus 5 más cercanos, más 200 pares de 100 km o más). La escala se guarda con su métrica (`density_per_km`); las escalas viejas, de exposición total, no se usan. Se recalcula tras cada actualización de datos. Franjas: 0–25 Seguro, 26–50 Precaución, 51–75 Riesgo alto, más de 75 Crítico.
+8. **Mejor hora:** la de menor densidad (como los casos por km no cambian con la hora, es la de menor $m(H)$); con empates dentro de 5 %, la más temprana. Sin casos, no hay mejor hora.
+9. **Errores:** si el origen o el destino queda a más de 2 km de una vía, la ruta no se calcula.
+
+> [!example] Ejemplo con números redondos
+> Una ruta de 100 km con $W = 20$ tiene 0,2 casos por km. Saliendo a las 22:00, un viaje de 90 minutos pasa una hora en las 22:00 y media hora en las 23:00. Si $share[22] = 6\,\%$ y $share[23] = 5\,\%$: $m(22) = (0{,}06 + 0{,}5 \times 0{,}05) / 1{,}5 \approx 0{,}0567$, y $densidad = 0{,}2 \times 24 \times 0{,}0567 \approx 0{,}27$. Si 0,27 supera al 70 % de las densidades de referencia, el puntaje es 70 («Riesgo alto»).
+
+> [!note] Por qué cambió (2026-10-10)
+> La primera versión del puntaje usaba la exposición total del viaje ($W$ por la suma de la curva en las horas del viaje). Con datos reales, esa cifra crecía con el largo de la ruta: 15 de 22 rutas entre cantones salían «Crítico». Ahora el puntaje mide peligro por kilómetro y el total de casos se muestra aparte.
 
 > [!warning] Lo que el puntaje no es
-> Mide muertes violentas registradas cerca de la ruta, no todo el delito ni el riesgo de cada persona. No se ajusta por tráfico: de noche viaja menos gente. Robos, secuestros y siniestros quedan fuera por falta de datos con ubicación.
+> Mide muertes violentas registradas por kilómetro de la ruta, no todo el delito ni el riesgo de cada persona. No se ajusta por tráfico: de noche viaja menos gente. Robos, secuestros y siniestros quedan fuera por falta de datos con ubicación.
 
 ### Descartado: multiplicadores fijos y pesos por tipo
 
@@ -70,10 +79,12 @@ El borrador inicial usaba multiplicadores por franja (madrugada $\times 1{,}6$, 
 Al ingresar una ruta, la interfaz presenta tres elementos concretos:
 
 ### A. Semáforo Global del Trayecto
-* 🟢 **Seguro (0–25 pts):** pocas muertes violentas registradas cerca de la ruta en el horario seleccionado, frente a las rutas de referencia.
-* 🟡 **Precaución (26–50 pts):** exposición moderada; transitable con atención.
-* 🟠 **Riesgo alto (51–75 pts):** exposición alta; conviene revisar la mejor hora de salida.
-* 🔴 **Crítico (>75 pts):** de las rutas con más muertes violentas registradas cerca; conviene evitar esa hora si se puede.
+* 🟢 **Seguro (0–25 pts):** pocas muertes violentas registradas por kilómetro en el horario seleccionado, frente a las rutas de referencia.
+* 🟡 **Precaución (26–50 pts):** densidad moderada; transitable con atención.
+* 🟠 **Riesgo alto (51–75 pts):** densidad alta; conviene revisar la mejor hora de salida.
+* 🔴 **Crítico (>75 pts):** de las rutas con más muertes violentas registradas por kilómetro; conviene evitar esa hora si se puede.
+
+Junto al semáforo se muestran el total de casos cerca de la ruta y los casos por km.
 
 El semáforo siempre lleva su texto y su forma, nunca solo el color.
 

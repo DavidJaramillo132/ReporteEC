@@ -1,6 +1,6 @@
 ---
 tags: [version, v2, rutas, movilidad, inteligencia-horaria]
-actualizado: 2026-10-09
+actualizado: 2026-10-10
 estado: en desarrollo
 ---
 
@@ -12,8 +12,8 @@ estado: en desarrollo
 
 Detalle de metodología en [[Riesgos en Rutas por Horario]] y modelo de negocio en [[Modelo de Monetización]].
 
-> [!info] Estado (2026-10-09)
-> Construida en la rama `feat/v2-rutas`: backend (módulo `routing`, OSRM, escala de referencia) y la página `/rutas`, más la sección «Riesgo en rutas» de la Metodología pública. Falta la revisión final, publicarla y recorrer la lista de la sección 4 en producción.
+> [!info] Estado (2026-10-10)
+> Publicada desde la rama `feat/v2-rutas`: backend (módulo `routing`, OSRM, escala de referencia) y la página `/rutas`, más la sección «Riesgo en rutas» de la Metodología pública. Con datos reales, el primer puntaje crecía con el largo de la ruta (15 de 22 rutas entre cantones salían «Crítico»); la rama `feat/v2-score-per-km` lo cambia a peligro por kilómetro. Falta publicar ese cambio y recorrer la lista de la sección 4 en producción.
 
 ---
 
@@ -25,9 +25,9 @@ Detalle de metodología en [[Riesgos en Rutas por Horario]] y modelo de negocio 
 * **Buffer espacial automático:** se decide por cada kilómetro de la ruta según su velocidad media: 1.000 metros si es de 60 km/h o más (carretera), 200 metros en los demás (ciudad).
 
 ### B. Evaluación del Nivel de Peligro por Horario
-* **Puntuación del trayecto (0 a 100):** es un percentil frente a unas 800 a 1.000 rutas de referencia entre cantones, y se muestra como semáforo con texto (Seguro, Precaución, Riesgo alto, Crítico).
+* **Puntuación del trayecto (0 a 100):** mide el peligro por kilómetro (casos por km según las horas del viaje), como percentil frente a unas 800 a 1.000 rutas de referencia entre cantones, y se muestra como semáforo con texto (Seguro, Precaución, Riesgo alto, Crítico). El total de casos cerca de la ruta y los casos por km se muestran aparte.
 * **Curva de riesgo en 24 horas:** la forma de la curva sale de la hora real de los casos cercanos a la ruta, suavizada y apoyada en la curva nacional cuando hay pocos casos. No usa multiplicadores fijos.
-* **Recomendación:** la mejor hora de salida (la de menor exposición; si varias empatan dentro de 5 %, la más temprana). Una ruta sin casos cerca no tiene mejor hora.
+* **Recomendación:** la mejor hora de salida (la de menor valor por kilómetro; si varias empatan dentro de 5 %, la más temprana). Una ruta sin casos cerca no tiene mejor hora.
 
 ### C. Detección de Tramos Críticos (*Blackspots*)
 * Un tramo es un kilómetro de la ruta con al menos 3 de peso entre los casos cercanos y dentro del 10 % más cargado de la ruta; hasta 5 por ruta.
@@ -48,7 +48,7 @@ Lo que se construyó, en el orden en que se hizo:
 |---|---|---|
 | 1 | Servidor de rutas propio | OSRM con el mapa de Ecuador de OpenStreetMap, preparado en la máquina del desarrollador y subido al servidor (en lugar de importar ejes viales de MTOP o pgRouting) |
 | 2 | Cruce espacial y curva horaria | Módulo `routing` del backend: casos cercanos a la ruta, peso por recencia (vida media de 12 meses) y curva de 24 horas |
-| 3 | Escala de referencia | Trabajo `route-reference`: exposición de unas 800 a 1.000 rutas entre cantones a las 24 horas, guardada como percentiles |
+| 3 | Escala de referencia | Trabajo `route-reference`: casos por km según la hora de unas 800 a 1.000 rutas entre cantones a las 24 horas, guardados como percentiles |
 | 4 | Endpoint de riesgo en FastAPI | `GET /api/routes/risk` con caché en memoria y buscador de cantones |
 | 5 | Interfaz en el frontend | Página `/rutas`: selector de origen y destino, semáforo, curva de 24 horas y lista de tramos críticos |
 | 6 | Metodología pública y vault | Sección «Riesgo en rutas» en `/metodologia` y esta documentación |
@@ -62,7 +62,7 @@ Después de la V2: documentación y claves de API para clientes B2B.
 - **No intentar competir como navegador GPS giro a giro con voz.** ReporteEC no es Waze ni Google Maps; su valor es el **diagnóstico de seguridad del recorrido**.
 - **No mezclar reportes de usuarios todavía.** Esta versión se nutre únicamente de los datos oficiales validados en la V1 para garantizar rigor matemático y cero costes de moderación.
 - **No sobrecargar la base de datos con rutas complejas.** Se guardan en memoria las últimas rutas consultadas.
-- **No presentar el puntaje como riesgo personal.** Mide muertes violentas registradas cerca de la ruta; no se ajusta por la cantidad de tráfico.
+- **No presentar el puntaje como riesgo personal.** Mide muertes violentas registradas por kilómetro de la ruta; no se ajusta por la cantidad de tráfico.
 
 ---
 
@@ -71,7 +71,7 @@ Después de la V2: documentación y claves de API para clientes B2B.
 Lista de verificación manual antes de dar la V2 por cerrada:
 
 - [ ] Ingresar una ruta conocida (ej. Guayaquil $\rightarrow$ Babahoyo) dibuja el trazado correcto en el mapa.
-- [ ] Cambiar la hora de viaje de 10:00 AM a 02:00 AM cambia el puntaje del semáforo.
+- [ ] Cambiar la hora de salida de 10:00 a 21:00 sube el puntaje en una ruta con casos nocturnos. (Los datos reales tienen su pico entre las 19:00 y las 23:00, no en la madrugada.)
 - [ ] Los incidentes detectados en el trayecto corresponden a los ocurridos dentro del buffer de la carretera.
 - [ ] El gráfico de curva de 24 horas muestra la variación del riesgo a lo largo del día.
 - [ ] La API responde en menos de 300 ms (p95) para consultas de ruta entre 20 pares de cantones.

@@ -427,14 +427,23 @@ cargarlas antes de `route-reference`, porque la escala se calcula entre
 cabeceras. Si a un cantón le falta cabecera, se usa un punto dentro de su
 polígono.
 
-**Escala del puntaje (0–100).** El puntaje de una ruta es un percentil: compara
-su exposición con la de unas 800 a 1.000 rutas de referencia (cifra aproximada; el trabajo imprime la exacta) entre cantones del
+**Escala del puntaje (0–100).** El puntaje de una ruta mide el peligro por
+kilómetro: es un percentil que compara sus casos por km, según las horas del
+viaje, con los de unas 800 a 1.000 rutas de referencia (cifra aproximada; el trabajo imprime la exacta) entre cantones del
 continente (cada cantón con sus 5 más cercanos, más 200 pares largos con
 semilla fija; Galápagos queda fuera). La escala se guarda en la tabla
-`route_risk_reference`, se conserva el historial y la API lee la más reciente
-(la API la detecta en la siguiente consulta, sin reiniciar). Hasta que exista una, la API
+`route_risk_reference` con su métrica (`density_per_km`), se conserva el
+historial y la API lee la más reciente de esa métrica (la detecta en la
+siguiente consulta, sin reiniciar). Hasta que exista una, la API
 responde sin puntaje (`score: null`, `score_available: false`): nunca inventa
 uno.
+
+**Al publicar el puntaje por kilómetro** (la migración que agrega la columna
+`metric`): las escalas ya guardadas eran de exposición total, quedan marcadas
+como `exposure_total` y la API no las usa. Después de
+`rec run --rm backend alembic upgrade head` y de levantar el backend nuevo,
+corre `route-reference` una vez; mientras tanto, la página muestra «Puntaje no
+disponible todavía».
 
 Se recalcula con el trabajo `route-reference`, que llama a OSRM unas 800 a 1.000
 veces, una tras otra (unos minutos). `actualizar_datos.sh` lo ejecuta como

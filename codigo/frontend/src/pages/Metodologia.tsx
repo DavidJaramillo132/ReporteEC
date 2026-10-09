@@ -182,7 +182,8 @@ export function Metodologia() {
         <Section id="riesgo-en-rutas" title="Riesgo en rutas">
           <p>
             La página Rutas calcula un puntaje de 0 a 100 para un viaje en auto entre dos puntos, según la hora de
-            salida. El camino lo traza OSRM, un servicio de rutas propio que usa el mapa abierto de OpenStreetMap
+            salida. El puntaje mide el peligro por kilómetro, no el total del viaje: una ruta larga no sale peor solo
+            por ser larga. El total de casos cerca de la ruta se muestra aparte. El camino lo traza OSRM, un servicio de rutas propio que usa el mapa abierto de OpenStreetMap
             para Ecuador; el tiempo de viaje es el que ese servicio estima para un auto.
           </p>
           <p>
@@ -211,37 +212,48 @@ export function Metodologia() {
             para que dos o tres casos sueltos no inventen una hora peligrosa.
           </p>
           <p>
+            <strong className="font-semibold text-ink">Casos por kilómetro.</strong> Se divide el peso total de los
+            casos cercanos a la ruta (con y sin hora) entre los kilómetros de la ruta. Es el mismo número a cualquier
+            hora, y se muestra junto al total de casos.
+          </p>
+          <p>
             <strong className="font-semibold text-ink">Del viaje al puntaje.</strong> Para cada hora de salida se
-            toma el peso total de los casos cercanos a la ruta y se reparte según la curva en las horas que dura el
-            viaje, empezando a la hora de salida (la última hora, en proporción a los minutos). Ese número es la
-            exposición. Si la ruta no tiene ningún caso cerca, la exposición es 0 y el puntaje es 0.
+            mira la curva en las horas que dura el viaje, empezando a la hora de salida, y se saca su promedio: cada
+            hora cuenta según los minutos que el viaje pasa en ella. Un viaje de menos de una hora usa solo la hora
+            de salida. Ese promedio se compara con una curva pareja (la misma parte, 1/24, en cada hora): si las horas
+            del viaje concentran el doble de lo normal, los casos por kilómetro de esa salida cuentan el doble. Si la
+            ruta no tiene ningún caso cerca, el valor es 0 y el puntaje es 0.
           </p>
           <p>
             <strong className="font-semibold text-ink">Qué significa el 0 a 100.</strong> Es un percentil. Para
-            tener una vara de medir, se calculó la exposición de cerca de 800 a 1.000 rutas entre cantones del
-            continente a las 24 horas de salida: cada cantón con sus 5 vecinos más cercanos, más 200 pares lejanos de
-            100 km o más. El puntaje dice en qué punto de esa lista cae tu ruta. Esa lista se vuelve a calcular cada
+            tener una vara de medir, se calculó ese valor por kilómetro para cerca de 800 a 1.000 rutas entre
+            cantones del continente a las 24 horas de salida: cada cantón con sus 5 vecinos más cercanos, más 200
+            pares lejanos de 100 km o más. El puntaje dice en qué punto de esa lista cae tu ruta. Como todo se mide
+            por kilómetro, una ruta del doble de largo con el doble de casos saca el mismo puntaje. Esa lista se vuelve a calcular cada
             vez que se actualizan los datos. Las franjas son: 0 a 25 Seguro, 26 a 50 Precaución, 51 a 75 Riesgo alto y
             más de 75 Crítico.
           </p>
           <p>
-            Un ejemplo: «70 de 100 a las 21:00» quiere decir que salir a las 21:00 expone a ese viaje a más muertes
-            violentas registradas que el 70 % de los viajes de referencia entre cantones; cae en «Riesgo alto». No
-            quiere decir que haya 70 % de probabilidad de que algo le pase a alguien. A las 03:00 la misma ruta puede
-            dar un número mucho menor, porque en todo el país las muertes violentas se concentran entre las 19:00 y
+            Un ejemplo con números redondos: una ruta de 100 km con un peso total de 20 casos tiene 0,2 casos por km.
+            Saliendo a las 22:00, un viaje de 1 h 30 min pasa una hora entera en las 22:00 y media hora en las 23:00.
+            Si la curva de la ruta pone el 6 % de los casos a las 22:00 y el 5 % a las 23:00, el promedio del viaje es
+            (6 % + 0,5 × 5 %) ÷ 1,5 ≈ 5,7 %, o sea 1,36 veces la parte pareja de 4,2 %. El valor de esa salida es 0,2
+            × 1,36 ≈ 0,27 casos por km. Si ese 0,27 supera al 70 % de los valores de referencia, el puntaje es «70 de
+            100» y cae en «Riesgo alto». No quiere decir que haya 70 % de probabilidad de que algo le pase a alguien.
+            A las 03:00 la misma ruta puede dar un número mucho menor, porque en todo el país las muertes violentas se concentran entre las 19:00 y
             las 23:00 (entre 2.400 y 3.000 casos en total desde 2019 por cada hora del día) y bajan entre las 03:00 y las
             05:00 (entre 790 y 1.200 en total desde 2019 por hora).
           </p>
           <p>
             <strong className="font-semibold text-ink">Mejor hora y puntos críticos.</strong> La mejor hora de salida
-            es la de menor exposición; si varias quedan a menos de 5 % de diferencia, se indica la más temprana. Una
+            es la de menor valor por kilómetro; si varias quedan a menos de 5 % de diferencia, se indica la más temprana. Una
             ruta sin casos cerca no tiene mejor hora. Un punto crítico es un kilómetro con al menos 3 de peso entre
             los casos cercanos y, además, dentro del 10 % de kilómetros más cargados de esa ruta; se muestran hasta
             5.
           </p>
           <p>
             <strong className="font-semibold text-ink">Lo que no incluye.</strong> El puntaje mide muertes violentas
-            registradas cerca de la ruta: no mide todo el delito ni el riesgo de cada persona que viaja. No incluye
+            registradas por kilómetro de la ruta: no mide todo el delito ni el riesgo de cada persona que viaja. No incluye
             robos ni secuestros, porque no existen datos con su ubicación, ni siniestros de tránsito, porque el INEC
             solo publica el cantón. Si el origen o el destino queda a más de 2 km de una vía, no se calcula la ruta.
           </p>
