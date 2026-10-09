@@ -1,6 +1,6 @@
 ---
 tags: [arquitectura, stack, infraestructura]
-actualizado: 2026-10-03
+actualizado: 2026-10-09
 ---
 # Stack e Infraestructura
 
@@ -20,15 +20,20 @@ actualizado: 2026-10-03
 | Gestor del frontend     | **Bun**                                      | Instala dependencias y ejecuta Vite. Solo se usa para desarrollar y construir                  |
 | API                     | **FastAPI** (Python)                         | Mismo lenguaje que la ingesta: un solo lenguaje en todo el servidor                            |
 | Teselas del mapa        | **Martin**                                   | Servidor de teselas del propio proyecto MapLibre; genera el mapa directo desde PostGIS         |
+| Rutas                   | **OSRM** (`osrm-backend` v6.0.0, perfil auto, MLD) | Servidor de rutas propio con el mapa abierto de OpenStreetMap; sin API de terceros. Ver más abajo |
 | Frontend                | **React + TypeScript + Vite + Tailwind CSS** | Aplicación centrada en el mapa; Vite es simple y rápido                                      |
 | Mapa                    | **MapLibre GL JS**                           | Ya elegido. Tiene capa de mapa de calor nativa                                                 |
-| PWA                     | **vite-plugin-pwa**                          | Instalación, service worker y, en v2, notificaciones                                          |
+| PWA                     | **vite-plugin-pwa**                          | Instalación, service worker y, en v3, notificaciones                                          |
 | Contenedores            | **Docker Compose**                           | Todo el sistema se levanta con un comando, igual en local y en el servidor                     |
 | Servidor web            | **Caddy**                                    | Ya elegido. HTTPS automático                                                                  |
 | Servidor                | **VPS Ubuntu Server en Azure**               | Ya elegido. Para empezar alcanza con 2 vCPU y 4 GB de RAM                                      |
 | Dominio                 | **GoDaddy**                                  | Ya elegido. Solo apunta al IP del VPS                                                          |
 
-### Solo para la v2
+### Rutas con OSRM (V2)
+
+El riesgo en rutas traza el camino con **OSRM** (imagen `ghcr.io/project-osrm/osrm-backend:v6.0.0`), con el mapa de Ecuador de OpenStreetMap, perfil de auto y algoritmo MLD. Corre como el servicio `osrm`, solo dentro de la red de Docker (sin puerto publicado). Los datos se preparan en la máquina del desarrollador con `codigo/scripts/preparar_osrm.sh` (en el VPS no alcanza la memoria) y se suben al servidor. En producción usa unos 660 MiB y tiene un límite de 1024 MB. Pasos en `codigo/despliegue/README.md` («Rutas (OSRM)»). El módulo `routing` del backend lo consume ([[Módulos del Sistema]]).
+
+### Solo para la v3
 
 | Necesidad              | Tecnología                                                                                                                               |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -43,7 +48,7 @@ PostgreSQL 17 con PostGIS 3 asume tanto el rol operacional (OLTP) como el analí
 ## Decisiones cerradas por esta recomendación
 
 **«Posgrest» es PostgreSQL, no PostgREST.** PostgREST genera una API
-automática, pero la v2 necesita lógica propia (votos, moderación, límites,
+automática, pero la v3 necesita lógica propia (votos, moderación, límites,
 notificaciones) que encaja mejor en FastAPI. Resuelve el riesgo 5 de
 [[Riesgos Abiertos]].
 
@@ -164,6 +169,7 @@ Internet ─► GoDaddy (DNS) ─► VPS Ubuntu (Azure, compartido con otros pro
                                   ├─ frontend     (archivos estáticos de la PWA)
                                   ├─ backend      (FastAPI)
                                   ├─ martin       (teselas)
+                                  ├─ osrm         (rutas; solo red interna)
                                   ├─ postgres     (PostgreSQL + PostGIS)
                                   └─ worker       (ingesta; apagado en producción)
 ```

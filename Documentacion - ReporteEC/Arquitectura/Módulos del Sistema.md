@@ -1,6 +1,6 @@
 ---
 tags: [arquitectura, modulos, estructura]
-actualizado: 2026-10-03
+actualizado: 2026-10-09
 ---
 # Módulos del Sistema
 
@@ -32,7 +32,8 @@ codigo/
 │   │   │   ├── territory/   provincias, cantones, población e indicadores cantonales
 │   │   │   ├── stats/       conteos y tasas por 100.000 hab.
 │   │   │   ├── meta/        estado de la carga de datos
-│   │   │   └── …            futuro: routes, notifications, almacenamiento (aún no existen)
+│   │   │   ├── routing/     V2: riesgo en rutas por hora (OSRM, puntaje, escala de referencia)
+│   │   │   └── …            futuro: notifications, almacenamiento (aún no existen)
 │   │   ├── ingestion/       pipeline de datos (no es un dominio de negocio)
 │   │   │   ├── __main__.py  CLI: `python -m app.ingestion <comando>`
 │   │   │   ├── jobs.py      tareas que usan la CLI y el worker
@@ -111,8 +112,13 @@ Un **adaptador por fuente**, todos con la misma interfaz:
 ### backend — API (`app/`)
 
 - v1: filtros, estadísticas (conteo y tasa), detalle de un incidente
-- v2: cuentas, reportes, votos, moderación, suscripciones, flujo en tiempo
+- V2: `GET /api/routes/risk` y `GET /api/places/search` (módulo `routing`)
+- v3: cuentas, reportes, votos, moderación, suscripciones, flujo en tiempo
   real, notificaciones
+
+### backend — rutas (`app/modules/routing/`)
+
+Calcula el riesgo de un trayecto por hora de salida. `osrm.py` llama al servicio OSRM; `geometry.py` corta la ruta en tramos de 1 km; `scoring.py` tiene la matemática pura (recencia, curva de 24 horas, exposición, franjas, percentil); `service.py` cruza la ruta con los incidentes en PostGIS y guarda en memoria las rutas recientes; `reference.py` genera la escala de referencia, que se guarda en la tabla `route_risk_reference` con el trabajo `python -m app.ingestion route-reference`. Método completo en [[Riesgos en Rutas por Horario]].
 
 ### despliegue — servidor de teselas
 

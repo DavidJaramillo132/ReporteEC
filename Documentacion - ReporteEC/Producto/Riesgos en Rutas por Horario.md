@@ -1,21 +1,19 @@
 ---
 tags: [producto, rutas, movilidad, inteligencia-horaria, seguridad-vial]
-actualizado: 2026-09-24
+actualizado: 2026-10-09
 ---
 
 # Riesgos en Rutas por Horario
 
 > [!abstract] Objetivo del módulo
-> Transformar los datos estáticos de criminalidad y siniestros en un **servicio de navegación con inteligencia de seguridad**.
+> Transformar los datos oficiales de muertes violentas en un **servicio de navegación con inteligencia de seguridad**.
 > Permite a cualquier usuario o empresa consultar un trayecto (Origen $\rightarrow$ Destino) y conocer **qué tan peligroso es el recorrido en función de la hora del día**, señalando los tramos críticos y la mejor ventana horaria para viajar.
 
 ---
 
 ## 1. El Problema: El Riesgo no es Estático, es Horario
 
-En Ecuador, la probabilidad de sufrir un asalto, secuestro exprés o interceptación armada en carretera depende críticamente del reloj:
-* Un recorrido entre Guayaquil y Quevedo a las 10:00 AM presenta un perfil de riesgo moderado.
-* El mismo recorrido a las 02:00 AM atraviesa corredores de altísima peligrosidad donde operan bandas de piratería terrestre.
+En Ecuador, las muertes violentas registradas dependen del reloj: se concentran entre las 19:00 y las 23:00 y son mínimas entre las 03:00 y las 05:00. Por eso una misma ruta puede tener un puntaje distinto según la hora de salida.
 * Los navegadores convencionales (Google Maps, Waze) optimizan por **tiempo de tráfico y distancia**, pero son ciegos al **riesgo delictivo histórico**.
 
 ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa de inteligencia de seguridad que evalúa la ruta**.
@@ -25,45 +23,45 @@ ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa 
 ## 2. Metodología de Cálculo
 
 ```
- Punto A (Origen) ──────────────── Ruta (LineString) ────────────────► Punto B (Destino)
-                                          │
-                             ┌────────────┴────────────┐
-                             ▼                         ▼
-                  Buffer Urbano (200 m)     Buffer Carretera (1.000 m)
-                             │                         │
-                             └────────────┬────────────┘
-                                          │
-                        Intersección espacial con PostGIS
-                                          │
-                        ┌─────────────────┴─────────────────┐
-                        ▼                                   ▼
-             Tipo y Gravedad del Delito            Franja Horaria del Hecho
-          (Homicidio > Secuestro > Robo)         (00:00–06:00 > 19:00–24:00)
-                                          │
-                                          ▼
-                         Índice de Riesgo del Trayecto (0 - 100)
-                                          │
-                     ┌────────────────────┼────────────────────┐
-                     ▼                    ▼                    ▼
-             Semáforo de Ruta      Tramos Críticos      Mejor Ventana Horaria
+ Punto A (Origen) ── OSRM (ruta en auto) ──► Punto B (Destino)
+                          │
+          Ruta cortada en tramos de 1 km
+                          │
+        ┌─────────────────┴─────────────────┐
+        ▼                                   ▼
+ Tramo a 60 km/h o más               Tramo más lento
+ Buffer de 1.000 m                   Buffer de 200 m
+        └─────────────────┬─────────────────┘
+                          │
+   Casos cercanos (PostGIS), con peso por recencia
+                          │
+   Curva de 24 horas: hora real de los casos, suavizada
+   y apoyada en la curva nacional
+                          │
+   Exposición por hora de salida  ──►  Percentil 0 - 100
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+ Semáforo de Ruta   Tramos Críticos   Mejor hora de salida
 ```
 
-### Factores de Ponderación:
+### Cómo se calcula:
 
-1. **Buffer de influencia espacial:**
-   - En vías urbanas: Se proyecta un área de **200 metros** alrededor de la calle o avenida.
-   - En carreteras y red vial estatal: Se proyecta un área de **1.000 metros** para capturar emboscadas y asaltos en bermas o gasolineras.
-2. **Ponderación por tipo de delito:**
-   - Secuestro y sicariato / homicidio: Peso máximo ($w = 1.0$).
-   - Robo a vehículos / personas armado: Peso alto ($w = 0.7$).
-   - Siniestro de tránsito grave: Peso preventivo ($w = 0.5$).
-3. **Modulador horario (Franjas de 24 horas):**
-   - **Madrugada (00:00 – 05:59):** Multiplicador $\times 1.6$ (menor tránsito, menor auxilio policial).
-   - **Noche (19:00 – 23:59):** Multiplicador $\times 1.3$.
-   - **Tarde (12:00 – 18:59):** Multiplicador $\times 1.0$.
-   - **Mañana (06:00 – 11:59):** Multiplicador $\times 0.8$.
-4. **Decaimiento temporal (Recencia):**
-   - Los incidentes del año en curso tienen peso del 100%; los de años anteriores decaen exponencialmente para no penalizar vías que ya cuentan con puestos de control militar o policial fijos.
+1. **Qué casos cuentan:** homicidios, sicariatos y femicidios que se dibujan en el mapa (ubicación exacta o aproximada; los de nivel cantón no cuentan). La hora se toma en hora local de Ecuador. Los casos sin hora registrada (guardados a las 00:00:00) no forman la curva horaria, pero sí cuentan en el total.
+2. **Buffer de influencia espacial:** la ruta se corta en tramos de 1 km. Un tramo con velocidad media de 60 km/h o más usa **1.000 metros**; los demás, **200 metros**.
+3. **Recencia:** peso $w = 0{,}5^{\,edad/365{,}25}$, con la edad medida desde la fecha de corte de los datos (un caso de hace un año pesa la mitad).
+4. **Curva horaria:** suma de pesos por hora local (0 a 23), suavizada de forma circular con el núcleo $[0{,}25;\ 0{,}5;\ 0{,}25]$. Se acerca a la curva nacional según $share[h] = (suave[h] + K \cdot nacional[h]) / (\sum raw + K)$, con $K = 20$.
+5. **Exposición:** para una salida a la hora $H$, el peso total de los casos de la ruta por la suma de la curva sobre las horas que dura el viaje (duración de OSRM), empezando en $H$ y prorrateando la última hora por minutos. Sin casos cerca, exposición 0 y puntaje 0.
+6. **Puntaje 0 a 100:** percentil de esa exposición frente a las exposiciones agrupadas de unas 800 a 1.000 rutas de referencia entre cantones del continente, a las 24 horas de salida (cada cantón con sus 5 más cercanos, más 200 pares de 100 km o más). Se recalcula tras cada actualización de datos. Franjas: 0–25 Seguro, 26–50 Precaución, 51–75 Riesgo alto, más de 75 Crítico.
+7. **Mejor hora:** la de menor exposición; con empates dentro de 5 %, la más temprana. Sin casos, no hay mejor hora.
+8. **Errores:** si el origen o el destino queda a más de 2 km de una vía, la ruta no se calcula.
+
+> [!warning] Lo que el puntaje no es
+> Mide muertes violentas registradas cerca de la ruta, no todo el delito ni el riesgo de cada persona. No se ajusta por tráfico: de noche viaja menos gente. Robos, secuestros y siniestros quedan fuera por falta de datos con ubicación.
+
+### Descartado: multiplicadores fijos y pesos por tipo
+
+El borrador inicial usaba multiplicadores por franja (madrugada $\times 1{,}6$, noche $\times 1{,}3$, tarde $\times 1{,}0$, mañana $\times 0{,}8$) y pesos por tipo de delito (robo $0{,}7$, siniestro $0{,}5$). Se descartaron porque los datos los contradicen: las muertes violentas del país se concentran entre las 19:00 y las 23:00 (de 2.400 a 3.000 por hora del día) y son mínimas entre las 03:00 y las 05:00 (de 790 a 1.200), lo contrario de «madrugada crítica». Además no hay datos con ubicación de robos ni secuestros, y los siniestros solo llegan por cantón. Ahora la curva sale de la hora real de los casos.
 
 ---
 
@@ -72,25 +70,27 @@ ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa 
 Al ingresar una ruta, la interfaz presenta tres elementos concretos:
 
 ### A. Semáforo Global del Trayecto
-* 🟢 **Ruta Segura (0–25 pts):** Baja concentración delictiva histórica en el horario seleccionado.
-* 🟡 **Precaución (26–50 pts):** Registro de siniestros o robos menores esporádicos; transitable con atención.
-* 🟠 **Riesgo Alto (51–75 pts):** Tramos recurrentes de asaltos o balaceras nocturnas; se sugiere no viajar de noche.
-* 🔴 **Riesgo Crítico (>75 pts):** Corredor con antecedentes frecuentes de secuestro, piratería de carretera o extorsión armada.
+* 🟢 **Seguro (0–25 pts):** pocas muertes violentas registradas cerca de la ruta en el horario seleccionado, frente a las rutas de referencia.
+* 🟡 **Precaución (26–50 pts):** exposición moderada; transitable con atención.
+* 🟠 **Riesgo alto (51–75 pts):** exposición alta; conviene revisar la mejor hora de salida.
+* 🔴 **Crítico (>75 pts):** de las rutas con más muertes violentas registradas cerca; conviene evitar esa hora si se puede.
+
+El semáforo siempre lleva su texto y su forma, nunca solo el color.
 
 ### B. Gráfico de Curva Horaria
 Un gráfico interactivo de 24 horas que responde a la pregunta:
 > *«¿A qué hora me conviene salir?»*
-Muestra los picos de peligro (ej. un pico pronunciado a partir de las 20:00) y recomienda la ventana óptima de traslado.
+Muestra el puntaje de cada hora de salida y señala la mejor hora, si la ruta tiene casos cerca.
 
 ### C. Alertas de «Tramos Negros» (*Blackspots*)
 Tarjetas descriptivas sobre puntos específicos del mapa:
-> ⚠️ **Km 42 Vía Santo Domingo–Quevedo:** *8 asaltos a transporte pesado y 2 tiroteos registrados entre 21:00 y 04:00 en los últimos 6 meses.*
+> ⚠️ **Km 42–43 de la ruta:** *casos registrados por tipo, las 3 horas pico y el rango de fechas.* Hasta 5 por ruta.
 
 ---
 
 ## 4. Oportunidad Estratégica y Monetización
 
-Este módulo es la piedra angular del modelo de negocio B2B de ReporteEC:
+Este módulo es la base de la futura línea B2B de ReporteEC. Las claves de API se harán **después de la V2** (ver [[V2 - Rutas e Inteligencia Horaria]]):
 1. **API para Logística y Carga:** Las flotas de transporte pesado pueden consultar la API para planificar despachos y calcular primas de riesgo de choferes.
 2. **Integración con Empresas de Rastreo Satelital (GPS):** Plataformas que rastrean flotas en Ecuador pueden integrar el semáforo de riesgo de ReporteEC en su panel de monitoreo.
 3. **Versión Ciudadana (Freemium):** En la web pública se permite consultar rutas de forma gratuita. En la versión Pro móvil, el usuario recibe alertas preventivas antes de tomar una ruta habitual.

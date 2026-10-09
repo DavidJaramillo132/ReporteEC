@@ -20,7 +20,7 @@ Fase 0 ──► V1 Observatorio Histórico ──► V2 Rutas e Inteligencia Ho
 | Versión | Qué resuelve | Documento |
 |---|---|---|
 | **Fase 0 + V1** | Mapa público con datos oficiales desde 2019, semáforo cantonal de extorsión/vacunas a negocios, estadísticas, metodología y licencia. **Publicada (2026-10-03)** en https://reporteec.playhubb.site; en cierre: faltan el worker diario y la prueba de la PWA en el teléfono | [[V1 - Mapa Histórico]] |
-| **V2** | Navegación e inteligencia de riesgo en rutas por franja horaria (origen $\rightarrow$ destino), tramos críticos y API B2B de logística | [[V2 - Rutas e Inteligencia Horaria]] |
+| **V2** | **En desarrollo (2026-10-09).** Riesgo en rutas por hora de salida (origen $\rightarrow$ destino) con OSRM propio, curva de 24 horas y tramos críticos. Las claves de API B2B quedan para después de la V2 | [[V2 - Rutas e Inteligencia Horaria]] |
 | **V3** | Reportes ciudadanos verificados, moderación, vista «Actualidad», notificaciones Web Push por zona y noticias de la Policía | [[V3 - Tiempo Real y Comunidad]] |
 | **V4** | Canales de Telegram colaboradores, ingesta automatizada con IA, geocodificación y monitoreo de fuentes | [[V4 - Red Colaborativa e IA]] |
 | **Negocio** | Modelo de sostenibilidad, API B2B para transporte y aseguradoras, y micro-suscripciones | [[Modelo de Monetización]] |
