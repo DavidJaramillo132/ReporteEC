@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.time import GUAYAQUIL
 from app.ingestion import __main__ as cli
 from app.main import app
-from app.modules.routing.models import RouteRiskReference
+from app.modules.routing.models import DENSITY_METRIC, EXPOSURE_METRIC, RouteRiskReference
 from app.modules.routing.osrm import OsrmClient
 from app.modules.routing.reference import (
     CantonPoint,
@@ -115,13 +115,14 @@ def test_job_counts_skipped_pairs_and_stores_the_distribution(
 
     # 5 mainland cantons -> 10 pairs. 0104 or 0105 is in 7 of them; 3 route.
     assert (result.routes_ok, result.routes_skipped) == (3, 7)
-    assert result.exposures_count == 3 * 24
+    assert result.values_count == 3 * 24
     assert len(result.breakpoints) == 101
     assert result.breakpoints == sorted(result.breakpoints)
     assert result.breakpoints[-1] > 0  # the incidents sit next to the routes
     row = db_session.scalars(select(RouteRiskReference)).one()
+    assert row.metric == DENSITY_METRIC
     assert list(row.breakpoints) == result.breakpoints
-    assert (row.routes_ok, row.routes_skipped, row.exposures_count) == (3, 7, 72)
+    assert (row.routes_ok, row.routes_skipped, row.values_count) == (3, 7, 72)
     assert row.data_cut == WHEN
     assert row.data_version and row.created_at is not None
     out = capsys.readouterr().out
@@ -234,12 +235,15 @@ def _use_road() -> list[httpx.Request]:
     return seen
 
 
-def _add_reference(session: Session, breakpoints: list[float]) -> RouteRiskReference:
+def _add_reference(
+    session: Session, breakpoints: list[float], metric: str = DENSITY_METRIC
+) -> RouteRiskReference:
     row = RouteRiskReference(
+        metric=metric,
         breakpoints=breakpoints,
         routes_ok=1,
         routes_skipped=0,
-        exposures_count=24,
+        values_count=24,
         data_cut=WHEN,
         data_version="test",
     )
@@ -262,7 +266,7 @@ def test_without_a_reference_scores_are_null_and_unavailable(
 
     body = _get(client)
 
-    assert any(row["exposure"] > 0 for row in body["hourly"])
+    assert any(row["density"] > 0 for row in body["hourly"])
     assert all(row["score"] is None and row["score_available"] is False for row in body["hourly"])
     assert all(row["band"] is None for row in body["hourly"])
 
@@ -272,8 +276,9 @@ def test_with_a_reference_scores_are_integers_and_bands_follow_band_for(
 ):
     _seed_incidents(db_session, count=6)
     _use_road()
-    # Linear reference over 0..0.5: exposure e scores about 200 * e.
-    breakpoints = [p * 0.005 for p in range(101)]
+    # 6 cases on ~11.1 km: densities up to ~6.5 per km at the busiest hour.
+    # Linear reference over 0..10: density d scores about 10 * d.
+    breakpoints = [p * 0.1 for p in range(101)]
     _add_reference(db_session, breakpoints)
 
     body = _get(client)
@@ -282,12 +287,12 @@ def test_with_a_reference_scores_are_integers_and_bands_follow_band_for(
     for row in body["hourly"]:
         assert row["score_available"] is True
         assert isinstance(row["score"], int) and 0 <= row["score"] <= 100
-        assert row["score"] == score_from_breakpoints(breakpoints, row["exposure"])
+        assert row["score"] == score_from_breakpoints(breakpoints, row["density"])
         assert row["band"] == band_for(row["score"]).value
         assert row["band_label"] == band_for(row["score"]).label
-        scores.append((row["exposure"], row["score"]))
+        scores.append((row["density"], row["score"]))
     scores.sort()
-    assert [s for _, s in scores] == sorted(s for _, s in scores)  # monotone in exposure
+    assert [s for _, s in scores] == sorted(s for _, s in scores)  # monotone in density
     assert body["selected"] == body["hourly"][21]
     assert len({s for _, s in scores}) > 1
 
@@ -299,13 +304,13 @@ def test_a_new_reference_changes_scores_without_rerouting(client: TestClient, db
     assert len(seen) == 1
 
     # The newest row wins; the context refreshes (TTL or restart) but the
-    # cached route analysis holds exposures only, so no OSRM call is repeated.
+    # cached route analysis holds densities only, so no OSRM call is repeated.
     _add_reference(db_session, [1000.0] * 101)  # old: everything scores 0
-    _add_reference(db_session, [0.0] * 101)  # new: any positive exposure scores 100
+    _add_reference(db_session, [0.0] * 101)  # new: any positive density scores 100
     body = _get(client)
 
     assert len(seen) == 1
-    assert body["selected"]["exposure"] > 0
+    assert body["selected"]["density"] > 0
     assert body["selected"]["score"] == 100
     assert body["selected"]["band"] == "critico"
 
@@ -342,3 +347,69 @@ def test_a_malformed_reference_is_ignored(client: TestClient, db_session: Sessio
     _add_reference(db_session, [0.0, 1.0])
 
     assert _get(client)["selected"]["score_available"] is False
+
+
+# --- the metric of the reference ------------------------------------------------
+
+
+def test_an_exposure_reference_is_never_used_to_score(client: TestClient, db_session: Session):
+    _seed_incidents(db_session)
+    _use_road()
+    _add_reference(db_session, [0.0] * 101, metric=EXPOSURE_METRIC)
+
+    body = _get(client)
+
+    assert body["selected"]["density"] > 0
+    assert body["selected"]["score"] is None
+    assert body["selected"]["score_available"] is False
+
+
+def test_the_newest_density_reference_wins_over_a_newer_exposure_one(
+    client: TestClient, db_session: Session
+):
+    _seed_incidents(db_session)
+    _use_road()
+    density = _add_reference(db_session, [1000.0] * 101)  # density: everything scores 0
+    _add_reference(db_session, [0.0] * 101, metric=EXPOSURE_METRIC)  # would score 100
+
+    assert get_reference(db_session).id == density.id
+    assert _get(client)["selected"]["score"] == 0
+
+
+def test_same_cases_per_km_on_routes_of_different_length_score_the_same(
+    client: TestClient, db_session: Session
+):
+    # Short road -79.60 -> -79.50 (~11.1 km) with 2 cases; long road -79.60 ->
+    # -79.40 (~22.2 km) with those 2 plus 2 more. All at 21h on the same day,
+    # so both routes and the national curve share one hourly shape, and both
+    # trips are under an hour: equal cases per km means equal density.
+    source = make_source(db_session)
+    for lon in (-79.58, -79.57, -79.45, -79.44):
+        make_incident(db_session, source, occurred_at=WHEN, lon=lon, lat=-1.996)
+    db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        lon2 = float(_COORDS.search(request.url.path).group(3))
+        road = [(-79.60, -2.0), (lon2, -2.0)]
+        return httpx.Response(200, json=straight_route_payload(road, [HIGHWAY_SPEED_MPS]))
+
+    client_ = fake_client(handler)
+    app.dependency_overrides[get_osrm_client] = lambda: client_
+    _add_reference(db_session, [p * 0.05 for p in range(101)])
+
+    def risk(to: str) -> dict:
+        response = client.get(
+            "/api/routes/risk", params={"from": "-79.6,-2.0", "to": to, "hour": 21}
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    short, long = risk("-79.5,-2.0"), risk("-79.4,-2.0")
+
+    assert (short["cases"]["total"], long["cases"]["total"]) == (2, 4)
+    assert long["distance_km"] == pytest.approx(2 * short["distance_km"], rel=1e-3)
+    assert long["cases_per_km"] == pytest.approx(short["cases_per_km"], rel=1e-3)
+    for a, b in zip(short["hourly"], long["hourly"], strict=True):
+        assert b["density"] == pytest.approx(a["density"], rel=1e-3)
+        assert b["score"] == a["score"]
+    assert short["selected"]["score"] > 0

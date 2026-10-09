@@ -291,12 +291,16 @@ export interface RouteCases {
   without_hour: number
 }
 
-/** One departure hour (local time). `score`/`band` are null while `score_available` is false. */
+/**
+ * One departure hour (local time). `density` is the danger per km the score
+ * ranks: `cases_per_km` x 24 x the trip's mean hourly share. `score`/`band`
+ * are null while `score_available` is false.
+ */
 export interface HourRisk {
   hour: number
   share: number
   weighted_cases: number
-  exposure: number
+  density: number
   score: number | null
   score_available: boolean
   band: RouteBand | null
@@ -324,6 +328,8 @@ export interface RouteRiskResponse {
   geometry: { type: 'LineString'; coordinates: [number, number][] }
   distance_km: number
   duration_min: number
+  /** Recency-weighted cases per km of route (`cases.weighted_total` / `distance_km`). */
+  cases_per_km: number
   cases: RouteCases
   selected: HourRisk
   best_hour: number | null

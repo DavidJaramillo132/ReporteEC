@@ -170,6 +170,14 @@ export function formatDuration(minutes: number): string {
   return m ? `${h} h ${m} min` : `${h} h`
 }
 
+const twoDecimals = new Intl.NumberFormat('es-EC', { maximumFractionDigits: 2 })
+
+/** Weighted cases per km with two decimals: 0.0338 -> «0,03»; a tiny positive value reads «menos de 0,01». */
+export function formatCasesPerKm(value: number): string {
+  if (value > 0 && value < 0.005) return 'menos de 0,01'
+  return twoDecimals.format(value)
+}
+
 /** A share (0..1) as a percentage with one decimal: 0.0421 -> «4,2 %». */
 export function formatShare(share: number): string {
   return `${oneDecimal.format(share * 100)} %`
@@ -358,7 +366,7 @@ export function pointLabel(point: LonLatPoint): string {
 
 /** The plain-Spanish limits of the score (Global Constraints); the API repeats them in `notes`. */
 export const ROUTE_NOTES = [
-  'El puntaje mide las muertes violentas registradas cerca de la ruta (homicidios, sicariatos y femicidios). No mide todos los delitos ni el riesgo de cada persona que viaja.',
+  'El puntaje mide las muertes violentas registradas por kilómetro de la ruta (homicidios, sicariatos y femicidios). No mide todos los delitos ni el riesgo de cada persona que viaja.',
   'De noche viaja menos gente, y estas cifras no se ajustan según la cantidad de tráfico.',
   'No incluye robos, secuestros ni siniestros de tránsito, porque no existen datos con su ubicación.',
 ]

@@ -3,9 +3,11 @@
 Units live in the field names (`distance_km`, `duration_min`, `km_from`) or
 in the field descriptions. Hours are local time (America/Guayaquil), 0-23.
 
-`score`/`band` stay null with `score_available: false` until a stored
-reference distribution of exposures exists to turn an exposure into a
-0-100 percentile; `exposure` is always present.
+The score measures danger per km: `density` (weighted cases per km x 24 x
+the trip's mean hourly share) as a 0-100 percentile. `score`/`band` stay
+null with `score_available: false` until a stored reference distribution of
+densities exists; `density` is always present. The case total is reported
+apart, in `cases`.
 """
 
 from datetime import date
@@ -48,7 +50,7 @@ class RouteCases(BaseModel):
     without_hour: int = Field(
         description=(
             "Cases with no recorded hour (stored as 00:00:00 local): counted in totals, "
-            "exposure and blackspots, left out of every hourly curve."
+            "density and blackspots, left out of every hourly curve."
         )
     )
 
@@ -67,14 +69,15 @@ class HourRisk(BaseModel):
             "cases without a recorded hour are not in any hour."
         )
     )
-    exposure: float = Field(
+    density: float = Field(
         description=(
-            "Weighted cases the trip is exposed to when leaving at this hour: route weighted "
-            "total x sum of share over the hours the trip spans, pro-rated by minutes."
+            "Danger per km when leaving at this hour: `cases_per_km` x 24 x the mean share over "
+            "the hours the trip spans, weighted by minutes (a trip under 1 h: share at this "
+            "hour). A flat hourly curve gives exactly `cases_per_km`."
         )
     )
     score: int | None = Field(
-        description="0-100 percentile of exposure against the reference; null when unavailable."
+        description="0-100 percentile of density against the reference; null when unavailable."
     )
     score_available: bool
     band: Band | None = Field(description="Semáforo band key for `score`; null with no score.")
@@ -105,13 +108,18 @@ class RouteRiskResponse(BaseModel):
     geometry: RouteGeometry
     distance_km: float
     duration_min: float = Field(description="OSRM driving time in minutes.")
+    cases_per_km: float = Field(
+        description=(
+            "Recency-weighted cases per km of route: `cases.weighted_total` / `distance_km`."
+        )
+    )
     cases: RouteCases
     selected: HourRisk = Field(description="Risk for the requested departure `hour`.")
     best_hour: int | None = Field(
         ge=0,
         le=23,
         description=(
-            "Departure hour with the lowest exposure; hours within 5% of it count as tied "
+            "Departure hour with the lowest density; hours within 5% of it count as tied "
             "and the earliest is reported. Null when the route has no case at all."
         ),
     )

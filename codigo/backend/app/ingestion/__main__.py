@@ -3,7 +3,7 @@
 Commands: homicidios, desaparecidas, detenidos, all (runs the three in
 order), download (CKAN files only, no database), cantons, canton-seats (each
 canton's cabecera from the committed OpenStreetMap CSV; run after cantons),
-population, extorsion, siniestros, route-reference (the exposure distribution
+population, extorsion, siniestros, route-reference (the density-per-km distribution
 behind the route risk 0-100 score; needs OSRM, see
 app.modules.routing.reference).
 --offline loads the MDI files already on disk instead of fetching CKAN, which blocks

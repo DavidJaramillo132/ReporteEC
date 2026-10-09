@@ -1,4 +1,4 @@
-"""Pure route-risk math: recency weights, the 24-hour curve, exposure, bands.
+"""Pure route-risk math: recency weights, the 24-hour curve, density, bands.
 
 No database and no HTTP here, so every rule is unit-tested by hand (see
 `tests/modules/routing/test_scoring.py`). The definitions are the V2 global
@@ -10,10 +10,13 @@ constraints, verbatim:
   circularly with the kernel [0.25, 0.5, 0.25] over h-1, h, h+1;
 - shrinkage toward the national curve:
   `share[h] = (smoothed[h] + K * national_share[h]) / (sum(raw) + K)`, K = 20;
-- exposure for departure hour H = W_total * the sum of `share` over the
-  hours the trip spans, starting at H and pro-rated by minutes. W_total is
-  the route's summed recency weights, so this equals the documented
-  "weighted cases per km x km x sum of share";
+- density for departure hour H = (W_total / distance_km) x 24 x m(H), where
+  W_total is the route's summed recency weights and m(H) the mean of
+  `share` over the hours a trip leaving at H spans, weighted by the minutes
+  spent in each (wrapping past midnight; a trip under 1 h gives
+  m(H) = share[H]). It does not grow with the route's length: twice the
+  cases on twice the kilometres is the same density. The `24 x` makes a
+  flat curve (share = 1/24) give density = weighted cases per km;
 - bands 0-25 Seguro, 26-50 Precaución, 51-75 Riesgo alto, >75 Crítico.
 """
 
@@ -98,46 +101,63 @@ def shrink_toward(
     return [(s + k * n) / denominator for s, n in zip(smoothed, national_share, strict=True)]
 
 
-def exposure_for_departure(
-    share: Sequence[float], weighted_total: float, departure_hour: int, duration_min: float
+def mean_share_for_departure(
+    share: Sequence[float], departure_hour: int, duration_min: float
 ) -> float:
-    """W_total x sum of `share` over the hours a trip leaving at `departure_hour` spans.
+    """Mean of `share` over the hours a trip leaving at `departure_hour` spans.
 
-    The trip leaves at the start of the hour; every full hour counts fully
-    and the last partial hour by its minutes (90 min leaving at 22h ->
-    share[22] + 0.5 * share[23]). A trip longer than a day wraps around.
+    Each hour weighs the minutes the trip spends in it: the trip leaves at
+    the start of the hour, every full hour counts fully and the last partial
+    hour by its minutes (90 min leaving at 22h ->
+    (share[22] + 0.5 * share[23]) / 1.5). A trip of 1 h or less is
+    `share[departure_hour]`. A trip longer than a day wraps around.
     """
     _check_day_curve(share)
-    total_share = 0.0
-    remaining = max(duration_min, 0.0)
+    if duration_min <= 60.0:
+        return share[departure_hour % HOURS_PER_DAY]
+    summed = 0.0
+    remaining = duration_min
     hour = departure_hour
     while remaining > 0:
-        fraction = min(remaining, 60.0) / 60.0
-        total_share += fraction * share[hour % HOURS_PER_DAY]
+        summed += min(remaining, 60.0) / 60.0 * share[hour % HOURS_PER_DAY]
         remaining -= 60.0
         hour += 1
-    return weighted_total * total_share
+    return summed / (duration_min / 60.0)
 
 
-def exposures_by_departure_hour(
-    share: Sequence[float], weighted_total: float, duration_min: float
+def density_for_departure(
+    share: Sequence[float], cases_per_km: float, departure_hour: int, duration_min: float
+) -> float:
+    """`cases_per_km x 24 x m(H)`: weighted cases per km, scaled by the trip's hours.
+
+    `cases_per_km` is W_total / distance_km. With a flat curve the density
+    equals `cases_per_km`; at an hour twice as busy as average, twice that.
+    """
+    return (
+        cases_per_km * HOURS_PER_DAY * mean_share_for_departure(share, departure_hour, duration_min)
+    )
+
+
+def densities_by_departure_hour(
+    share: Sequence[float], cases_per_km: float, duration_min: float
 ) -> list[float]:
-    """Exposure for each departure hour 0..23."""
+    """Density for each departure hour 0..23."""
     return [
-        exposure_for_departure(share, weighted_total, hour, duration_min)
+        density_for_departure(share, cases_per_km, hour, duration_min)
         for hour in range(HOURS_PER_DAY)
     ]
 
 
-def best_departure_hour(exposures: Sequence[float]) -> int:
-    """The departure hour with the minimum exposure.
+def best_departure_hour(densities: Sequence[float]) -> int:
+    """The departure hour with the minimum density.
 
     Hours within 5% of the minimum count as tied; the earliest (from 00h)
-    is reported.
+    is reported. Cases per km are the same at every hour, so this is also
+    the hour with the lowest mean share over the trip.
     """
-    _check_day_curve(exposures)
-    limit = min(exposures) * (1 + BEST_WINDOW_TOLERANCE)
-    return next(hour for hour, value in enumerate(exposures) if value <= limit)
+    _check_day_curve(densities)
+    limit = min(densities) * (1 + BEST_WINDOW_TOLERANCE)
+    return next(hour for hour, value in enumerate(densities) if value <= limit)
 
 
 class Band(StrEnum):
@@ -206,22 +226,22 @@ def peak_hours(weight_by_hour: Sequence[float], count: int = PEAK_HOURS) -> list
 
 
 # ---------------------------------------------------------------------------
-# The 0-100 scale: percentile of exposure against a reference distribution.
+# The 0-100 scale: percentile of density against a reference distribution.
 # ---------------------------------------------------------------------------
 
 BREAKPOINT_COUNT = 101  # percentiles 0..100
 
 
-def percentile_breakpoints(exposures: Sequence[float]) -> list[float]:
-    """The 101 percentiles (0..100) of `exposures`, linearly interpolated.
+def percentile_breakpoints(values: Sequence[float]) -> list[float]:
+    """The 101 percentiles (0..100) of `values`, linearly interpolated.
 
     Same convention as numpy's default: percentile p sits at sorted position
     `p / 100 * (n - 1)`. The result is non-decreasing. With heavy ties (for
-    example many routes with exposure exactly 0) many breakpoints are equal.
+    example many routes with density exactly 0) many breakpoints are equal.
     """
-    if not exposures:
+    if not values:
         raise ValueError("cannot build breakpoints from an empty sample")
-    ordered = sorted(exposures)
+    ordered = sorted(values)
     last = len(ordered) - 1
     points = []
     for p in range(BREAKPOINT_COUNT):
@@ -232,31 +252,31 @@ def percentile_breakpoints(exposures: Sequence[float]) -> list[float]:
     return points
 
 
-def score_from_breakpoints(breakpoints: Sequence[float], exposure: float) -> int:
-    """Whole 0-100 score of `exposure` against 101 percentile breakpoints.
+def score_from_breakpoints(breakpoints: Sequence[float], value: float) -> int:
+    """Whole 0-100 score of `value` (a density) against 101 percentile breakpoints.
 
-    Method: p = the largest integer with `breakpoints[p] <= exposure` (the
-    percentile the exposure reaches; with ties it is the top of the tie).
+    Method: p = the largest integer with `breakpoints[p] <= value` (the
+    percentile the value reaches; with ties it is the top of the tie).
     Between breakpoints p and p + 1 the score is interpolated linearly and
     rounded half up to a whole number. Clamped to 0-100: below the lowest
-    reference exposure is 0, at or above the highest is 100.
+    reference value is 0, at or above the highest is 100.
 
-    Exposure <= 0 is always 0: a route with no registered case nearby is the
+    A value <= 0 is always 0: a route with no registered case nearby is the
     lowest band even when more than a quarter of the reference routes also
     have none (then breakpoints 0..k are all 0 and the tie rule alone would
-    give such a route a score of k). Monotone: a higher exposure never
-    scores lower.
+    give such a route a score of k). Monotone: a higher value never scores
+    lower.
     """
     if len(breakpoints) != BREAKPOINT_COUNT:
         raise ValueError(f"expected {BREAKPOINT_COUNT} breakpoints, got {len(breakpoints)}")
-    if not exposure > 0:  # also NaN
+    if not value > 0:  # also NaN
         return 0
-    p = bisect.bisect_right(breakpoints, exposure) - 1
+    p = bisect.bisect_right(breakpoints, value) - 1
     if p < 0:
         return 0
     if p >= BREAKPOINT_COUNT - 1:
         return 100
     low, high = breakpoints[p], breakpoints[p + 1]
-    # bisect_right guarantees high > exposure >= low, so high > low.
-    fractional = p + (exposure - low) / (high - low)
+    # bisect_right guarantees high > value >= low, so high > low.
+    fractional = p + (value - low) / (high - low)
     return max(0, min(100, math.floor(fractional + 0.5)))

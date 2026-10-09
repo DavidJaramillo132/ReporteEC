@@ -1,4 +1,4 @@
-"""The 0-100 scale: percentile breakpoints and the exposure -> score mapping (pure math)."""
+"""The 0-100 scale: percentile breakpoints and the density -> score mapping (pure math)."""
 
 import pytest
 
@@ -11,7 +11,7 @@ from app.modules.routing.scoring import (
 )
 from app.modules.routing.service import no_reference_score, reference_score_fn
 
-# Breakpoint p = p / 10, so exposure e sits at percentile 10 * e.
+# Breakpoint p = p / 10, so density d sits at percentile 10 * d.
 LINEAR = [p / 10 for p in range(BREAKPOINT_COUNT)]
 
 
@@ -37,7 +37,7 @@ def test_breakpoints_never_decrease():
 
 
 @pytest.mark.parametrize(
-    ("exposure", "score"),
+    ("density", "score"),
     [
         (0.0, 0),
         (0.04, 0),  # 0.4 of the way to breakpoint 1: rounds down
@@ -49,42 +49,42 @@ def test_breakpoints_never_decrease():
         (500.0, 100),  # above the highest breakpoint: clamped
     ],
 )
-def test_score_interpolates_between_breakpoints_and_rounds(exposure: float, score: int):
-    assert score_from_breakpoints(LINEAR, exposure) == score
+def test_score_interpolates_between_breakpoints_and_rounds(density: float, score: int):
+    assert score_from_breakpoints(LINEAR, density) == score
 
 
-def test_exposure_below_the_lowest_breakpoint_is_zero():
+def test_density_below_the_lowest_breakpoint_is_zero():
     shifted = [5.0 + p for p in range(101)]
     assert score_from_breakpoints(shifted, 1.0) == 0
     assert score_from_breakpoints(shifted, 5.0) == 0
     assert score_from_breakpoints(shifted, 6.0) == 1
 
 
-def test_ties_take_the_top_of_the_tie_but_zero_exposure_stays_zero():
-    # 40% of the reference sample has exactly zero exposure: breakpoints 0..40 are 0.
+def test_ties_take_the_top_of_the_tie_but_zero_density_stays_zero():
+    # 40% of the reference sample has exactly zero density: breakpoints 0..40 are 0.
     tied = [0.0] * 41 + [float(p - 40) for p in range(41, 101)]
-    # A positive exposure reaches the largest percentile it ties with or passes.
+    # A positive density reaches the largest percentile it ties with or passes.
     assert score_from_breakpoints(tied, 0.0001) == 40
     # ...but no registered case near the route is the lowest score, never 40.
     assert score_from_breakpoints(tied, 0.0) == 0
     assert score_from_breakpoints(tied, 1.0) == 41
 
 
-def test_all_zero_reference_scores_any_positive_exposure_100():
+def test_all_zero_reference_scores_any_positive_density_100():
     flat = [0.0] * 101
     assert score_from_breakpoints(flat, 0.0) == 0
     assert score_from_breakpoints(flat, 0.001) == 100
 
 
-def test_higher_exposure_never_scores_lower():
+def test_higher_density_never_scores_lower():
     breakpoints = percentile_breakpoints([0, 0, 0, 0.2, 0.2, 1, 1, 1, 3, 8, 8, 20, 55])
-    exposures = [i * 0.37 for i in range(0, 200)]
-    scores = [score_from_breakpoints(breakpoints, e) for e in exposures]
+    densities = [i * 0.37 for i in range(0, 200)]
+    scores = [score_from_breakpoints(breakpoints, d) for d in densities]
     assert scores == sorted(scores)
     assert all(0 <= s <= 100 and isinstance(s, int) for s in scores)
 
 
-def test_nan_and_negative_exposure_score_zero():
+def test_nan_and_negative_density_score_zero():
     assert score_from_breakpoints(LINEAR, float("nan")) == 0
     assert score_from_breakpoints(LINEAR, -3.0) == 0
 
@@ -103,3 +103,14 @@ def test_scores_map_to_the_documented_bands():
 
 def test_no_reference_means_no_score():
     assert no_reference_score(12.3) is None
+
+
+def test_a_density_scores_by_its_percentile_among_reference_densities():
+    # Five reference routes x hours with these densities (cases per km x 24 x m).
+    sample = [0.0, 0.1, 0.2, 0.4, 0.8]
+    breakpoints = percentile_breakpoints(sample)
+
+    # Sorted positions 0..4 are percentiles 0, 25, 50, 75, 100.
+    assert score_from_breakpoints(breakpoints, 0.2) == 50
+    assert score_from_breakpoints(breakpoints, 0.25) == 56  # a quarter of 50 -> 75: 56.25
+    assert score_from_breakpoints(breakpoints, 0.8) == 100

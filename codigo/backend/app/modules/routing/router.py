@@ -58,7 +58,7 @@ def get_osrm_client() -> OsrmClient:
 
 
 def get_score_fn(session: Session = Depends(get_session)) -> ScoreFn:
-    """FastAPI dependency: exposure -> 0-100 score from the newest stored reference.
+    """FastAPI dependency: density -> 0-100 score from the newest stored density reference.
 
     Without a reference row every score is None (`score_available: false`).
     """

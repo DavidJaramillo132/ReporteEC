@@ -9,8 +9,10 @@ The tiny fixture used throughout (`_RAW`): weighted cases 4.0 at 00h and
 - shrinkage toward a uniform national curve (1/24 each), K = 20:
   share[h] = (s[h] + 20/24) / (6 + 20) -> share[0] = 20/156,
   share[23] = 17/156, share[5] = 5/156.
-- exposure leaving at 23h on a 90-minute trip:
-  W_total * (share[23] + 0.5 * share[0]) = 6 * 27/156 = 162/156.
+- mean share m(23) of a 90-minute trip leaving at 23h:
+  (share[23] + 0.5 * share[0]) / 1.5 = (27/156) / 1.5 = 18/156.
+- density for 6 weighted cases on a 60 km route, leaving at 23h on that trip:
+  (6 / 60) * 24 * 18/156 = 43.2/156.
 """
 
 import math
@@ -23,9 +25,10 @@ from app.modules.routing.scoring import (
     Band,
     band_for,
     best_departure_hour,
-    exposure_for_departure,
-    exposures_by_departure_hour,
+    densities_by_departure_hour,
+    density_for_departure,
     has_recorded_hour,
+    mean_share_for_departure,
     normalize,
     peak_hours,
     recency_weight,
@@ -82,37 +85,76 @@ def test_normalize_of_an_empty_curve_is_uniform():
     assert normalize([0.0] * 24) == pytest.approx(_UNIFORM)
 
 
-def test_exposure_spans_the_trip_hours_pro_rated_by_minutes():
+def test_mean_share_of_a_90_minute_trip_at_22h_by_hand():
+    share = [0.0] * 24
+    share[22] = 0.09
+    share[23] = 0.06
+
+    # (1 * share[22] + 0.5 * share[23]) / 1.5 = 0.12 / 1.5
+    assert mean_share_for_departure(share, 22, 90) == pytest.approx(0.08)
+
+
+def test_mean_share_spans_the_trip_hours_pro_rated_by_minutes():
     share = shrink_toward(smooth_circular(_RAW), _UNIFORM)
 
-    assert exposure_for_departure(share, 6.0, 23, 90) == pytest.approx(162 / 156)
+    assert mean_share_for_departure(share, 23, 90) == pytest.approx(18 / 156)
 
 
-def test_exposure_of_a_short_trip_is_a_fraction_of_one_hour():
-    share = [0.0] * 24
-    share[10] = 0.5
-    share[11] = 0.5
-
-    assert exposure_for_departure(share, 2.0, 10, 30) == pytest.approx(2.0 * 0.5 * 0.5)
-
-
-def test_exposure_wraps_past_midnight_and_past_a_full_day():
+def test_mean_share_of_a_trip_under_one_hour_is_the_departure_hour_share():
     share = normalize([float(h) for h in range(24)])
 
-    # 25 hours leaving at 22h: every hour once, plus 22h a second time.
-    assert exposure_for_departure(share, 1.0, 22, 25 * 60) == pytest.approx(1.0 + share[22])
+    assert mean_share_for_departure(share, 10, 30) == share[10]
+    assert mean_share_for_departure(share, 10, 60) == share[10]
+    assert mean_share_for_departure(share, 10, 0) == share[10]
 
 
-def test_exposure_of_a_zero_length_trip_is_zero():
-    assert exposure_for_departure(_UNIFORM, 5.0, 8, 0) == 0
+def test_mean_share_wraps_past_midnight():
+    share = normalize([float(h) for h in range(24)])  # share[h] = h / 276
+
+    # 150 min leaving at 23h: 23h fully, 00h fully, half of 01h, over 2.5 h.
+    expected = (23 / 276 + 0 / 276 + 0.5 * 1 / 276) / 2.5
+    assert mean_share_for_departure(share, 23, 150) == pytest.approx(expected)
 
 
-def test_exposures_by_departure_hour_has_one_value_per_hour():
+def test_mean_share_of_a_trip_longer_than_a_day_wraps_again():
+    share = normalize([float(h) for h in range(24)])
+
+    # 25 hours leaving at 22h: every hour once (sum 1), plus 22h a second time.
+    assert mean_share_for_departure(share, 22, 25 * 60) == pytest.approx((1.0 + share[22]) / 25)
+
+
+def test_density_by_hand():
     share = shrink_toward(smooth_circular(_RAW), _UNIFORM)
-    exposures = exposures_by_departure_hour(share, 6.0, 90)
 
-    assert len(exposures) == 24
-    assert exposures[23] == pytest.approx(162 / 156)
+    # 6 weighted cases over 60 km -> 0.1 per km; x 24 x m(23h) of a 90-min trip.
+    assert density_for_departure(share, 6 / 60, 23, 90) == pytest.approx(43.2 / 156)
+
+
+def test_a_flat_curve_gives_a_density_equal_to_the_cases_per_km():
+    for hour, minutes in [(0, 20), (13, 90), (22, 600), (5, 3000)]:
+        assert density_for_departure(_UNIFORM, 0.35, hour, minutes) == pytest.approx(0.35)
+
+
+def test_density_does_not_depend_on_route_length():
+    share = shrink_toward(smooth_circular(_RAW), _UNIFORM)
+    # Twice the cases on a twice-as-long route with the same trip length in hours.
+    short = densities_by_departure_hour(share, 6 / 60, 90)
+    long = densities_by_departure_hour(share, 12 / 120, 90)
+
+    assert long == pytest.approx(short)
+
+
+def test_density_with_no_cases_is_zero():
+    assert densities_by_departure_hour(_UNIFORM, 0.0, 45) == [0.0] * 24
+
+
+def test_densities_by_departure_hour_has_one_value_per_hour():
+    share = shrink_toward(smooth_circular(_RAW), _UNIFORM)
+    densities = densities_by_departure_hour(share, 6 / 60, 90)
+
+    assert len(densities) == 24
+    assert densities[23] == pytest.approx(43.2 / 156)
+    assert densities[5] == pytest.approx(0.1 * 24 * (5 / 156 + 0.5 * 5 / 156) / 1.5)
 
 
 def test_recency_weight_halves_at_one_year():
@@ -150,23 +192,23 @@ def test_band_rejects_a_score_outside_0_100(score: float):
         band_for(score)
 
 
-def test_best_departure_is_the_minimum_exposure():
-    exposures = [5.0] * 24
-    exposures[14] = 1.0
+def test_best_departure_is_the_minimum_density():
+    densities = [5.0] * 24
+    densities[14] = 1.0
 
-    assert best_departure_hour(exposures) == 14
+    assert best_departure_hour(densities) == 14
 
 
 def test_best_departure_reports_the_earliest_hour_within_five_percent():
-    exposures = [5.0] * 24
-    exposures[14] = 1.0
-    exposures[6] = 1.05  # within 5% of the minimum: earlier, so it wins
-    exposures[3] = 1.06  # just outside
+    densities = [5.0] * 24
+    densities[14] = 1.0
+    densities[6] = 1.05  # within 5% of the minimum: earlier, so it wins
+    densities[3] = 1.06  # just outside
 
-    assert best_departure_hour(exposures) == 6
+    assert best_departure_hour(densities) == 6
 
 
-def test_best_departure_with_no_exposure_at_all_is_midnight():
+def test_best_departure_with_no_density_at_all_is_midnight():
     assert best_departure_hour([0.0] * 24) == 0
 
 

@@ -28,11 +28,11 @@ from app.modules.routing.service import (
     NOTES,
     RouteAnalysis,
     RouteCase,
-    RouteExposure,
+    RouteDensity,
     WeightedCase,
     _national_cache,
     _route_cache,
-    compute_route_exposure,
+    compute_route_density,
     load_national_context,
 )
 from tests.factories import make_incident, make_source
@@ -229,17 +229,19 @@ def test_response_shape_with_no_score_until_a_reference_exists(
         assert row["band_label"] is None
     # By hand. The cut is 22:00, so w(22h) = 1 and w(21h) = 0.5 ** (1 h / 1 year).
     # These three are also the whole national curve, so share == national share
-    # == smoothed / total, and exposure(H) = W_total * share[H] * trip_h (the
-    # trip is under an hour) = smoothed[H] * trip_h.
+    # == smoothed / W_total. The trip is under an hour, so m(H) = share[H] and
+    # density(H) = W_total / km * 24 * share[H] = 24 * smoothed[H] / km.
     w21 = 0.5 ** ((1 / 24) / 365.25)
-    trip_h = road["routes"][0]["duration"] / 3600
+    km = road["routes"][0]["distance"] / 1000
     smoothed = {20: 0.25 * w21, 21: 0.5 * w21 + 0.25 * 2, 22: 0.25 * w21 + 0.5 * 2, 23: 0.5}
     for hour, row in enumerate(body["hourly"]):
-        expected = smoothed.get(hour, 0.0) * trip_h
-        assert row["exposure"] == pytest.approx(expected, abs=1e-4), hour
+        expected = 24 * smoothed.get(hour, 0.0) / km
+        assert row["density"] == pytest.approx(expected, abs=1e-6), hour
         assert row["share"] == pytest.approx(smoothed.get(hour, 0.0) / (2 + w21), abs=1e-6)
+        assert "exposure" not in row
     assert body["cases"]["weighted_total"] == pytest.approx(2 + w21, abs=1e-4)
-    # Every hour outside 20-23h has zero exposure: the earliest, 00h, wins.
+    assert body["cases_per_km"] == pytest.approx((2 + w21) / km, abs=1e-4)
+    # Every hour outside 20-23h has zero density: the earliest, 00h, wins.
     assert body["best_hour"] == 0
     assert body["low_data"] is True
     assert body["notes"] == list(NOTES)
@@ -265,7 +267,8 @@ def test_a_route_with_no_cases_follows_the_national_curve(client: TestClient, db
     body = _ok(_risk(client))
 
     assert body["cases"]["total"] == 0
-    assert [row["exposure"] for row in body["hourly"]] == [0.0] * 24
+    assert body["cases_per_km"] == 0.0
+    assert [row["density"] for row in body["hourly"]] == [0.0] * 24
     # All 24 hours tie at zero: no best hour to suggest, but the route is there.
     assert body["best_hour"] is None
     assert len(body["geometry"]["coordinates"]) == 2
@@ -390,7 +393,7 @@ def test_the_cache_keeps_no_route_geometry_pieces_or_case_rows(
     (cached,) = _route_cache._items.values()
     assert isinstance(cached, RouteAnalysis)
     reachable = _instances_reachable_from(cached)
-    for heavy in (OsrmRoute, RoutePiece, RouteExposure, RouteCase, WeightedCase, datetime):
+    for heavy in (OsrmRoute, RoutePiece, RouteDensity, RouteCase, WeightedCase, datetime):
         assert heavy not in reachable, heavy.__name__
     # The cached answer is the same answer.
     assert _ok(_risk(client)) == body
@@ -467,10 +470,10 @@ def test_a_case_without_hour_counts_but_feeds_no_hourly_curve(
     assert weighted[3] == 1.0
     assert sum(weighted) == 1.0
     # The national curve also only has the 03h case: share 0.25 / 0.5 / 0.25.
-    # Exposure still uses W_total, which includes the no-hour case.
-    trip_h = road["routes"][0]["duration"] / 3600
-    assert body["hourly"][3]["exposure"] == pytest.approx((1 + w_midnight) * 0.5 * trip_h, abs=1e-4)
-    assert body["hourly"][0]["exposure"] == 0.0
+    # Density still uses W_total, which includes the no-hour case.
+    km = road["routes"][0]["distance"] / 1000
+    assert body["hourly"][3]["density"] == pytest.approx((1 + w_midnight) / km * 24 * 0.5, abs=1e-6)
+    assert body["hourly"][0]["density"] == 0.0
 
 
 def test_the_national_curve_leaves_out_cases_without_hour(db_session: Session):
@@ -690,7 +693,7 @@ def test_galapagos_is_inside_the_accepted_box(client: TestClient, db_session: Se
 # --- the service without HTTP ---------------------------------------------------
 
 
-def test_exposure_is_computable_without_http_in_one_spatial_query(db_session: Session):
+def test_density_is_computable_without_http_in_one_spatial_query(db_session: Session):
     source = make_source(db_session)
     make_incident(db_session, source, occurred_at=WHEN, **_north_of_road(100))
     db_session.commit()
@@ -705,16 +708,17 @@ def test_exposure_is_computable_without_http_in_one_spatial_query(db_session: Se
 
     event.listen(engine, "before_cursor_execute", count)
     try:
-        exposure = compute_route_exposure(db_session, route, context)
+        density = compute_route_density(db_session, route, context)
     finally:
         event.remove(engine, "before_cursor_execute", count)
 
     assert len(statements) == 1
-    assert exposure.weighted_total == pytest.approx(1.0)
-    assert len(exposure.exposures) == 24
-    duration_h = route.duration_s / 3600
-    # Departing at 12h, the trip spans 12h for `duration_h` of an hour.
-    assert exposure.exposures[12] == pytest.approx(exposure.share[12] * duration_h)
+    assert density.weighted_total == pytest.approx(1.0)
+    km = route.distance_m / 1000
+    assert density.cases_per_km == pytest.approx(1.0 / km)
+    assert len(density.densities) == 24
+    # Departing at 12h, a trip under an hour stays in 12h: m(12) = share[12].
+    assert density.densities[12] == pytest.approx(24 * density.share[12] / km)
 
 
 def test_national_context_with_no_incidents_is_uniform(db_session: Session):

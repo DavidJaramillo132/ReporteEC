@@ -8,6 +8,7 @@ import {
   type BandInfo,
   bandForHour,
   blackspotParts,
+  formatCasesPerKm,
   formatDistance,
   formatDuration,
   hourLabel,
@@ -56,7 +57,8 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
           value={formatCount(data.cases.total)}
           note={data.data_cut ? `2019 a ${formatLongDate(data.data_cut)}` : undefined}
         />
-        <div className="min-w-0">
+        <Fact term="Casos por km" value={formatCasesPerKm(data.cases_per_km)} note="Los casos recientes pesan más" />
+        <div className="col-span-2 min-w-0">
           <dt className="label text-ink-3">Mejor hora para salir</dt>
           {bestHour !== null ? (
             <dd className="mt-0.5">
@@ -88,7 +90,7 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
         title={withScore ? 'Puntaje según la hora de salida' : 'Casos cerca de la ruta según la hora del día'}
         subtitle={
           withScore
-            ? 'De 0 a 100 para cada hora de salida, de 00:00 a 23:00 (hora de Ecuador).'
+            ? 'De 0 a 100 para cada hora de salida, según los casos por kilómetro, de 00:00 a 23:00 (hora de Ecuador).'
             : 'Porcentaje de los casos registrados cerca de la ruta en cada hora del día (hora de Ecuador).'
         }
         data={columns.map((c) => ({
@@ -203,8 +205,7 @@ function SemaforoReading({ band, score, hour }: { band: BandInfo; score: number;
         </div>
       </div>
       <p className="mt-2 text-[13px] text-ink-2">
-        Compara los casos registrados cerca de esta ruta, a esta hora, con los de cientos de rutas entre cantones del
-        país a todas las horas.
+        Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones.
       </p>
     </div>
   )

@@ -10,7 +10,7 @@ function hourly(withScore: boolean): HourRisk[] {
       hour,
       share: 1 / 24,
       weighted_cases: 0.5,
-      exposure: 0.4,
+      density: 0.4,
       score,
       score_available: withScore,
       band: score === null ? null : score > 75 ? 'critico' : 'precaucion',
@@ -41,6 +41,7 @@ function response(withScore: boolean): RouteRiskResponse {
     geometry: { type: 'LineString', coordinates: [[-79.9, -2.19], [-78.5, -0.22]] },
     distance_km: 420.4,
     duration_min: 455,
+    cases_per_km: 0.0338,
     cases: { total: 46, by_type: { homicidio: 41, sicariato: 3, femicidio: 2 }, weighted_total: 14.2, without_hour: 1 },
     selected: h[20],
     best_hour: 4,
@@ -56,6 +57,7 @@ function response(withScore: boolean): RouteRiskResponse {
 function emptyRoute(): RouteRiskResponse {
   return {
     ...response(true),
+    cases_per_km: 0,
     cases: { total: 0, by_type: { homicidio: 0, sicariato: 0, femicidio: 0 }, weighted_total: 0, without_hour: 0 },
     best_hour: null,
     blackspots: [],
@@ -80,6 +82,16 @@ describe('RiskPanel (server render smoke)', () => {
     expect(html).not.toContain('Puntaje no disponible')
   })
 
+  it('explains the score as cases per km and shows cases per km next to the case total', () => {
+    const html = render(response(true), 20)
+    expect(html).toContain('Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones.')
+    expect(html).toContain('Casos cerca de la ruta')
+    expect(html).toContain('Casos por km')
+    expect(html).toContain('0,03')
+    expect(html).toContain('Puntaje según la hora de salida')
+    expect(html).toContain('según los casos por kilómetro')
+  })
+
   it('reads another hour from hourly[] without new data', () => {
     const html = render(response(true), 9)
     expect(html).toContain('aria-label="Nivel para salir a las 09:00: Precaución, 30 de 100"')
@@ -102,6 +114,7 @@ describe('RiskPanel (server render smoke)', () => {
   it('says plainly when a route has no case at all', () => {
     const html = render(emptyRoute(), 20)
     expect(html).toContain('Sin casos registrados cerca de la ruta.')
+    expect(html).toContain('Casos por km')
     expect(html).toContain('No hay casos registrados cerca de esta ruta.')
     expect(html).not.toContain('Ver esa hora')
   })

@@ -7,6 +7,7 @@ import {
   blackspotLabel,
   casesLabel,
   dateRangeLabel,
+  formatCasesPerKm,
   formatDistance,
   formatDuration,
   guayaquilHour,
@@ -33,7 +34,7 @@ function hourRisk(hour: number, score: number | null): HourRisk {
     hour,
     share: 1 / 24,
     weighted_cases: 1,
-    exposure: hour / 10,
+    density: hour / 10,
     score,
     score_available: score !== null,
     band: score === null ? null : bandForScore(score).key,
@@ -49,6 +50,7 @@ function response(scores: (number | null)[], selectedHour = 8): RouteRiskRespons
     geometry: { type: 'LineString', coordinates: [[-79.9, -2.19], [-78.5, -0.22]] },
     distance_km: 420.4,
     duration_min: 455,
+    cases_per_km: 0.0338,
     cases: { total: 30, by_type: { homicidio: 28, sicariato: 1, femicidio: 1 }, weighted_total: 14.2, without_hour: 0 },
     selected: hourly[selectedHour],
     best_hour: 4,
@@ -206,6 +208,10 @@ describe('figures', () => {
     expect(formatDuration(120)).toBe('2 h')
     expect(formatDuration(455)).toBe('7 h 35 min')
     expect(formatDuration(0.2)).toBe('1 min')
+    expect(formatCasesPerKm(0.0338)).toBe('0,03')
+    expect(formatCasesPerKm(1.256)).toBe('1,26')
+    expect(formatCasesPerKm(0.004)).toBe('menos de 0,01')
+    expect(formatCasesPerKm(0)).toBe('0')
   })
 })
 

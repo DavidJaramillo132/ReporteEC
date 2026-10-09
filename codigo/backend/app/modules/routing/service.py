@@ -10,9 +10,9 @@ Pipeline for one origin/destination pair (`analyze_route`):
    `ST_Expand` lets the GiST index on `incidents.geom` pick candidates; the
    exact `ST_DWithin` on geography (meters) then applies each piece's
    1,000 m highway / 200 m urban buffer.
-3. `compute_route_exposure` -- recency weights, the hourly curve, shrinkage
-   and exposure for every departure hour (pure math in
-   `app.modules.routing.scoring`). Callable without HTTP: it takes an
+3. `compute_route_density` -- recency weights, the hourly curve, shrinkage,
+   weighted cases per km and the density for every departure hour (pure
+   math in `app.modules.routing.scoring`). Callable without HTTP: it takes an
    `OsrmRoute` and a session, so the reference-distribution job can call it
    for every canton pair.
 4. `find_blackspots` -- the same 1 km pieces, ranked by weighted cases.
@@ -23,12 +23,14 @@ cache keeps a compact `RouteAnalysis` (no full geometry, pieces or case
 rows), and at most `MAX_CONCURRENT_COMPUTATIONS` uncached routes are
 computed at once per worker; past that, `RoutingBusy` (503).
 
-The 0-100 score is a percentile of exposure against a stored reference
-distribution (`route_risk_reference`, built by `app.modules.routing.reference`).
-The newest row is tracked by id (`get_reference`): one cheap indexed query per
-request, breakpoints reloaded only when a newer row appears. Every response is built
-with a `ScoreFn`:
-`score_fn_for(session)` maps exposure through the reference, and
+The 0-100 score is a percentile of density (danger per km, see
+`app.modules.routing.scoring`) against a stored reference distribution
+(`route_risk_reference`, built by `app.modules.routing.reference`). Only rows
+whose `metric` is `DENSITY_METRIC` count; the older exposure rows are never
+used. The newest density row is tracked by id (`get_reference`): one cheap
+query per request, breakpoints reloaded only when a newer row appears. Every
+response is built with a `ScoreFn`:
+`score_fn_for(session)` maps density through the reference, and
 `no_reference_score` (always None, so `score_available: false`) is used when
 no row exists. Scores are applied per request, after the route cache, so a
 new reference never leaves a cached response with an old score.
@@ -65,7 +67,7 @@ from app.modules.routing.geometry import (
     point_at_distance,
     simplify_line,
 )
-from app.modules.routing.models import RouteRiskReference
+from app.modules.routing.models import DENSITY_METRIC, RouteRiskReference
 from app.modules.routing.osrm import OsrmClient, OsrmRoute
 from app.modules.routing.schemas import (
     Blackspot,
@@ -81,7 +83,7 @@ from app.modules.routing.scoring import (
     SHRINKAGE_K,
     band_for,
     best_departure_hour,
-    exposures_by_departure_hour,
+    densities_by_departure_hour,
     has_recorded_hour,
     normalize,
     peak_hours,
@@ -120,7 +122,7 @@ MAX_CONCURRENT_COMPUTATIONS = 2
 _METERS_PER_DEGREE_LOWER_BOUND = 110_000.0
 
 NOTES = (
-    "El puntaje mide las muertes violentas registradas cerca de la ruta (homicidios, "
+    "El puntaje mide las muertes violentas registradas por kilómetro de la ruta (homicidios, "
     "sicariatos y femicidios). No mide todos los delitos ni el riesgo de cada persona "
     "que viaja.",
     "De noche viaja menos gente, y estas cifras no se ajustan según la cantidad de tráfico.",
@@ -131,15 +133,15 @@ NOTES = (
 ScoreFn = Callable[[float], int | None]
 
 
-def no_reference_score(exposure: float) -> int | None:
-    """No reference distribution of exposures is stored: no score, never a made-up one."""
+def no_reference_score(density: float) -> int | None:
+    """No reference distribution of densities is stored: no score, never a made-up one."""
     return None
 
 
 def reference_score_fn(breakpoints: Sequence[float]) -> ScoreFn:
-    """Exposure -> whole 0-100 score against 101 percentile breakpoints."""
+    """Density -> whole 0-100 score against 101 percentile breakpoints."""
     frozen = tuple(breakpoints)
-    return lambda exposure: score_from_breakpoints(frozen, exposure)
+    return lambda density: score_from_breakpoints(frozen, density)
 
 
 InvalidRouteReason = Literal["origin_far_from_road", "destination_far_from_road", "same_place"]
@@ -176,7 +178,7 @@ def validate_route(route: OsrmRoute) -> None:
 
 @dataclass(frozen=True, slots=True)
 class ReferenceInfo:
-    """The newest stored reference distribution (one `route_risk_reference` row)."""
+    """The newest stored density reference (one `route_risk_reference` row)."""
 
     id: int
     breakpoints: tuple[float, ...]
@@ -252,10 +254,11 @@ def _load_reference(session: Session, reference_id: int) -> ReferenceInfo | None
 
 
 class _ReferenceCache:
-    """The newest reference row, re-read only when a newer id appears.
+    """The newest density reference row, re-read only when a newer id appears.
 
-    Each call costs one indexed `SELECT id ... ORDER BY id DESC LIMIT 1`; the
-    101 breakpoints are loaded only when that id differs from the cached one.
+    Each call costs one `SELECT id ... WHERE metric = 'density_per_km' ORDER BY
+    id DESC LIMIT 1` (a handful of rows, one per job run); the 101
+    breakpoints are loaded only when that id differs from the cached one.
     The job runs in another process, so this is how a new row takes effect on
     the very next request, without waiting for the national context's TTL.
     """
@@ -266,7 +269,10 @@ class _ReferenceCache:
 
     def get(self, session: Session) -> ReferenceInfo | None:
         newest = session.execute(
-            select(RouteRiskReference.id).order_by(RouteRiskReference.id.desc()).limit(1)
+            select(RouteRiskReference.id)
+            .where(RouteRiskReference.metric == DENSITY_METRIC)
+            .order_by(RouteRiskReference.id.desc())
+            .limit(1)
         ).scalar_one_or_none()
         with self._lock:
             if self._value is not None and self._value[0] == newest:
@@ -285,7 +291,10 @@ _reference_cache = _ReferenceCache()
 
 
 def get_reference(session: Session) -> ReferenceInfo | None:
-    """The newest stored reference (None if there is none or it is malformed)."""
+    """The newest stored density reference (None if there is none or it is malformed).
+
+    Rows of any other metric (the retired exposure scale) are ignored.
+    """
     return _reference_cache.get(session)
 
 
@@ -394,7 +403,7 @@ def fetch_route_cases(session: Session, pieces: Sequence[RoutePiece]) -> list[Ro
 
 
 # ---------------------------------------------------------------------------
-# Exposure and the analysis of one route.
+# Density and the analysis of one route.
 # ---------------------------------------------------------------------------
 
 
@@ -411,7 +420,7 @@ class WeightedCase:
 
 
 @dataclass(frozen=True, slots=True)
-class RouteExposure:
+class RouteDensity:
     route: OsrmRoute
     pieces: tuple[RoutePiece, ...]
     cases: tuple[WeightedCase, ...]
@@ -420,7 +429,10 @@ class RouteExposure:
     share: tuple[float, ...]
     weighted_total: float
     """W_total: recency weights of every case, with or without a recorded hour."""
-    exposures: tuple[float, ...]
+    cases_per_km: float
+    """W_total / distance_km."""
+    densities: tuple[float, ...]
+    """Density for each departure hour 0..23 (`scoring.density_for_departure`)."""
     data_cut: datetime | None
 
     @property
@@ -457,14 +469,14 @@ def _weight_by_hour(cases: Sequence[WeightedCase]) -> list[float]:
     return by_hour
 
 
-def compute_route_exposure(
+def compute_route_density(
     session: Session, route: OsrmRoute, context: NationalContext | None = None
-) -> RouteExposure:
-    """Exposure for all 24 departure hours of an already-routed trip.
+) -> RouteDensity:
+    """Density for all 24 departure hours of an already-routed trip.
 
     No HTTP involved: the caller routes with OSRM; this runs the one spatial
     query and the pure math. `context` defaults to the cached national one.
-    exposure(H) = W_total x Σ share over the hours the trip spans from H.
+    density(H) = (W_total / distance_km) x 24 x the trip's mean share from H.
     """
     context = context or get_national_context(session)
     pieces = build_pieces(route.coordinates, route.segment_distances_m, route.segment_speeds_mps)
@@ -473,15 +485,18 @@ def compute_route_exposure(
     weighted_by_hour = _weight_by_hour(cases)
     weighted_total = sum(case.weight for case in cases)
     share = shrink_toward(smooth_circular(weighted_by_hour), context.national_share)
-    exposures = exposures_by_departure_hour(share, weighted_total, route.duration_s / 60.0)
-    return RouteExposure(
+    # validate_route rejects 0 m routes; the guard only keeps this total.
+    cases_per_km = weighted_total / (route.distance_m / 1000) if route.distance_m > 0 else 0.0
+    densities = densities_by_departure_hour(share, cases_per_km, route.duration_s / 60.0)
+    return RouteDensity(
         route=route,
         pieces=tuple(pieces),
         cases=tuple(cases),
         weighted_by_hour=tuple(weighted_by_hour),
         share=tuple(share),
         weighted_total=weighted_total,
-        exposures=tuple(exposures),
+        cases_per_km=cases_per_km,
+        densities=tuple(densities),
         data_cut=context.data_cut,
     )
 
@@ -493,16 +508,16 @@ def _count_by_type(cases: Sequence[WeightedCase]) -> dict[str, int]:
     return counts
 
 
-def find_blackspots(exposure: RouteExposure) -> list[Blackspot]:
+def find_blackspots(density: RouteDensity) -> list[Blackspot]:
     """Report the blackspot pieces among the route's 1 km pieces."""
-    route = exposure.route
-    cases_by_piece: list[list[WeightedCase]] = [[] for _ in exposure.pieces]
-    for case in exposure.cases:
+    route = density.route
+    cases_by_piece: list[list[WeightedCase]] = [[] for _ in density.pieces]
+    for case in density.cases:
         cases_by_piece[case.piece].append(case)
 
     blackspots = []
     for index in select_blackspot_pieces([sum(c.weight for c in cs) for cs in cases_by_piece]):
-        piece, cases = exposure.pieces[index], cases_by_piece[index]
+        piece, cases = density.pieces[index], cases_by_piece[index]
         end_m = piece.start_m + piece.length_m
         lon, lat = point_at_distance(
             route.coordinates, route.segment_distances_m, piece.start_m + piece.length_m / 2
@@ -542,8 +557,9 @@ class RouteAnalysis:
     """The simplified display line, flattened: lon0, lat0, lon1, lat1, ..."""
     weighted_by_hour: tuple[float, ...]
     share: tuple[float, ...]
-    exposures: tuple[float, ...]
+    densities: tuple[float, ...]
     weighted_total: float
+    cases_per_km: float
     case_count: int
     by_type: tuple[tuple[str, int], ...]
     without_hour: int
@@ -566,13 +582,13 @@ def analyze_route(
     destination: LonLat,
     context: NationalContext | None = None,
 ) -> RouteAnalysis:
-    """Compute a route's exposure and keep only what a response needs.
+    """Compute a route's density and keep only what a response needs.
 
     The full route, its pieces and its cases are dropped once the analysis
     is built, so a cached analysis stays small (see `ROUTE_CACHE_SIZE`).
     """
-    exposure = compute_route_exposure(session, route, context)
-    cases = exposure.cases
+    density = compute_route_density(session, route, context)
+    cases = density.cases
     return RouteAnalysis(
         origin=origin,
         destination=destination,
@@ -581,31 +597,30 @@ def analyze_route(
         display_coordinates=array(
             "d", (value for point in simplify_line(route.coordinates) for value in point)
         ),
-        weighted_by_hour=exposure.weighted_by_hour,
-        share=exposure.share,
-        exposures=exposure.exposures,
-        weighted_total=exposure.weighted_total,
+        weighted_by_hour=density.weighted_by_hour,
+        share=density.share,
+        densities=density.densities,
+        weighted_total=density.weighted_total,
+        cases_per_km=density.cases_per_km,
         case_count=len(cases),
         by_type=tuple(_count_by_type(cases).items()),
         without_hour=sum(1 for case in cases if not case.has_hour),
-        low_data=exposure.low_data,
-        blackspots=tuple(find_blackspots(exposure)),
-        best_hour=(
-            best_departure_hour(exposure.exposures) if exposure.weighted_total > 0 else None
-        ),
-        data_cut=exposure.data_cut.astimezone(GUAYAQUIL).date() if exposure.data_cut else None,
+        low_data=density.low_data,
+        blackspots=tuple(find_blackspots(density)),
+        best_hour=(best_departure_hour(density.densities) if density.weighted_total > 0 else None),
+        data_cut=density.data_cut.astimezone(GUAYAQUIL).date() if density.data_cut else None,
     )
 
 
 def _hour_risk(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> HourRisk:
-    value = analysis.exposures[hour]
+    value = analysis.densities[hour]
     score = score_fn(value)
     band = band_for(score) if score is not None else None
     return HourRisk(
         hour=hour,
         share=round(analysis.share[hour], 6),
         weighted_cases=round(analysis.weighted_by_hour[hour], 4),
-        exposure=round(value, 4),
+        density=round(value, 6),
         score=score,
         score_available=score is not None,
         band=band,
@@ -621,6 +636,7 @@ def build_response(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> Rou
         geometry=RouteGeometry(coordinates=analysis.display_line()),
         distance_km=round(analysis.distance_m / 1000, 2),
         duration_min=round(analysis.duration_s / 60, 1),
+        cases_per_km=round(analysis.cases_per_km, 4),
         cases=RouteCases(
             total=analysis.case_count,
             by_type=dict(analysis.by_type),
@@ -704,8 +720,8 @@ def route_risk(
     cached and a fresh answer are identical. The cache key includes the data
     version, so any change to the eligible incidents misses the old entries
     once the national context refreshes (at most `NATIONAL_CONTEXT_TTL_S`).
-    The cached analysis holds exposures only; `score_fn` (default: the
-    newest stored reference) is applied on every call, so a new reference row
+    The cached analysis holds densities only; `score_fn` (default: the
+    newest stored density reference) is applied on every call, so a new reference row
     takes effect on the next request without touching this cache.
     A cached route answers right away; an uncached one needs one of the
     `MAX_CONCURRENT_COMPUTATIONS` slots, else `RoutingBusy`.
