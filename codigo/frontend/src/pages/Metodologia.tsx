@@ -229,8 +229,8 @@ export function Metodologia() {
             violentas registradas que el 70 % de los viajes de referencia entre cantones; cae en «Riesgo alto». No
             quiere decir que haya 70 % de probabilidad de que algo le pase a alguien. A las 03:00 la misma ruta puede
             dar un número mucho menor, porque en todo el país las muertes violentas se concentran entre las 19:00 y
-            las 23:00 (entre 2.400 y 3.000 por cada hora del día) y bajan entre las 03:00 y las 05:00 (entre 790 y
-            1.200).
+            las 23:00 (entre 2.400 y 3.000 casos en total desde 2019 por cada hora del día) y bajan entre las 03:00 y las
+            05:00 (entre 790 y 1.200 en total desde 2019 por hora).
           </p>
           <p>
             <strong className="font-semibold text-ink">Mejor hora y puntos críticos.</strong> La mejor hora de salida

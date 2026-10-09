@@ -49,9 +49,9 @@ ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa 
 
 1. **Qué casos cuentan:** homicidios, sicariatos y femicidios que se dibujan en el mapa (ubicación exacta o aproximada; los de nivel cantón no cuentan). La hora se toma en hora local de Ecuador. Los casos sin hora registrada (guardados a las 00:00:00) no forman la curva horaria, pero sí cuentan en el total.
 2. **Buffer de influencia espacial:** la ruta se corta en tramos de 1 km. Un tramo con velocidad media de 60 km/h o más usa **1.000 metros**; los demás, **200 metros**.
-3. **Recencia:** peso $w = 0{,}5^{\,edad/365{,}25}$, con la edad medida desde la fecha de corte de los datos (un caso de hace un año pesa la mitad).
-4. **Curva horaria:** suma de pesos por hora local (0 a 23), suavizada de forma circular con el núcleo $[0{,}25;\ 0{,}5;\ 0{,}25]$. Se acerca a la curva nacional según $share[h] = (suave[h] + K \cdot nacional[h]) / (\sum raw + K)$, con $K = 20$.
-5. **Exposición:** para una salida a la hora $H$, el peso total de los casos de la ruta por la suma de la curva sobre las horas que dura el viaje (duración de OSRM), empezando en $H$ y prorrateando la última hora por minutos. Sin casos cerca, exposición 0 y puntaje 0.
+3. **Recencia:** peso $w_i = 0{,}5^{\,edad_i/365{,}25}$, con la edad (en días) medida desde la fecha de corte de los datos (un caso de hace un año pesa la mitad).
+4. **Curva horaria:** $raw[h]$ es la suma de $w_i$ de los casos de la ruta con hora registrada que ocurrieron a la hora local $h$ (0 a 23); los casos sin hora no entran aquí (en el código, `weighted_by_hour`). Se suaviza de forma circular: $suave[h] = 0{,}25\,raw[h-1] + 0{,}5\,raw[h] + 0{,}25\,raw[h+1]$. Se acerca a la curva nacional según $share[h] = (suave[h] + K \cdot nac[h]) / (\sum_h raw[h] + K)$, con $K = 20$.
+5. **Exposición:** para una salida a la hora $H$, $W$ (la suma de $w_i$ de **todos** los casos de la ruta, con o sin hora) por la suma de la curva sobre las horas que dura el viaje (duración de OSRM), empezando en $H$ y prorrateando la última hora por minutos. Sin casos cerca, exposición 0 y puntaje 0.
 6. **Puntaje 0 a 100:** percentil de esa exposición frente a las exposiciones agrupadas de unas 800 a 1.000 rutas de referencia entre cantones del continente, a las 24 horas de salida (cada cantón con sus 5 más cercanos, más 200 pares de 100 km o más). Se recalcula tras cada actualización de datos. Franjas: 0–25 Seguro, 26–50 Precaución, 51–75 Riesgo alto, más de 75 Crítico.
 7. **Mejor hora:** la de menor exposición; con empates dentro de 5 %, la más temprana. Sin casos, no hay mejor hora.
 8. **Errores:** si el origen o el destino queda a más de 2 km de una vía, la ruta no se calcula.
@@ -61,7 +61,7 @@ ReporteEC no busca competir como navegador GPS giro a giro; busca ser la **capa 
 
 ### Descartado: multiplicadores fijos y pesos por tipo
 
-El borrador inicial usaba multiplicadores por franja (madrugada $\times 1{,}6$, noche $\times 1{,}3$, tarde $\times 1{,}0$, mañana $\times 0{,}8$) y pesos por tipo de delito (robo $0{,}7$, siniestro $0{,}5$). Se descartaron porque los datos los contradicen: las muertes violentas del país se concentran entre las 19:00 y las 23:00 (de 2.400 a 3.000 por hora del día) y son mínimas entre las 03:00 y las 05:00 (de 790 a 1.200), lo contrario de «madrugada crítica». Además no hay datos con ubicación de robos ni secuestros, y los siniestros solo llegan por cantón. Ahora la curva sale de la hora real de los casos.
+El borrador inicial usaba multiplicadores por franja (madrugada $\times 1{,}6$, noche $\times 1{,}3$, tarde $\times 1{,}0$, mañana $\times 0{,}8$) y pesos por tipo de delito (robo $0{,}7$, siniestro $0{,}5$). Se descartaron porque los datos los contradicen: las muertes violentas del país se concentran entre las 19:00 y las 23:00 (de 2.400 a 3.000 casos en total desde 2019 por cada hora del día) y son mínimas entre las 03:00 y las 05:00 (de 790 a 1.200 en total desde 2019), lo contrario de «madrugada crítica». Además no hay datos con ubicación de robos ni secuestros, y los siniestros solo llegan por cantón. Ahora la curva sale de la hora real de los casos.
 
 ---
 

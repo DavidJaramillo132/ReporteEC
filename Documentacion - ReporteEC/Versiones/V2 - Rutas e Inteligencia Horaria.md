@@ -36,7 +36,7 @@ Detalle de metodología en [[Riesgos en Rutas por Horario]] y modelo de negocio 
 
 ### D. API pública documentada
 * `GET /api/routes/risk` (origen, destino y hora de salida) y `GET /api/places/search` (cantones), documentados en OpenAPI.
-* Las claves de API, cuotas y uso para empresas **no** van en la V2: se hacen después, con un cliente piloto (ver [[Modelo de Monetización]]).
+* Las claves de API, cuotas y uso para empresas **no** van en la V2: llegan después de la V2 (ver [[Modelo de Monetización]]).
 
 ---
 
@@ -79,4 +79,4 @@ Lista de verificación manual antes de dar la V2 por cerrada:
 - [ ] Los demás sitios del servidor compartido siguen respondiendo y la memoria del servidor es suficiente tras el arranque.
 
 ## Terminada cuando
-Todas las casillas anteriores están verificadas en producción.
+Todas las casillas anteriores están verificadas en producción. La API para empresas llega después de la V2.

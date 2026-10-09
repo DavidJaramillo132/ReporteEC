@@ -62,9 +62,9 @@ codigo/
  CKAN (Min. Interior) ─┐
  INEC (siniestros,     ├─► workers ─► PostgreSQL + PostGIS ─┬─► servidor de teselas ─┐
        población)      │   (backend)       (tabla única      │                        ├─► frontend (PWA, mapa)
- [v2] Noticias Policía ┘                    de incidentes)   └─► backend ─────────────┘
+ [v3] Noticias Policía ┘                    de incidentes)   └─► backend ─────────────┘
                                                   ▲               │
- [v2] Reportes ciudadanos ──────────────────── backend ◄──────────┘
+ [v3] Reportes ciudadanos ──────────────────── backend ◄──────────┘
 ```
 
 ## Responsabilidad de cada módulo
@@ -107,7 +107,7 @@ Un **adaptador por fuente**, todos con la misma interfaz:
   `location_precision <> 'canton'`, desde 2019). Son la única fuente que Martin
   publica como teselas, y la API las reutiliza (unidas a `incidents`/`sources`/
   `admin_units`) para no duplicar esa regla en dos lugares
-- v2: usuarios, reportes, votos, suscripciones de zona
+- v3: usuarios, reportes, votos, suscripciones de zona
 
 ### backend — API (`app/`)
 
@@ -140,4 +140,4 @@ Cambiar de proveedor es cambiar la configuración, no el código.
 
 - Mapa, filtros, estadísticas, etiquetas de confianza, nota metodológica
 - PWA instalable
-- v2: vista «Actualidad», aviso lateral, formulario de reporte, suscripciones
+- v3: vista «Actualidad», aviso lateral, formulario de reporte, suscripciones

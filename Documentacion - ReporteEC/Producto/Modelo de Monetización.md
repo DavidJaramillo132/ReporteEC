@@ -1,6 +1,6 @@
 ---
 tags: [producto, monetizacion, b2b, api, sostenibilidad, negocio]
-actualizado: 2026-09-24
+actualizado: 2026-10-09
 ---
 
 # Modelo de Monetización y Sostenibilidad
@@ -83,5 +83,5 @@ Para mantener una relación directa con la ciudadanía sin limitar el acceso ese
 ## 5. Proyección de Sostenibilidad a 12 Meses
 
 1. **Mes 1 a 3 (V1 Lanzada):** Operar con costo mínimo en VPS de Azure (\$35–\$50 USD/mes). Postular a fondos cívicos y validar la tracción mediática del mapa histórico y el índice de extorsión.
-2. **Mes 4 a 6 (V1.5 Módulo de Rutas):** Desarrollar la API de rutas e iniciar pruebas piloto con 2 empresas de logística o transporte de carga en la ruta Guayaquil–Quito.
-3. **Mes 7 a 12 (V2 + Expansión B2B):** Cerrar los primeros 5 contratos SaaS de logística y el primer reporte actuarial para aseguradora, alcanzando un punto de equilibrio operativo superior a los \$3.000 USD mensuales de ingreso recurrente.
+2. **Mes 4 a 6 (V2 Módulo de Rutas):** Desarrollar y publicar la página de rutas; después de la V2, iniciar la API y pruebas piloto con 2 empresas de logística o transporte de carga en la ruta Guayaquil–Quito.
+3. **Mes 7 a 12 (Después de la V2: Expansión B2B):** Cerrar los primeros 5 contratos SaaS de logística y el primer reporte actuarial para aseguradora, alcanzando un punto de equilibrio operativo superior a los \$3.000 USD mensuales de ingreso recurrente.

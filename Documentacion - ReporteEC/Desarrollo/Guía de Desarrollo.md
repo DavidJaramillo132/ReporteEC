@@ -29,7 +29,7 @@ FASE 0: Esqueleto de Punta a Punta (Cimientos)
 FASE 1: V1 — Observatorio Histórico y Riesgo Comercial
    │
    ▼
-FASE 2: V2 — Rutas Seguras e Inteligencia Horaria (Monetización B2B)
+FASE 2: V2 — Rutas Seguras e Inteligencia Horaria (Rutas por hora)
    │
    ▼
 FASE 3: V3 — Comunidad y Tiempo Real (Reportes y Moderación)
@@ -112,18 +112,18 @@ diario y la prueba de la PWA en el teléfono).
 Detalle completo en [[V2 - Rutas e Inteligencia Horaria]] y [[Riesgos en Rutas por Horario]].
 
 1. **Red Vial Nacional:**
-   - Importar la red de carreteras estatales y avenidas urbanas principales en PostGIS.
+   - Servidor de rutas propio OSRM con el mapa de Ecuador de OpenStreetMap (ver [[Stack e Infraestructura]]).
 2. **Motor de Intersección Espacio-Temporal:**
-   - Función SQL `evaluar_ruta_horario(linea_geom, hora_salida)`:
-     - Genera buffer de 200m (urbano) o 1.000m (carretera).
-     - Intersecta con incidentes históricos.
-     - Pondera según franja horaria (madrugada $\times 1.6$, noche $\times 1.3$).
+   - Módulo `routing` del backend:
+     - Buffer de 200 m (urbano) o 1.000 m (carretera) por cada kilómetro de la ruta.
+     - Intersecta con incidentes históricos, con peso por recencia.
+     - La curva horaria sale de la hora real de los casos (ver [[Riesgos en Rutas por Horario]]).
 3. **Gráfico Horario 24h en Frontend:**
    - Componente visual que ilustra la curva de riesgo hora por hora para la ruta seleccionada.
 4. **Detección de Tramos Críticos (*Blackspots*):**
    - Marcadores de advertencia en segmentos viales con alta concentración de delitos.
-5. **API REST B2B:**
-   - Autenticación por API Key para empresas de transporte y monitoreo satelital ([[Modelo de Monetización]]).
+5. **API pública documentada** (OpenAPI):
+   - Las claves de API para empresas de transporte y monitoreo satelital llegan después de la V2 ([[Modelo de Monetización]]).
 
 ---
 

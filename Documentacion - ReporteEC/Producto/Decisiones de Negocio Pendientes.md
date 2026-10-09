@@ -1,6 +1,6 @@
 ---
 tags: [producto, decisiones, logica-negocio]
-actualizado: 2026-09-22
+actualizado: 2026-10-09
 ---
 
 # Decisiones de Negocio Pendientes
@@ -133,7 +133,7 @@ Ordenadas por impacto.
 >   para hacer a mano.
 > - **V1 incluye** mapa histórico desde 2019, semáforo cantonal de extorsión a negocios, página de inicio,
 >   metodología (conteo frente a tasa) y licencias.
-> - **V2 incluye** navegación y cálculo de riesgo en trayectos por franja horaria y API B2B de logística.
+> - **V2 incluye** navegación y cálculo de riesgo en trayectos según la hora de salida. La API para empresas llega después de la V2.
 > - **V3 incluye** cuentas verificadas por correo (sin verificar no se puede reportar ni suscribirse),
 >   reportes ciudadanos, moderación, notificaciones por zona y noticias policiales.
 > - **Solo Telegram** para fuentes colaboradoras (V4). WhatsApp y WhatsApp Business quedan descartados.

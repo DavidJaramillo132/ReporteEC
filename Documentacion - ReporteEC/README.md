@@ -20,7 +20,7 @@ registro con un nivel de confianza que declara de dónde salió la información.
 
 ### Versiones
 - [[V1 - Mapa Histórico]] — cimientos, mapa con datos oficiales desde 2019, páginas de inicio, metodología y licencia
-- [[V2 - Rutas e Inteligencia Horaria]] — navegación de seguridad, tramos críticos por franja horaria y API B2B
+- [[V2 - Rutas e Inteligencia Horaria]] — riesgo en rutas por hora de salida y tramos críticos; la API para empresas llega después de la V2
 - [[V3 - Tiempo Real y Comunidad]] — cuentas, reportes ciudadanos, moderación, vista actualidad y notificaciones
 - [[V4 - Red Colaborativa e IA]] — canales de Telegram colaboradores, ingesta automatizada con IA y geocodificación
 

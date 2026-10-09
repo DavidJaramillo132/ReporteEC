@@ -1,6 +1,6 @@
 ---
 tags: [producto, alcance]
-actualizado: 2026-09-24
+actualizado: 2026-10-09
 ---
 
 # Visión y Alcance
@@ -27,7 +27,7 @@ ReporteEC evoluciona de un simple visor a una **plataforma integral de inteligen
 El contenido de cada versión está en [[Hoja de Ruta]]:
 
 - **v1 — Observatorio Histórico y Riesgo Comercial:** datos oficiales desde 2019, semáforo cantonal de extorsión y estadísticas normalizadas por población.
-- **v2 — Rutas Seguras e Inteligencia Horaria:** navegación y evaluación de riesgo en trayectos viales con modulación por franja horaria y API B2B.
+- **v2 — Rutas Seguras e Inteligencia Horaria:** navegación y evaluación de riesgo en trayectos viales según la hora de salida, con la curva real de los casos cercanos. La API para empresas llega después de la V2.
 - **v3 — Tiempo Real y Comunidad:** reportes ciudadanos moderados, PWA con avisos zonales y noticias policiales.
 - **v4 — Red Colaborativa e IA:** canales de Telegram aliados, extracción con IA y geocodificación automática.
 

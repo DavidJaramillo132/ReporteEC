@@ -31,7 +31,7 @@ actualizado: 2026-10-09
 
 ### Rutas con OSRM (V2)
 
-El riesgo en rutas traza el camino con **OSRM** (imagen `ghcr.io/project-osrm/osrm-backend:v6.0.0`), con el mapa de Ecuador de OpenStreetMap, perfil de auto y algoritmo MLD. Corre como el servicio `osrm`, solo dentro de la red de Docker (sin puerto publicado). Los datos se preparan en la máquina del desarrollador con `codigo/scripts/preparar_osrm.sh` (en el VPS no alcanza la memoria) y se suben al servidor. En producción usa unos 660 MiB y tiene un límite de 1024 MB. Pasos en `codigo/despliegue/README.md` («Rutas (OSRM)»). El módulo `routing` del backend lo consume ([[Módulos del Sistema]]).
+El riesgo en rutas traza el camino con **OSRM** (imagen `ghcr.io/project-osrm/osrm-backend:v6.0.0`), con el mapa de Ecuador de OpenStreetMap, perfil de auto y algoritmo MLD. Corre como el servicio `osrm`, solo dentro de la red de Docker (sin puerto publicado). Los datos se preparan en la máquina del desarrollador con `codigo/scripts/preparar_osrm.sh` (en el VPS no alcanza la memoria) y se suben al servidor. En producción usa unos 660 MiB y tiene un límite de 1024 MB (`mem_limit` en `codigo/despliegue/compose.behind-proxy.yml`). Pasos en `codigo/despliegue/README.md` («Rutas (OSRM)»). El módulo `routing` del backend lo consume ([[Módulos del Sistema]]).
 
 ### Solo para la v3
 
