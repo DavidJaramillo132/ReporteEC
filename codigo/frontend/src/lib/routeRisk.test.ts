@@ -211,6 +211,10 @@ describe('figures', () => {
     expect(formatCasesPerKm(0.0338)).toBe('0,03')
     expect(formatCasesPerKm(1.256)).toBe('1,26')
     expect(formatCasesPerKm(0.004)).toBe('menos de 0,01')
+    // Never «0» while there are cases: one old case on a long route is 0.00004/km.
+    expect(formatCasesPerKm(0.00004)).toBe('menos de 0,01')
+    expect(formatCasesPerKm(0.0099)).toBe('menos de 0,01')
+    expect(formatCasesPerKm(0.01)).toBe('0,01')
     expect(formatCasesPerKm(0)).toBe('0')
   })
 })

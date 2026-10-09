@@ -93,6 +93,7 @@ from app.modules.routing.scoring import (
     peak_hours,
     recency_weight,
     score_from_breakpoints,
+    scored_cases_per_km,
     select_blackspot_pieces,
     shrink_toward,
     smooth_circular,
@@ -444,7 +445,7 @@ class RouteDensity:
     weighted_total: float
     """W_total: recency weights of every case, with or without a recorded hour."""
     cases_per_km: float
-    """W_total / distance_km."""
+    """W_total / distance_km: the figure shown to the reader."""
     densities: tuple[float, ...]
     """Density for each departure hour 0..23 (`scoring.density_for_departure`)."""
     data_cut: datetime | None
@@ -490,7 +491,10 @@ def compute_route_density(
 
     No HTTP involved: the caller routes with OSRM; this runs the one spatial
     query and the pure math. `context` defaults to the cached national one.
-    density(H) = (W_total / distance_km) x 24 x the trip's mean share from H.
+    density(H) = (W_total / max(distance_km, 10)) x 24 x the trip's mean share
+    from H; the 10 km floor (`scoring.MIN_DENSITY_KM`) keeps one case on a very
+    short route from jumping to the top bands. The reference job calls this
+    same function, so the scale and the live score share the floor.
     """
     context = context or get_national_context(session)
     pieces = build_pieces(route.coordinates, route.segment_distances_m, route.segment_speeds_mps)
@@ -499,9 +503,12 @@ def compute_route_density(
     weighted_by_hour = _weight_by_hour(cases)
     weighted_total = sum(case.weight for case in cases)
     share = shrink_toward(smooth_circular(weighted_by_hour), context.national_share)
+    distance_km = route.distance_m / 1000
     # validate_route rejects 0 m routes; the guard only keeps this total.
-    cases_per_km = weighted_total / (route.distance_m / 1000) if route.distance_m > 0 else 0.0
-    densities = densities_by_departure_hour(share, cases_per_km, route.duration_s / 60.0)
+    cases_per_km = weighted_total / distance_km if distance_km > 0 else 0.0
+    densities = densities_by_departure_hour(
+        share, scored_cases_per_km(weighted_total, distance_km), route.duration_s / 60.0
+    )
     return RouteDensity(
         route=route,
         pieces=tuple(pieces),
@@ -590,7 +597,9 @@ class RouteAnalysis:
 
 
 # Simplifies display lines while the spatial query runs; one slot per
-# concurrent computation (see `MAX_CONCURRENT_COMPUTATIONS`).
+# concurrent computation (see `MAX_CONCURRENT_COMPUTATIONS`). It lives as
+# long as the worker process and is never shut down, on purpose: its threads
+# start lazily on the first submit (after any fork) and exit with the process.
 _simplifier = ThreadPoolExecutor(
     max_workers=MAX_CONCURRENT_COMPUTATIONS, thread_name_prefix="simplify"
 )
@@ -656,7 +665,7 @@ def build_response(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> Rou
         geometry=RouteGeometry(coordinates=analysis.display_line()),
         distance_km=round(analysis.distance_m / 1000, 2),
         duration_min=round(analysis.duration_s / 60, 1),
-        cases_per_km=round(analysis.cases_per_km, 4),
+        cases_per_km=round(analysis.cases_per_km, 6),
         cases=RouteCases(
             total=analysis.case_count,
             by_type=dict(analysis.by_type),

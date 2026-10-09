@@ -1,11 +1,15 @@
 """The recorded OSRM route gives exactly the same cases, pieces, blackspots and display line.
 
 A golden file pins the output of the route pipeline (spatial query, 1 km
-pieces, blackspots, display simplification) on the recorded Guayaquil ->
+pieces, blackspots, display simplification, weighted total and the 24
+densities) on the recorded Guayaquil ->
 Babahoyo route with 600 seeded incidents scattered around it: many sit near
 the 200 m and 1,000 m buffer edges and between two pieces. It was written by
 the code before the latency work (WKT pieces, per-row geography casts,
 the first `simplify_line`), so any optimization must reproduce it exactly.
+`weighted_total` and `densities` were added to it later by fix round 1 (the
+73 km route is above the 10 km density floor, so they are those of the
+original per-km score).
 
 Regenerate only on purpose: `REGENERATE_ROUTE_GOLDEN=1 pytest <this file>`.
 """
@@ -89,6 +93,8 @@ def _snapshot(session: Session) -> dict:
         "cases": sorted([case.type, case.occurred_at.isoformat(), case.piece] for case in cases),
         "blackspots": [spot.model_dump(mode="json") for spot in analysis.blackspots],
         "display_line": [list(point) for point in analysis.display_line()],
+        "weighted_total": analysis.weighted_total,
+        "densities": list(analysis.densities),
     }
 
 
@@ -104,3 +110,5 @@ def test_the_recorded_route_matches_the_golden_output(db_session: Session):
     assert snapshot["cases"] == golden["cases"]
     assert snapshot["blackspots"] == golden["blackspots"]
     assert snapshot["display_line"] == golden["display_line"]
+    assert snapshot["weighted_total"] == golden["weighted_total"]
+    assert snapshot["densities"] == golden["densities"]

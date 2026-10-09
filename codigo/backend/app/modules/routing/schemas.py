@@ -3,8 +3,9 @@
 Units live in the field names (`distance_km`, `duration_min`, `km_from`) or
 in the field descriptions. Hours are local time (America/Guayaquil), 0-23.
 
-The score measures danger per km: `density` (weighted cases per km x 24 x
-the trip's mean hourly share) as a 0-100 percentile. `score`/`band` stay
+The score measures danger per km: `density` (weighted cases per km, at
+least 10 km in the divisor, x 24 x the trip's mean hourly share) as a 0-100
+percentile. `score`/`band` stay
 null with `score_available: false` until a stored reference distribution of
 densities exists; `density` is always present. The case total is reported
 apart, in `cases`.
@@ -71,9 +72,10 @@ class HourRisk(BaseModel):
     )
     density: float = Field(
         description=(
-            "Danger per km when leaving at this hour: `cases_per_km` x 24 x the mean share over "
-            "the hours the trip spans, weighted by minutes (a trip under 1 h: share at this "
-            "hour). A flat hourly curve gives exactly `cases_per_km`."
+            "Danger per km when leaving at this hour: weighted cases / max(distance_km, 10) x 24 "
+            "x the mean share over the hours the trip spans, weighted by minutes (a trip under "
+            "1 h: share at this hour). From 10 km on, a flat hourly curve gives exactly "
+            "`cases_per_km`."
         )
     )
     score: int | None = Field(

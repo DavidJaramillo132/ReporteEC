@@ -413,3 +413,59 @@ def test_same_cases_per_km_on_routes_of_different_length_score_the_same(
         assert b["density"] == pytest.approx(a["density"], rel=1e-3)
         assert b["score"] == a["score"]
     assert short["selected"]["score"] > 0
+
+
+# --- the 10 km floor on short routes ---------------------------------------------
+
+
+def _one_case_route_risk(client: TestClient, db_session: Session, to_lons: list[float]) -> dict:
+    """One fresh case at 21h near lon -79.598, and the risk of roads from -79.60 to each lon."""
+    source = make_source(db_session)
+    make_incident(db_session, source, occurred_at=WHEN, lon=-79.598, lat=-1.996)
+    db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        lon2 = float(_COORDS.search(request.url.path).group(3))
+        road = [(-79.60, -2.0), (lon2, -2.0)]
+        return httpx.Response(200, json=straight_route_payload(road, [HIGHWAY_SPEED_MPS]))
+
+    client_ = fake_client(handler)
+    app.dependency_overrides[get_osrm_client] = lambda: client_
+    _add_reference(db_session, [p * 0.05 for p in range(101)])
+    bodies = {}
+    for lon in to_lons:
+        response = client.get(
+            "/api/routes/risk", params={"from": "-79.6,-2.0", "to": f"{lon},-2.0", "hour": 21}
+        )
+        assert response.status_code == 200, response.text
+        bodies[lon] = response.json()
+    return bodies
+
+
+def test_a_3_km_route_with_one_case_scores_like_a_10_km_route_with_one_case(
+    client: TestClient, db_session: Session
+):
+    # ~3.0 km and ~10.0 km roads (0.027 and 0.09 degrees of longitude at lat -2).
+    bodies = _one_case_route_risk(client, db_session, [-79.573, -79.51])
+    short, ten = bodies[-79.573], bodies[-79.51]
+
+    assert short["distance_km"] == pytest.approx(3.0, abs=0.05)
+    assert ten["distance_km"] == pytest.approx(10.0, abs=0.05)
+    assert short["cases"]["total"] == ten["cases"]["total"] == 1
+    for a, b in zip(short["hourly"], ten["hourly"], strict=True):
+        assert a["density"] == pytest.approx(b["density"], rel=1e-3)
+        assert a["score"] == b["score"]
+    # 1 case / 10 km x 24 x share[21] (0.5: the only case is at 21h, smoothed).
+    assert short["selected"]["density"] == pytest.approx(0.1 * 24 * 0.5, rel=1e-3)
+    # The figure shown is still the real cases per km.
+    assert short["cases_per_km"] == pytest.approx(1 / short["distance_km"], rel=1e-3)
+
+
+def test_a_25_km_route_keeps_its_real_distance(client: TestClient, db_session: Session):
+    bodies = _one_case_route_risk(client, db_session, [-79.375])
+    body = bodies[-79.375]
+    km = body["distance_km"]
+
+    assert km == pytest.approx(25.0, abs=0.05)
+    assert body["cases_per_km"] == pytest.approx(1 / km, rel=1e-3)
+    assert body["selected"]["density"] == pytest.approx(1 / km * 24 * 0.5, rel=1e-3)

@@ -172,9 +172,12 @@ export function formatDuration(minutes: number): string {
 
 const twoDecimals = new Intl.NumberFormat('es-EC', { maximumFractionDigits: 2 })
 
-/** Weighted cases per km with two decimals: 0.0338 -> «0,03»; a tiny positive value reads «menos de 0,01». */
+/**
+ * Weighted cases per km with two decimals: 0.0338 -> «0,03». Any positive
+ * value under 0.01 reads «menos de 0,01», so a route with cases never shows «0».
+ */
 export function formatCasesPerKm(value: number): string {
-  if (value > 0 && value < 0.005) return 'menos de 0,01'
+  if (value > 0 && value < 0.01) return 'menos de 0,01'
   return twoDecimals.format(value)
 }
 

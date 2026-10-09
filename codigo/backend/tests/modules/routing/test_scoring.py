@@ -22,6 +22,7 @@ import pytest
 
 from app.core.time import GUAYAQUIL
 from app.modules.routing.scoring import (
+    MIN_DENSITY_KM,
     Band,
     band_for,
     best_departure_hour,
@@ -32,6 +33,7 @@ from app.modules.routing.scoring import (
     normalize,
     peak_hours,
     recency_weight,
+    scored_cases_per_km,
     select_blackspot_pieces,
     shrink_toward,
     smooth_circular,
@@ -142,6 +144,16 @@ def test_density_does_not_depend_on_route_length():
     long = densities_by_departure_hour(share, 12 / 120, 90)
 
     assert long == pytest.approx(short)
+
+
+def test_scored_cases_per_km_divides_by_at_least_10_km():
+    assert MIN_DENSITY_KM == 10.0
+    # Under 10 km: divided by 10, so one case on 3 km counts like one on 10 km.
+    assert scored_cases_per_km(1.0, 3.0) == scored_cases_per_km(1.0, 10.0) == 0.1
+    assert scored_cases_per_km(1.0, 0.0) == 0.1
+    # From 10 km on: the real distance.
+    assert scored_cases_per_km(1.0, 25.0) == 1.0 / 25.0
+    assert scored_cases_per_km(0.0, 3.0) == 0.0
 
 
 def test_density_with_no_cases_is_zero():

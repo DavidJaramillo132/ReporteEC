@@ -10,13 +10,14 @@ constraints, verbatim:
   circularly with the kernel [0.25, 0.5, 0.25] over h-1, h, h+1;
 - shrinkage toward the national curve:
   `share[h] = (smoothed[h] + K * national_share[h]) / (sum(raw) + K)`, K = 20;
-- density for departure hour H = (W_total / distance_km) x 24 x m(H), where
-  W_total is the route's summed recency weights and m(H) the mean of
+- density for departure hour H = (W_total / max(distance_km, 10)) x 24 x m(H),
+  where W_total is the route's summed recency weights and m(H) the mean of
   `share` over the hours a trip leaving at H spans, weighted by the minutes
   spent in each (wrapping past midnight; a trip under 1 h gives
-  m(H) = share[H]). It does not grow with the route's length: twice the
-  cases on twice the kilometres is the same density. The `24 x` makes a
-  flat curve (share = 1/24) give density = weighted cases per km;
+  m(H) = share[H]). Length alone does not raise it: with the same hourly mix
+  over the trip and the same trip hours, twice the cases on twice the
+  kilometres is the same density. The `24 x` makes a flat curve
+  (share = 1/24) give density = weighted cases per km;
 - bands 0-25 Seguro, 26-50 Precaución, 51-75 Riesgo alto, >75 Crítico.
 """
 
@@ -33,6 +34,9 @@ HALF_LIFE_DAYS = 365.25
 SMOOTHING_KERNEL = (0.25, 0.5, 0.25)
 SHRINKAGE_K = 20.0
 BEST_WINDOW_TOLERANCE = 0.05
+# The scored density divides by at least this many km: on a 2-3 km route a
+# single case would otherwise jump the score from 0 to the top bands.
+MIN_DENSITY_KM = 10.0
 BLACKSPOT_MIN_WEIGHTED_CASES = 3.0
 BLACKSPOT_TOP_FRACTION = 0.10
 MAX_BLACKSPOTS = 5
@@ -125,12 +129,21 @@ def mean_share_for_departure(
     return summed / (duration_min / 60.0)
 
 
+def scored_cases_per_km(weighted_total: float, distance_km: float) -> float:
+    """W_total / max(distance_km, `MIN_DENSITY_KM`): the per-km level the score uses.
+
+    Routes of 10 km or more use their real distance. The cases per km shown
+    to the reader are always W_total / the real distance.
+    """
+    return weighted_total / max(distance_km, MIN_DENSITY_KM)
+
+
 def density_for_departure(
     share: Sequence[float], cases_per_km: float, departure_hour: int, duration_min: float
 ) -> float:
     """`cases_per_km x 24 x m(H)`: weighted cases per km, scaled by the trip's hours.
 
-    `cases_per_km` is W_total / distance_km. With a flat curve the density
+    `cases_per_km` is `scored_cases_per_km(W_total, distance_km)`. With a flat curve the density
     equals `cases_per_km`; at an hour twice as busy as average, twice that.
     """
     return (

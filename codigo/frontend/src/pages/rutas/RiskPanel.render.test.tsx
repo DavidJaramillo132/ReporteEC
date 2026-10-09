@@ -84,9 +84,12 @@ describe('RiskPanel (server render smoke)', () => {
 
   it('explains the score as cases per km and shows cases per km next to the case total', () => {
     const html = render(response(true), 20)
-    expect(html).toContain('Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones.')
+    expect(html).toContain(
+      'Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones, a todas las horas.',
+    )
     expect(html).toContain('Casos cerca de la ruta')
-    expect(html).toContain('Casos por km')
+    expect(html).toContain('Casos por km (ponderados por antigüedad)')
+    expect(html).toContain('Un caso de hace un año cuenta la mitad.')
     expect(html).toContain('0,03')
     expect(html).toContain('Puntaje según la hora de salida')
     expect(html).toContain('según los casos por kilómetro')

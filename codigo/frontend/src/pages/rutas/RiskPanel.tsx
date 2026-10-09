@@ -57,7 +57,11 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
           value={formatCount(data.cases.total)}
           note={data.data_cut ? `2019 a ${formatLongDate(data.data_cut)}` : undefined}
         />
-        <Fact term="Casos por km" value={formatCasesPerKm(data.cases_per_km)} note="Los casos recientes pesan más" />
+        <Fact
+          term="Casos por km (ponderados por antigüedad)"
+          value={formatCasesPerKm(data.cases_per_km)}
+          note="Un caso de hace un año cuenta la mitad."
+        />
         <div className="col-span-2 min-w-0">
           <dt className="label text-ink-3">Mejor hora para salir</dt>
           {bestHour !== null ? (
@@ -205,7 +209,8 @@ function SemaforoReading({ band, score, hour }: { band: BandInfo; score: number;
         </div>
       </div>
       <p className="mt-2 text-[13px] text-ink-2">
-        Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones.
+        Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones, a todas
+        las horas.
       </p>
     </div>
   )
