@@ -240,14 +240,17 @@ describe('blackspot labels', () => {
 })
 
 describe('errors', () => {
-  it('shows the server message for a 422 and a 404, a fixed one for a 503', () => {
+  it('shows the server message for a 422, a 404 and a 503, a fixed one when there is none', () => {
     expect(routeError(422, 'El origen está a más de 2 km de una vía.')).toEqual({
       kind: 'invalid',
       message: 'El origen está a más de 2 km de una vía.',
     })
     expect(routeError(422, null).kind).toBe('invalid')
     expect(routeError(404, null).message).toBe('No encontramos una ruta por carretera entre esos dos puntos.')
-    expect(routeError(503, 'otro texto').message).toBe('El cálculo de rutas no está disponible en este momento.')
+    const busy = 'Hay muchas consultas de rutas en este momento. Intenta de nuevo en unos segundos.'
+    expect(routeError(503, busy)).toEqual({ kind: 'unavailable', message: busy })
+    // A proxy 503 has no JSON detail.
+    expect(routeError(503, null).message).toBe('El cálculo de rutas no está disponible en este momento.')
     expect(routeError(null, null).kind).toBe('failed')
   })
 

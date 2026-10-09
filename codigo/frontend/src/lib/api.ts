@@ -337,7 +337,7 @@ export interface RouteRiskResponse {
 
 const lonLatParam = (point: LonLatPoint) => `${point.lon},${point.lat}`
 
-/** GET /api/routes/risk. Errors arrive as ApiError: 422 (with a Spanish detail), 404 no route, 503 routing down. */
+/** GET /api/routes/risk. Errors arrive as ApiError: 422 (with a Spanish detail), 404 no route, 503 routing down or busy. */
 export function getRouteRisk(
   from: LonLatPoint,
   to: LonLatPoint,

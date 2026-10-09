@@ -3,8 +3,9 @@
 See `app.modules.routing.service` for the method. Errors: malformed or
 out-of-Ecuador coordinates, an hour outside 0-23, an end more than 2 km from
 any road, or origin and destination at the same place -> 422; no drivable
-route -> 404; OSRM down or slower than 2 s in total -> 503. Messages are
-Spanish.
+route -> 404; OSRM down or slower than 2 s in total -> 503; already
+computing `MAX_CONCURRENT_COMPUTATIONS` uncached routes in this worker -> 503.
+Messages are Spanish.
 """
 
 from functools import lru_cache
@@ -20,6 +21,7 @@ from app.modules.routing.schemas import RouteRiskResponse
 from app.modules.routing.service import (
     InvalidRoute,
     InvalidRouteReason,
+    RoutingBusy,
     ScoreFn,
     route_risk,
     score_fn_for,
@@ -35,6 +37,7 @@ NO_ROUTE_MESSAGE = "No encontramos una ruta por carretera entre esos dos puntos.
 OSRM_DOWN_MESSAGE = (
     "El servicio de rutas no está disponible en este momento. Intenta de nuevo en unos minutos."
 )
+BUSY_MESSAGE = "Hay muchas consultas de rutas en este momento. Intenta de nuevo en unos segundos."
 INVALID_ROUTE_MESSAGES: dict[InvalidRouteReason, str] = {
     "origin_far_from_road": (
         "El origen está a más de 2 km de una vía. "
@@ -100,3 +103,5 @@ def get_route_risk(
         raise HTTPException(status_code=404, detail=NO_ROUTE_MESSAGE) from None
     except OsrmUnavailable:
         raise HTTPException(status_code=503, detail=OSRM_DOWN_MESSAGE) from None
+    except RoutingBusy:
+        raise HTTPException(status_code=503, detail=BUSY_MESSAGE) from None

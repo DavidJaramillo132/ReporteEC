@@ -18,7 +18,10 @@ Pipeline for one origin/destination pair (`analyze_route`):
 4. `find_blackspots` -- the same 1 km pieces, ranked by weighted cases.
 
 Everything is computed on the full OSRM geometry; only the line returned
-for drawing is simplified (Douglas-Peucker, 20 m).
+for drawing is simplified (Douglas-Peucker, 20 m). The in-process route
+cache keeps a compact `RouteAnalysis` (no full geometry, pieces or case
+rows), and at most `MAX_CONCURRENT_COMPUTATIONS` uncached routes are
+computed at once per worker; past that, `RoutingBusy` (503).
 
 The 0-100 score is a percentile of exposure against a stored reference
 distribution (`route_risk_reference`, built by `app.modules.routing.reference`).
@@ -43,10 +46,11 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from sqlalchemy import select, text
@@ -95,11 +99,19 @@ ROUTE_LOCATION_PRECISIONS = (LocationPrecision.EXACTA, LocationPrecision.APROXIM
 COORDINATE_DECIMALS = 4  # ~11 m: map clicks a few meters apart share a cache entry
 MAX_SNAP_DISTANCE_M = 2000.0
 NATIONAL_CONTEXT_TTL_S = 600.0
-# A cached analysis keeps the whole parsed OSRM route: measured ~0.07 MB for
-# Guayaquil-Babahoyo (73 km) and ~1.1 MB for Loja-Quito (642 km, 12,800
-# vertices). 64 entries cap the cache near 70 MB even for the longest
-# routes, inside the backend container's 512 MB limit.
-ROUTE_CACHE_SIZE = 64
+# The cache is per worker process (the Dockerfile runs 2 uvicorn workers),
+# and it keeps only what a response needs (`RouteAnalysis`): no OSRM
+# geometry, pieces or case rows. Deep size of one entry, measured with real
+# OSRM routes and the full incident data: Loja-Quito (643 km, 397 cases)
+# 0.048 MB, Huaquillas-Tulcán (800 km, 1,609 cases) 0.042 MB; it was 2.7 and
+# 3.0 MB when the cache kept the whole analysis. The size follows the display
+# line, not the case count. Budget: under 40 MB of cache per worker, so 512
+# entries of ~0.05 MB (~26 MB per worker, ~52 MB for both, worst case).
+ROUTE_CACHE_SIZE = 512
+# Uncached computations running at once in one worker process. Each holds a
+# database connection, an OSRM request and ~50 ms of pure Python (the GIL);
+# beyond this a request gets a 503 at once instead of queueing behind them.
+MAX_CONCURRENT_COMPUTATIONS = 2
 
 # Conservative meters per degree for the index pre-filter box: a degree of
 # latitude is >= 110,570 m and a degree of longitude is >= 110,000 m for
@@ -515,15 +527,36 @@ def find_blackspots(exposure: RouteExposure) -> list[Blackspot]:
 
 @dataclass(frozen=True, slots=True)
 class RouteAnalysis:
-    """Everything about a route that does not depend on the departure hour asked for."""
+    """Everything a response needs about a route, whatever departure hour is asked for.
+
+    This is what the route cache keeps, so it holds no OSRM geometry, 1 km
+    pieces or case rows: only the display line (a flat array of doubles),
+    the 24-hour arrays, the case counts, the blackspots and the metadata.
+    """
 
     origin: LonLat
     destination: LonLat
-    exposure: RouteExposure
-    display_coordinates: tuple[LonLat, ...]
+    distance_m: float
+    duration_s: float
+    display_coordinates: array[float]
+    """The simplified display line, flattened: lon0, lat0, lon1, lat1, ..."""
+    weighted_by_hour: tuple[float, ...]
+    share: tuple[float, ...]
+    exposures: tuple[float, ...]
+    weighted_total: float
+    case_count: int
+    by_type: tuple[tuple[str, int], ...]
+    without_hour: int
+    low_data: bool
     blackspots: tuple[Blackspot, ...]
     best_hour: int | None
     """None when the route has no case at all: every hour ties at 0."""
+    data_cut: date | None
+    """The data cut as a local (America/Guayaquil) date."""
+
+    def display_line(self) -> list[tuple[float, float]]:
+        flat = self.display_coordinates
+        return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
 
 
 def analyze_route(
@@ -533,27 +566,45 @@ def analyze_route(
     destination: LonLat,
     context: NationalContext | None = None,
 ) -> RouteAnalysis:
+    """Compute a route's exposure and keep only what a response needs.
+
+    The full route, its pieces and its cases are dropped once the analysis
+    is built, so a cached analysis stays small (see `ROUTE_CACHE_SIZE`).
+    """
     exposure = compute_route_exposure(session, route, context)
+    cases = exposure.cases
     return RouteAnalysis(
         origin=origin,
         destination=destination,
-        exposure=exposure,
-        display_coordinates=tuple(simplify_line(route.coordinates)),
+        distance_m=route.distance_m,
+        duration_s=route.duration_s,
+        display_coordinates=array(
+            "d", (value for point in simplify_line(route.coordinates) for value in point)
+        ),
+        weighted_by_hour=exposure.weighted_by_hour,
+        share=exposure.share,
+        exposures=exposure.exposures,
+        weighted_total=exposure.weighted_total,
+        case_count=len(cases),
+        by_type=tuple(_count_by_type(cases).items()),
+        without_hour=sum(1 for case in cases if not case.has_hour),
+        low_data=exposure.low_data,
         blackspots=tuple(find_blackspots(exposure)),
         best_hour=(
             best_departure_hour(exposure.exposures) if exposure.weighted_total > 0 else None
         ),
+        data_cut=exposure.data_cut.astimezone(GUAYAQUIL).date() if exposure.data_cut else None,
     )
 
 
-def _hour_risk(exposure: RouteExposure, hour: int, score_fn: ScoreFn) -> HourRisk:
-    value = exposure.exposures[hour]
+def _hour_risk(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> HourRisk:
+    value = analysis.exposures[hour]
     score = score_fn(value)
     band = band_for(score) if score is not None else None
     return HourRisk(
         hour=hour,
-        share=round(exposure.share[hour], 6),
-        weighted_cases=round(exposure.weighted_by_hour[hour], 4),
+        share=round(analysis.share[hour], 6),
+        weighted_cases=round(analysis.weighted_by_hour[hour], 4),
         exposure=round(value, 4),
         score=score,
         score_available=score is not None,
@@ -563,27 +614,25 @@ def _hour_risk(exposure: RouteExposure, hour: int, score_fn: ScoreFn) -> HourRis
 
 
 def build_response(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> RouteRiskResponse:
-    exposure = analysis.exposure
-    route = exposure.route
-    hourly = [_hour_risk(exposure, h, score_fn) for h in range(HOURS_PER_DAY)]
+    hourly = [_hour_risk(analysis, h, score_fn) for h in range(HOURS_PER_DAY)]
     return RouteRiskResponse(
         origin=Coordinates(lon=analysis.origin[0], lat=analysis.origin[1]),
         destination=Coordinates(lon=analysis.destination[0], lat=analysis.destination[1]),
-        geometry=RouteGeometry(coordinates=list(analysis.display_coordinates)),
-        distance_km=round(route.distance_m / 1000, 2),
-        duration_min=round(route.duration_s / 60, 1),
+        geometry=RouteGeometry(coordinates=analysis.display_line()),
+        distance_km=round(analysis.distance_m / 1000, 2),
+        duration_min=round(analysis.duration_s / 60, 1),
         cases=RouteCases(
-            total=len(exposure.cases),
-            by_type=_count_by_type(exposure.cases),
-            weighted_total=round(exposure.weighted_total, 4),
-            without_hour=sum(1 for case in exposure.cases if not case.has_hour),
+            total=analysis.case_count,
+            by_type=dict(analysis.by_type),
+            weighted_total=round(analysis.weighted_total, 4),
+            without_hour=analysis.without_hour,
         ),
         selected=hourly[hour],
         best_hour=analysis.best_hour,
         hourly=hourly,
         blackspots=list(analysis.blackspots),
-        low_data=exposure.low_data,
-        data_cut=exposure.data_cut.astimezone(GUAYAQUIL).date() if exposure.data_cut else None,
+        low_data=analysis.low_data,
+        data_cut=analysis.data_cut,
         notes=list(NOTES),
     )
 
@@ -632,6 +681,15 @@ def round_coordinates(point: LonLat) -> LonLat:
     return (round(point[0], COORDINATE_DECIMALS), round(point[1], COORDINATE_DECIMALS))
 
 
+class RoutingBusy(Exception):
+    """`MAX_CONCURRENT_COMPUTATIONS` uncached routes are already being computed here."""
+
+
+# Per worker process. Acquired without waiting: a busy worker answers 503 at
+# once rather than piling requests on its threads and database pool.
+_computations = threading.BoundedSemaphore(MAX_CONCURRENT_COMPUTATIONS)
+
+
 def route_risk(
     session: Session,
     client: OsrmClient,
@@ -649,8 +707,10 @@ def route_risk(
     The cached analysis holds exposures only; `score_fn` (default: the
     newest stored reference) is applied on every call, so a new reference row
     takes effect on the next request without touching this cache.
-    Raises `InvalidRoute`, and `RouteNotFound` / `OsrmUnavailable` from the
-    OSRM client.
+    A cached route answers right away; an uncached one needs one of the
+    `MAX_CONCURRENT_COMPUTATIONS` slots, else `RoutingBusy`.
+    Raises `InvalidRoute`, `RoutingBusy`, and `RouteNotFound` /
+    `OsrmUnavailable` from the OSRM client.
     """
     origin, destination = round_coordinates(origin), round_coordinates(destination)
     if origin == destination:
@@ -659,8 +719,13 @@ def route_risk(
     key = (origin, destination, context.data_version)
     analysis = _route_cache.get(key)
     if analysis is None:
-        route = client.route(origin, destination)
-        validate_route(route)
-        analysis = analyze_route(session, route, origin, destination, context)
+        if not _computations.acquire(blocking=False):
+            raise RoutingBusy
+        try:
+            route = client.route(origin, destination)
+            validate_route(route)
+            analysis = analyze_route(session, route, origin, destination, context)
+        finally:
+            _computations.release()
         _route_cache.put(key, analysis)
     return build_response(analysis, hour, score_fn or score_fn_for(session))

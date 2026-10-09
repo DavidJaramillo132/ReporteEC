@@ -260,13 +260,14 @@ export type RouteErrorKind = 'invalid' | 'not-found' | 'unavailable' | 'failed'
  * What to tell the reader for a failed request. A 422 carries the server's
  * own Spanish message (a point far from a road, the same place twice...)
  * when it is an HTTPException; a validation 422 has none (see
- * detailMessage) and reads the generic sentence. A 404 uses the server's
- * message when present. A 503 always reads the same calm sentence.
+ * detailMessage) and reads the generic sentence. A 404 and a 503 use the
+ * server's message when present (a 503 says whether routing is down or busy);
+ * a 503 with no JSON body (from the proxy) reads the fixed calm sentence.
  */
 export function routeError(status: number | null, detail: string | null): { kind: RouteErrorKind; message: string } {
   if (status === 422) return { kind: 'invalid', message: detail ?? ROUTE_MESSAGES.invalid }
   if (status === 404) return { kind: 'not-found', message: detail ?? ROUTE_MESSAGES.notFound }
-  if (status === 503) return { kind: 'unavailable', message: ROUTE_MESSAGES.unavailable }
+  if (status === 503) return { kind: 'unavailable', message: detail ?? ROUTE_MESSAGES.unavailable }
   return { kind: 'failed', message: ROUTE_MESSAGES.failed }
 }
 

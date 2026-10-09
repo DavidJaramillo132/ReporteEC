@@ -6,7 +6,10 @@ at a chosen distance, so the buffer edges (1,000 m highway / 200 m urban)
 are tested in meters.
 """
 
+import gc
+import threading
 from datetime import UTC, datetime, timedelta
+from types import FunctionType, ModuleType
 
 import httpx
 import pytest
@@ -17,12 +20,18 @@ from sqlalchemy.orm import Session
 from app.core.time import GUAYAQUIL
 from app.main import app
 from app.modules.incidents.models import IncidentStatus, IncidentType, LocationPrecision
-from app.modules.routing.osrm import parse_route
+from app.modules.routing.geometry import RoutePiece
+from app.modules.routing.osrm import OsrmRoute, parse_route
 from app.modules.routing.router import get_osrm_client
 from app.modules.routing.scoring import SHRINKAGE_K
 from app.modules.routing.service import (
     NOTES,
+    RouteAnalysis,
+    RouteCase,
+    RouteExposure,
+    WeightedCase,
     _national_cache,
+    _route_cache,
     compute_route_exposure,
     load_national_context,
 )
@@ -344,6 +353,93 @@ def test_identical_requests_route_once_and_coordinates_are_rounded(
 
     assert len(seen) == 1
     assert seen[0].url.path == "/route/v1/driving/-79.6,-2.0;-79.5,-2.0"
+
+
+def _instances_reachable_from(root: object) -> set[type]:
+    """The type of every object reachable from `root` (classes and functions excluded)."""
+    seen: set[int] = set()
+    found: set[type] = set()
+    objects = [root]
+    while objects:
+        fresh = []
+        for obj in objects:
+            if id(obj) in seen or isinstance(obj, (type, ModuleType, FunctionType)):
+                continue
+            seen.add(id(obj))
+            found.add(type(obj))
+            fresh.append(obj)
+        objects = gc.get_referents(*fresh)
+    return found
+
+
+def test_the_cache_keeps_no_route_geometry_pieces_or_case_rows(
+    client: TestClient, db_session: Session
+):
+    source = make_source(db_session)
+    for days in range(4):  # enough weighted cases in one piece for a blackspot
+        make_incident(
+            db_session, source, occurred_at=WHEN - timedelta(days=days), **_north_of_road(100)
+        )
+    db_session.commit()
+    _use_osrm(_road(HIGHWAY_SPEED_MPS))
+
+    body = _ok(_risk(client))
+
+    assert body["cases"]["total"] == 4
+    assert len(body["blackspots"]) == 1
+    (cached,) = _route_cache._items.values()
+    assert isinstance(cached, RouteAnalysis)
+    reachable = _instances_reachable_from(cached)
+    for heavy in (OsrmRoute, RoutePiece, RouteExposure, RouteCase, WeightedCase, datetime):
+        assert heavy not in reachable, heavy.__name__
+    # The cached answer is the same answer.
+    assert _ok(_risk(client)) == body
+
+
+# --- load guard -----------------------------------------------------------------
+
+
+def test_a_third_concurrent_uncached_route_is_a_503_and_cached_ones_still_answer(
+    client: TestClient, db_session: Session
+):
+    payload = _road(HIGHWAY_SPEED_MPS)
+    arrived = threading.Semaphore(0)
+    release = {origin: threading.Event() for origin in ("-79.61,-2.0", "-79.62,-2.0")}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        origin = request.url.path.split("/")[-1].split(";")[0]
+        if origin in release:
+            arrived.release()
+            assert release[origin].wait(timeout=10)
+        return httpx.Response(200, json=payload)
+
+    _use_osrm(handler)
+    _ok(_risk(client))  # cached from here on; also warms the national context
+    results: dict[str, int] = {}
+
+    def request(origin: str) -> None:
+        results[origin] = _risk(client, **{"from": origin}).status_code
+
+    threads = {origin: threading.Thread(target=request, args=(origin,)) for origin in release}
+    for thread in threads.values():
+        # One at a time: the test shares one database session between threads.
+        thread.start()
+        assert arrived.acquire(timeout=10)
+
+    busy = _risk(client, **{"from": "-79.63,-2.0"})
+    cached = _risk(client)
+
+    for origin, gate in release.items():  # again one at a time, for the shared session
+        gate.set()
+        threads[origin].join(timeout=10)
+    assert busy.status_code == 503
+    assert busy.json()["detail"] == (
+        "Hay muchas consultas de rutas en este momento. Intenta de nuevo en unos segundos."
+    )
+    assert cached.status_code == 200
+    assert results == {origin: 200 for origin in release}
+    # Both slots are free again.
+    _ok(_risk(client, **{"from": "-79.63,-2.0"}))
 
 
 # --- cases with no recorded hour (00:00:00 local) -------------------------------
