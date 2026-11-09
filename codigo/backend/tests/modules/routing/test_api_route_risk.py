@@ -238,11 +238,13 @@ def test_response_shape_with_no_score_until_a_reference_exists(
         expected = 24 * smoothed.get(hour, 0.0) / km
         assert row["density"] == pytest.approx(expected, abs=1e-6), hour
         assert row["share"] == pytest.approx(smoothed.get(hour, 0.0) / (2 + w21), abs=1e-6)
-        assert "exposure" not in row
+        assert row["exposure"]["value"] >= 0
+        assert row["exposure"]["level"] is None
+        assert row["exposure"]["level_available"] is False
     assert body["cases"]["weighted_total"] == pytest.approx(2 + w21, abs=1e-4)
     assert body["cases_per_km"] == pytest.approx((2 + w21) / km, abs=1e-4)
     # Every hour outside 20-23h has zero density: the earliest, 00h, wins.
-    assert body["best_hour"] == 0
+    assert body["best_hour"] is None  # insufficient local hourly evidence
     assert body["low_data"] is True
     assert body["notes"] == list(NOTES)
     assert len(body["notes"]) == 3

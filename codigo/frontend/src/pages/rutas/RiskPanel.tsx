@@ -3,21 +3,15 @@ import type { RouteRiskResponse } from '../../lib/api'
 import { SELLO, SELLO_LIGHT } from '../../lib/charts'
 import { formatCount, formatLongDate } from '../../lib/registry'
 import {
-  BANDS,
   ROUTE_NOTES,
-  type BandInfo,
-  bandForHour,
   blackspotParts,
   formatCasesPerKm,
   formatDistance,
   formatDuration,
   hourLabel,
-  hourlyColumns,
   riskForHour,
-  scoreAvailable,
 } from '../../lib/routeRisk'
 import { Link } from '../../lib/router'
-import { BandIcon } from './BandIcon'
 import { BlackspotNumber } from './EndpointMark'
 
 interface RiskPanelProps {
@@ -30,24 +24,31 @@ interface RiskPanelProps {
 /** The result for one route: semáforo, figures, notices, the 24-hour chart, blackspots and the honesty note. */
 export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelProps) {
   const risk = riskForHour(data, hour)
-  const withScore = scoreAvailable(data)
-  const band = withScore ? bandForHour(risk) : null
-  const columns = hourlyColumns(data.hourly, hour, withScore)
+  const exposure = risk.exposure
+  const columns = data.hourly.map((h) => ({
+    key: String(h.hour), label: hourLabel(h.hour), value: h.exposure?.value ?? 0,
+    valueLabel: new Intl.NumberFormat('es-EC', { maximumFractionDigits: 2 }).format(h.exposure?.value ?? 0),
+    detail: h.exposure?.level_label ?? 'Nivel aún no disponible', selected: h.hour === hour,
+  }))
   const bestHour = data.best_hour
 
   return (
     <div className="space-y-5">
-      {band && risk.score !== null ? (
-        <SemaforoReading band={band} score={risk.score} hour={hour} />
-      ) : (
-        <div className="border border-ink bg-sheet p-4">
-          <p className="text-[17px] font-semibold">Puntaje no disponible todavía</p>
-          <p className="mt-1 text-[13.5px] text-ink-2">
-            Aún no está calculada la referencia que convierte los casos en un puntaje de 0 a 100. Mientras tanto, el
-            gráfico muestra a qué hora del día se registraron los casos cerca de esta ruta.
-          </p>
-        </div>
-      )}
+      <div className="border border-ink bg-sheet p-4" role="group" aria-label={`Exposición al salir a las ${hourLabel(hour)}`}>
+        <p className="label text-ink-3">Saliendo a las {hourLabel(hour)}</p>
+        <p className="mt-2 text-[24px] font-semibold leading-tight">
+          {exposure?.level_label ?? 'Nivel aún no disponible'}
+        </p>
+        <p className="mt-2 text-[13.5px] text-ink-2">
+          Acumula la concentración histórica cercana a cada tramo según los minutos que pasas en él.
+          No es una probabilidad de sufrir un delito.
+        </p>
+        <p className="mt-2 text-[12px] text-ink-3">
+          {exposure?.level_available
+            ? 'Nivel relativo a una referencia nacional de viajes urbanos e interurbanos.'
+            : 'La referencia nacional del nuevo cálculo todavía no está calibrada. El gráfico muestra el índice de exposición.'}
+        </p>
+      </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-ink py-3 text-[14px]">
         <Fact term="Distancia" value={formatDistance(data.distance_km)} />
@@ -63,7 +64,7 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
           note="Un caso de hace un año cuenta la mitad."
         />
         <div className="col-span-2 min-w-0">
-          <dt className="label text-ink-3">Mejor hora para salir</dt>
+          <dt className="label text-ink-3">Hora con menor exposición estimada</dt>
           {bestHour !== null ? (
             <dd className="mt-0.5">
               <span className="text-[20px] font-semibold tabular-nums">{hourLabel(bestHour)}</span>
@@ -78,7 +79,7 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
               )}
             </dd>
           ) : (
-            <dd className="mt-0.5 text-[13.5px] text-ink-2">Sin casos registrados cerca de la ruta.</dd>
+            <dd className="mt-0.5 text-[13.5px] text-ink-2">No hay evidencia horaria suficiente para recomendar una hora.</dd>
           )}
         </div>
       </dl>
@@ -91,12 +92,8 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
       )}
 
       <ColumnChart
-        title={withScore ? 'Puntaje según la hora de salida' : 'Casos cerca de la ruta según la hora del día'}
-        subtitle={
-          withScore
-            ? 'De 0 a 100 para cada hora de salida, según los casos por kilómetro, de 00:00 a 23:00 (hora de Ecuador).'
-            : 'Porcentaje de los casos registrados cerca de la ruta en cada hora del día (hora de Ecuador).'
-        }
+        title="Exposición histórica según la hora de salida"
+        subtitle="Intensidad histórica × minutos de recorrido, de 00:00 a 23:00 (hora de Ecuador). Un índice menor indica menor exposición estimada."
         data={columns.map((c) => ({
           key: c.key,
           label: c.label,
@@ -105,9 +102,9 @@ export function RiskPanel({ data, hour, onHour, onFocusBlackspot }: RiskPanelPro
           detail: c.detail,
           color: c.selected ? SELLO : SELLO_LIGHT,
         }))}
-        valueHeader={withScore ? 'Puntaje' : '% de los casos'}
-        detailHeader={withScore ? 'Nivel' : undefined}
-        categoryHeader={withScore ? 'Hora de salida' : 'Hora del día'}
+        valueHeader="Índice de exposición"
+        detailHeader="Nivel"
+        categoryHeader="Hora de salida"
         legend={[
           { key: 'elegida', label: `Hora elegida (${hourLabel(hour)})`, color: SELLO },
           { key: 'otras', label: 'Otras horas', color: SELLO_LIGHT },
@@ -167,51 +164,6 @@ function Fact({ term, value, note }: { term: string; value: string; note?: strin
         <span className="text-[20px] font-semibold tabular-nums">{value}</span>
         {note && <span className="block text-[12px] text-ink-3">{note}</span>}
       </dd>
-    </div>
-  )
-}
-
-/** The band for the chosen hour: shape + label + score, and where the score sits on the 0-100 scale. */
-function SemaforoReading({ band, score, hour }: { band: BandInfo; score: number; hour: number }) {
-  return (
-    <div
-      className="border border-ink bg-sheet p-4"
-      role="group"
-      aria-label={`Nivel para salir a las ${hourLabel(hour)}: ${band.label}, ${score} de 100`}
-    >
-      <p className="label text-ink-3">Saliendo a las {hourLabel(hour)}</p>
-      <div className="mt-2 flex items-center gap-3">
-        <BandIcon shape={band.shape} color={band.color} size={36} />
-        {/* A large figure at normal width, like Estadísticas' Resumen: the condensed axis is for the nameplate and labels only. */}
-        <p className="text-[30px] leading-none font-semibold">{band.label}</p>
-        <p className="ml-auto text-right">
-          <span className="text-[26px] font-semibold tabular-nums">{score}</span>
-          <span className="text-[13px] text-ink-2"> de 100</span>
-        </p>
-      </div>
-      <div className="mt-3" aria-hidden="true">
-        <div className="relative flex h-2.5 gap-0.5">
-          {BANDS.map((b) => (
-            <span
-              key={b.key}
-              className={b.key === band.key ? '' : 'hatch'}
-              style={{ flex: b.max - b.min + 1, background: b.key === band.key ? b.color : undefined }}
-            />
-          ))}
-          <span className="absolute -top-1 h-[18px] w-0.5 bg-ink" style={{ left: `calc(${score}% - 1px)` }} />
-        </div>
-        <div className="mt-1 flex text-[11.5px] text-ink-3">
-          {BANDS.map((b) => (
-            <span key={b.key} className={`truncate ${b.key === band.key ? 'font-semibold text-ink' : ''}`} style={{ flex: b.max - b.min + 1 }}>
-              {b.label}
-            </span>
-          ))}
-        </div>
-      </div>
-      <p className="mt-2 text-[13px] text-ink-2">
-        Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones, a todas
-        las horas.
-      </p>
     </div>
   )
 }

@@ -13,6 +13,7 @@ error or an unexpected payload) -> 503.
 
 from __future__ import annotations
 
+import math
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
@@ -65,6 +66,7 @@ class OsrmRoute:
     segment_speeds_mps: tuple[float, ...]
     waypoints: tuple[Waypoint, ...]
     """Snapped origin and destination, in request order."""
+    segment_durations_s: tuple[float, ...] = ()
 
 
 def parse_route(payload: Any) -> OsrmRoute:
@@ -83,15 +85,18 @@ def parse_route(payload: Any) -> OsrmRoute:
         )
         distances: list[float] = []
         speeds: list[float] = []
+        durations: list[float] = []
         for leg in route["legs"]:
             distances.extend(float(value) for value in leg["annotation"]["distance"])
             speeds.extend(float(value) for value in leg["annotation"]["speed"])
+            durations.extend(float(value) for value in leg["annotation"]["duration"])
         parsed = OsrmRoute(
             coordinates=coordinates,
             distance_m=float(route["distance"]),
             duration_s=float(route["duration"]),
             segment_distances_m=tuple(distances),
             segment_speeds_mps=tuple(speeds),
+            segment_durations_s=tuple(durations),
             waypoints=tuple(
                 Waypoint(
                     location=(float(point["location"][0]), float(point["location"][1])),
@@ -107,6 +112,12 @@ def parse_route(payload: Any) -> OsrmRoute:
         len(coordinates) < 2
         or len(distances) != len(coordinates) - 1
         or len(speeds) != len(distances)
+        or len(durations) != len(distances)
+        or any(
+            not math.isfinite(v) or v < 0
+            for v in (*distances, *speeds, *durations, parsed.duration_s, parsed.distance_m)
+        )
+        or not math.isclose(sum(durations), parsed.duration_s, rel_tol=0.01, abs_tol=1.0)
     ):
         raise OsrmUnavailable("OSRM annotations do not match the route geometry")
     if len(parsed.waypoints) != 2:
@@ -158,9 +169,8 @@ class OsrmClient:
                 params={
                     "overview": "full",
                     "geometries": "geojson",
-                    # Only what `parse_route` reads: per-segment durations would
-                    # add ~10% to the payload of a long route for nothing.
-                    "annotations": "distance,speed",
+                    # Native segment times drive accumulated exposure.
+                    "annotations": "distance,speed,duration",
                 },
             )
         except httpx.HTTPError as exc:  # connect errors, timeouts, protocol errors

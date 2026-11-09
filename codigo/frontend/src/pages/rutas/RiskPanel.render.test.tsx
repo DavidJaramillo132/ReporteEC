@@ -8,6 +8,13 @@ function hourly(withScore: boolean): HourRisk[] {
     const score = withScore ? (hour === 20 ? 82 : 30) : null
     return {
       hour,
+      exposure: {
+        value: hour === 20 ? 50 : 10,
+        level: withScore ? (hour === 20 ? 'elevada' : 'moderada') : null,
+        level_label: withScore ? `Exposición histórica ${hour === 20 ? 'elevada' : 'moderada'}` : null,
+        level_available: withScore,
+        model_version: 'test', reference: withScore ? 'national-test' : null,
+      },
       share: 1 / 24,
       weighted_cases: 0.5,
       density: 0.4,
@@ -70,11 +77,11 @@ const render = (data: RouteRiskResponse, hour: number) =>
   renderToStaticMarkup(<RiskPanel data={data} hour={hour} onHour={noop} onFocusBlackspot={noop} />)
 
 describe('RiskPanel (server render smoke)', () => {
-  it('names the band of the chosen hour with its score, the best hour, blackspots and the honesty link', () => {
+  it('names historical exposure without a probability or legacy score, the best hour, blackspots and the honesty link', () => {
     const html = render(response(true), 20)
-    expect(html).toContain('aria-label="Nivel para salir a las 20:00: Crítico, 82 de 100"')
+    expect(html).toContain('aria-label="Exposición al salir a las 20:00"')
     expect(html).toContain('Saliendo a las 20:00')
-    expect(html).toContain('Mejor hora para salir')
+    expect(html).toContain('Hora con menor exposición estimada')
     expect(html).toContain('04:00')
     expect(html).toContain('Ver esa hora')
     expect(html).toContain('Km 42–43')
@@ -82,41 +89,43 @@ describe('RiskPanel (server render smoke)', () => {
     expect(html).not.toContain('Puntaje no disponible')
   })
 
-  it('explains the score as cases per km and shows cases per km next to the case total', () => {
+  it('explains accumulated intensity and retains historical evidence', () => {
     const html = render(response(true), 20)
     expect(html).toContain(
-      'Compara cuántos casos hay por kilómetro de esta ruta, a esta hora, con cientos de rutas entre cantones, a todas las horas.',
+      'Acumula la concentración histórica cercana a cada tramo según los minutos que pasas en él.',
     )
     expect(html).toContain('Casos cerca de la ruta')
     expect(html).toContain('Casos por km (ponderados por antigüedad)')
     expect(html).toContain('Un caso de hace un año cuenta la mitad.')
     expect(html).toContain('0,03')
-    expect(html).toContain('Puntaje según la hora de salida')
-    expect(html).toContain('según los casos por kilómetro')
+    expect(html).toContain('Exposición histórica según la hora de salida')
+    expect(html).toContain('Intensidad histórica × minutos de recorrido')
   })
 
   it('reads another hour from hourly[] without new data', () => {
     const html = render(response(true), 9)
-    expect(html).toContain('aria-label="Nivel para salir a las 09:00: Precaución, 30 de 100"')
-    expect(html).not.toContain('Crítico, 82 de 100')
+    expect(html).toContain('aria-label="Exposición al salir a las 09:00"')
+    expect(html).toContain('Exposición histórica moderada')
+    expect(html).not.toContain('Exposición histórica elevada')
+    expect(html).not.toContain('de 100')
   })
 
   it('offers no "Ver esa hora" when the chosen hour is already the best one', () => {
     expect(render(response(true), 4)).not.toContain('Ver esa hora')
   })
 
-  it('never shows a band without a score, and flags low data', () => {
+  it('keeps uncalibrated levels unavailable and flags low data', () => {
     const html = render(response(false), 20)
-    expect(html).toContain('Puntaje no disponible todavía')
+    expect(html).toContain('Nivel aún no disponible')
     expect(html).not.toContain('Nivel para salir')
-    expect(html).toContain('Casos cerca de la ruta según la hora del día')
+    expect(html).toContain('Exposición histórica según la hora de salida')
     expect(html).toContain('Pocos casos cerca de esta ruta.')
     expect(html).toContain('No incluye robos, secuestros ni siniestros de tránsito')
   })
 
   it('says plainly when a route has no case at all', () => {
     const html = render(emptyRoute(), 20)
-    expect(html).toContain('Sin casos registrados cerca de la ruta.')
+    expect(html).toContain('No hay evidencia horaria suficiente para recomendar una hora.')
     expect(html).toContain('Casos por km')
     expect(html).toContain('No hay casos registrados cerca de esta ruta.')
     expect(html).not.toContain('Ver esa hora')

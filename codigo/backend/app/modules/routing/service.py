@@ -49,6 +49,7 @@ missing hour as midnight): it counts everywhere except in hourly curves.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from array import array
@@ -64,6 +65,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import GUAYAQUIL
 from app.modules.incidents.models import IncidentType, LocationPrecision
+from app.modules.routing.exposure import MODEL_VERSION, REFERENCE_METRIC, compute_exposure
 from app.modules.routing.geometry import (
     LonLat,
     RoutePiece,
@@ -76,6 +78,7 @@ from app.modules.routing.osrm import OsrmClient, OsrmRoute
 from app.modules.routing.schemas import (
     Blackspot,
     Coordinates,
+    Exposure,
     HourRisk,
     RouteCases,
     RouteGeometry,
@@ -127,8 +130,8 @@ MAX_CONCURRENT_COMPUTATIONS = 2
 _METERS_PER_DEGREE_LOWER_BOUND = 110_000.0
 
 NOTES = (
-    "El puntaje mide las muertes violentas registradas por kilómetro de la ruta (homicidios, "
-    "sicariatos y femicidios). No mide todos los delitos ni el riesgo de cada persona "
+    "La exposición histórica combina minutos de recorrido y concentración cercana de homicidios, "
+    "sicariatos y femicidios. No mide todos los delitos ni el riesgo de cada persona "
     "que viaja.",
     "De noche viaja menos gente, y estas cifras no se ajustan según la cantidad de tráfico.",
     "No incluye robos, secuestros ni siniestros de tránsito, porque no existen datos "
@@ -588,6 +591,7 @@ class RouteAnalysis:
     blackspots: tuple[Blackspot, ...]
     best_hour: int | None
     """None when the route has no case at all: every hour ties at 0."""
+    exposures: tuple[float, ...]
     data_cut: date | None
     """The data cut as a local (America/Guayaquil) date."""
 
@@ -620,6 +624,12 @@ def analyze_route(
     display = _simplifier.submit(simplify_line, route.coordinates)
     density = compute_route_density(session, route, context)
     cases = density.cases
+    exposures = compute_exposure(session, route, context or get_national_context(session))
+    best = (
+        best_departure_hour(exposures)
+        if max(exposures) > min(exposures) * 1.05 and not density.low_data
+        else None
+    )
     return RouteAnalysis(
         origin=origin,
         destination=destination,
@@ -636,17 +646,38 @@ def analyze_route(
         without_hour=sum(1 for case in cases if not case.has_hour),
         low_data=density.low_data,
         blackspots=tuple(find_blackspots(density)),
-        best_hour=(best_departure_hour(density.densities) if density.weighted_total > 0 else None),
+        best_hour=best,
+        exposures=exposures,
         data_cut=density.data_cut.astimezone(GUAYAQUIL).date() if density.data_cut else None,
     )
 
 
-def _hour_risk(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> HourRisk:
+def _hour_risk(
+    analysis: RouteAnalysis, hour: int, score_fn: ScoreFn, exposure_reference=None
+) -> HourRisk:
     value = analysis.densities[hour]
     score = score_fn(value)
     band = band_for(score) if score is not None else None
     return HourRisk(
         hour=hour,
+        exposure=Exposure(
+            value=analysis.exposures[hour],
+            model_version=MODEL_VERSION,
+            level=(
+                level := (
+                    "menor"
+                    if analysis.exposures[hour] <= exposure_reference[33]
+                    else "moderada"
+                    if analysis.exposures[hour] <= exposure_reference[67]
+                    else "elevada"
+                )
+            )
+            if exposure_reference
+            else None,
+            level_label=f"Exposición histórica {level}" if exposure_reference else None,
+            level_available=exposure_reference is not None,
+            reference=REFERENCE_METRIC if exposure_reference else None,
+        ),
         share=round(analysis.share[hour], 6),
         weighted_cases=round(analysis.weighted_by_hour[hour], 4),
         density=round(value, 6),
@@ -657,8 +688,10 @@ def _hour_risk(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> HourRis
     )
 
 
-def build_response(analysis: RouteAnalysis, hour: int, score_fn: ScoreFn) -> RouteRiskResponse:
-    hourly = [_hour_risk(analysis, h, score_fn) for h in range(HOURS_PER_DAY)]
+def build_response(
+    analysis: RouteAnalysis, hour: int, score_fn: ScoreFn, exposure_reference=None
+) -> RouteRiskResponse:
+    hourly = [_hour_risk(analysis, h, score_fn, exposure_reference) for h in range(HOURS_PER_DAY)]
     return RouteRiskResponse(
         origin=Coordinates(lon=analysis.origin[0], lat=analysis.origin[1]),
         destination=Coordinates(lon=analysis.destination[0], lat=analysis.destination[1]),
@@ -761,7 +794,7 @@ def route_risk(
     if origin == destination:
         raise InvalidRoute("same_place")
     context = get_national_context(session)
-    key = (origin, destination, context.data_version)
+    key = (MODEL_VERSION, origin, destination, context.data_version)
     analysis = _route_cache.get(key)
     if analysis is None:
         if not _computations.acquire(blocking=False):
@@ -773,4 +806,22 @@ def route_risk(
         finally:
             _computations.release()
         _route_cache.put(key, analysis)
-    return build_response(analysis, hour, score_fn or score_fn_for(session))
+    # A new metric prevents accidental reuse of either legacy score scale.
+    reference = session.execute(
+        select(RouteRiskReference.breakpoints)
+        .where(
+            RouteRiskReference.metric == REFERENCE_METRIC,
+            RouteRiskReference.data_cut == context.data_cut,
+            RouteRiskReference.data_version
+            == "|".join("" if part is None else str(part) for part in context.data_version),
+        )
+        .order_by(RouteRiskReference.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if reference is not None and (
+        len(reference) != 101
+        or any(not math.isfinite(v) or v < 0 for v in reference)
+        or any(a > b for a, b in zip(reference, reference[1:], strict=False))
+    ):
+        reference = None
+    return build_response(analysis, hour, score_fn or score_fn_for(session), reference)

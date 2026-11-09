@@ -297,6 +297,14 @@ export interface RouteCases {
  * are null while `score_available` is false.
  */
 export interface HourRisk {
+  exposure?: {
+    value: number
+    level: 'menor' | 'moderada' | 'elevada' | null
+    level_label: string | null
+    level_available: boolean
+    model_version: string
+    reference: string | null
+  } | null
   hour: number
   share: number
   weighted_cases: number

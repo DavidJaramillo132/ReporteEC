@@ -369,7 +369,7 @@ export function pointLabel(point: LonLatPoint): string {
 
 /** The plain-Spanish limits of the score (Global Constraints); the API repeats them in `notes`. */
 export const ROUTE_NOTES = [
-  'El puntaje mide las muertes violentas registradas por kilómetro de la ruta (homicidios, sicariatos y femicidios). No mide todos los delitos ni el riesgo de cada persona que viaja.',
+  'La exposición histórica combina los minutos de recorrido con la concentración cercana de homicidios, sicariatos y femicidios. No mide todos los delitos ni el riesgo de cada persona que viaja.',
   'De noche viaja menos gente, y estas cifras no se ajustan según la cantidad de tráfico.',
   'No incluye robos, secuestros ni siniestros de tránsito, porque no existen datos con su ubicación.',
 ]

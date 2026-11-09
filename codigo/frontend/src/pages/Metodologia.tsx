@@ -179,91 +179,13 @@ export function Metodologia() {
           </p>
         </Section>
 
-        <Section id="riesgo-en-rutas" title="Riesgo en rutas">
-          <p>
-            La página Rutas calcula un puntaje de 0 a 100 para un viaje en auto entre dos puntos, según la hora de
-            salida. El puntaje mide el peligro por kilómetro, no el total del viaje: una ruta larga no sale peor solo
-            por ser larga. El total de casos cerca de la ruta se muestra aparte. El camino lo traza OSRM, un servicio de rutas propio que usa el mapa abierto de OpenStreetMap
-            para Ecuador; el tiempo de viaje es el que ese servicio estima para un auto.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Qué cuenta.</strong> Solo los homicidios, sicariatos y
-            femicidios que se dibujan en el mapa, con coordenada exacta o aproximada. Los casos ubicados únicamente
-            por cantón no cuentan, porque no dicen en qué calle ocurrieron. Cuenta cada caso registrado desde 2019 que
-            esté cerca de la ruta.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Qué tan cerca.</strong> La ruta se corta en tramos de 1
-            kilómetro. En un tramo cuya velocidad media es de 60 km/h o más (carretera) cuentan los casos a menos de
-            1.000 metros; en los demás (ciudad) cuentan los casos a menos de 200 metros. La carretera tiene un margen
-            más ancho porque en ruta abierta la distancia a un caso importa menos que en una calle de ciudad.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Qué tan reciente.</strong> Un caso pesa la mitad por cada año
-            que pasó: uno de hace un año pesa 0,5 y uno de hace dos años, 0,25. La antigüedad se mide desde la fecha
-            de corte de los datos, no desde hoy.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">La curva de 24 horas.</strong> Se suma el peso de los casos de
-            la ruta según la hora local en que ocurrieron. Esa curva se suaviza: cada hora se mezcla con la anterior y
-            la siguiente (un cuarto, la mitad y un cuarto), y las 23:00 son vecinas de las 00:00. Los casos que la
-            fuente registra sin hora no entran en la curva, pero sí cuentan en el total de la ruta. Si la ruta tiene
-            pocos casos, la curva se apoya en la de todo el país: cuanto menos casos, más se parece a la nacional,
-            para que dos o tres casos sueltos no inventen una hora peligrosa.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Casos por kilómetro.</strong> Se divide el peso total de los
-            casos cercanos a la ruta (con y sin hora) entre los kilómetros de la ruta. Es el mismo número a cualquier
-            hora, y se muestra junto al total de casos. Para el puntaje, en rutas de menos de 10 km se divide entre 10
-            km, para que un solo caso no dispare el puntaje.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Del viaje al puntaje.</strong> Para cada hora de salida se
-            mira la curva en las horas que dura el viaje, empezando a la hora de salida, y se saca su promedio: cada
-            hora cuenta según los minutos que el viaje pasa en ella. Un viaje de menos de una hora usa solo la hora
-            de salida. Ese promedio se compara con una curva pareja (la misma parte, 1/24, en cada hora): si las horas
-            del viaje concentran el doble de lo normal, los casos por kilómetro de esa salida cuentan el doble. Si la
-            ruta no tiene ningún caso cerca, el valor es 0 y el puntaje es 0.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Qué significa el 0 a 100.</strong> Es un percentil. Para
-            tener una vara de medir, se calculó ese valor por kilómetro para cerca de 800 a 1.000 rutas entre
-            cantones del continente a las 24 horas de salida: cada cantón con sus 5 vecinos más cercanos, más 200
-            pares lejanos de 100 km o más. El puntaje dice en qué punto de esa lista cae tu ruta. Como todo se mide
-            por kilómetro, una ruta del doble de largo con el doble de casos saca el mismo puntaje, siempre que tenga
-            la misma distribución horaria y el mismo horario de viaje. Esa lista se vuelve a calcular cada
-            vez que se actualizan los datos. Las franjas son: 0 a 25 Seguro, 26 a 50 Precaución, 51 a 75 Riesgo alto y
-            más de 75 Crítico.
-          </p>
-          <p>
-            Un ejemplo con números redondos: una ruta de 100 km con un peso total de 20 casos tiene 0,2 casos por km.
-            Saliendo a las 22:00, un viaje de 1 h 30 min pasa una hora entera en las 22:00 y media hora en las 23:00.
-            Si la curva de la ruta pone el 6 % de los casos a las 22:00 y el 5 % a las 23:00, el promedio del viaje es
-            (6 % + 0,5 × 5 %) ÷ 1,5 ≈ 5,7 %, o sea 1,36 veces la parte pareja de 4,2 %. El valor de esa salida es 0,2
-            × 1,36 ≈ 0,27 casos por km. Si ese 0,27 supera al 70 % de los valores de referencia, el puntaje es «70 de
-            100» y cae en «Riesgo alto». No quiere decir que haya 70 % de probabilidad de que algo le pase a alguien.
-            A las 03:00 la misma ruta puede dar un número mucho menor, porque en todo el país las muertes violentas se concentran entre las 19:00 y
-            las 23:00 (entre 2.400 y 3.000 casos en total desde 2019 por cada hora del día) y bajan entre las 03:00 y las
-            05:00 (entre 790 y 1.200 en total desde 2019 por hora).
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Mejor hora y puntos críticos.</strong> La mejor hora de salida
-            es la de menor valor por kilómetro; si varias quedan a menos de 5 % de diferencia, se indica la más temprana. Una
-            ruta sin casos cerca no tiene mejor hora. Un punto crítico es un kilómetro con al menos 3 de peso entre
-            los casos cercanos y, además, dentro del 10 % de kilómetros más cargados de esa ruta; se muestran hasta
-            5.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Lo que no incluye.</strong> El puntaje mide muertes violentas
-            registradas por kilómetro de la ruta: no mide todo el delito ni el riesgo de cada persona que viaja. No incluye
-            robos ni secuestros, porque no existen datos con su ubicación, ni siniestros de tránsito, porque el INEC
-            solo publica el cantón. Si el origen o el destino queda a más de 2 km de una vía, no se calcula la ruta.
-          </p>
-          <p>
-            <strong className="font-semibold text-ink">Aviso sobre el tráfico.</strong> De noche viaja menos gente,
-            y estas cifras no se ajustan según la cantidad de tráfico: una hora con pocos casos puede ser también una
-            hora con pocos viajes. Úsalo como una referencia para decidir con cuidado, no como una garantía.
-          </p>
+        <Section id="riesgo-en-rutas" title="Exposición histórica en rutas">
+          <p>El cálculo combina la concentración histórica de homicidios, sicariatos y femicidios cerca de cada tramo con los minutos que permaneces en él. No representa una probabilidad personal ni incluye todos los delitos.</p>
+          <p>Se divide el recorrido en intervalos de hasta 50 metros o un minuto, con tiempos estimados por el servicio de rutas. Los casos más cercanos tienen más influencia y los recientes pesan más: uno de hace un año cuenta la mitad. La ubicación aproximada de algunos registros limita la precisión.</p>
+          <p>La intensidad se ajusta a la hora prevista de paso por cada tramo y se multiplica por sus minutos de recorrido. Se suman esos aportes para el viaje completo, sin dividir entre kilómetros. Más tiempo en un entorno equivalente acumula más exposición.</p>
+          <p>Cuando hay pocas horas registradas, el patrón local se combina con el nacional. Los registros sin hora aportan al total histórico, distribuidos mediante ese patrón estimado. No se recomienda una hora si falta señal local o las horas resultan similares.</p>
+          <p>Los niveles menor, moderada y elevada se comparan con una referencia nacional fija de viajes urbanos e interurbanos, usando los percentiles 33 y 67. Son categorías relativas, no umbrales de peligro. Hasta calibrar una referencia compatible se muestra «Nivel aún no disponible».</p>
+          <p>Los casos cercanos y los tramos destacados del mapa siguen siendo evidencia histórica y se cuentan una sola vez. No se ajusta por cuántas personas o vehículos circulan; ausencia de registros no significa seguridad.</p>
         </Section>
 
         <Section id="desaparecidas" title="Personas desaparecidas">

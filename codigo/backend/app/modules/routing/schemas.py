@@ -56,7 +56,19 @@ class RouteCases(BaseModel):
     )
 
 
+class Exposure(BaseModel):
+    value: float = Field(
+        ge=0, description="Historical intensity × travel minutes; not a probability."
+    )
+    level: Literal["menor", "moderada", "elevada"] | None = None
+    level_label: str | None = None
+    level_available: bool = False
+    model_version: str
+    reference: str | None = None
+
+
 class HourRisk(BaseModel):
+    exposure: Exposure | None = None
     hour: int = Field(ge=0, le=23, description="Departure hour, local time (America/Guayaquil).")
     share: float = Field(
         description=(
